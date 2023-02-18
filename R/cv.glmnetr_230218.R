@@ -1,49 +1,55 @@
 ###############################################################################################################
 ###############################################################################################################
 ## do cross validation to choose tuning paramter, i.e. lambda and gamma #######################################
-#' Get a cross validated tuned relaxed lasso model fit.
+#' Get a cross validation informed relaxed lasso model fit.
 #'
 #' @description
-#' This function derives a relaxed lasso model and derives hyperparmaters 
-#' using cross validaiton.  It is analogous to the glmnet() function of the 
-#' _glmnet_ package, but handles caes where glmnet() may run slowly when using the
-#' relaxed-=TRUE option.   
+#' Derive a relaxed lasso model and identifies hyperparameters, i.e. lambda and gamma,  
+#' which give the best bit using cross validation.  It is analogous to the cv.glmnet() function of the 
+#' 'glmnet' package, but handles cases where glmnet() may run slowly when using the
+#' relaxed=TRUE option.   
 #' 
-#' @param xs Predictor matrix 
-#' @param start Vector of start times or the Cox model.  May be NULL.
+#' @param xs predictor matrix 
+#' @param start vector of start times or the Cox model.  Should be NULL for other models.
 #' @param y_ outcome vector
 #' @param event event vector in case of the Cox model.  May be NULL for other models.  
-#' @param family Model family, one of "cox", "gaussian" or "binomial".  
-#' @param lambda The lambda vector.  May be NULL.  
-#' @param gamma The gamma vector.  Default is c(0,0.25,0.50,0.75,1). 
-#' @param folds_n Number of folds for cross validation.  Default and recommended is 10.
+#' @param family model family, one of "cox", "gaussian" or "binomial".  
+#' @param lambda the lambda vector.  May be NULL.  
+#' @param gamma the gamma vector.  Default is c(0,0.25,0.50,0.75,1). 
+#' @param folds_n number of folds for cross validation.  Default and generally recommended is 10.
 #' @param limit limit the small values for lambda after the initial fit.  
-#' This will calcualtions that have minimal impact on the cross validation.  
+#' This will eliminate calculations that have small or minimal impact on the cross validation.  
 #' Default is 2 for moderate limitation, 1 for less limitation, 0 for none.     
-#' @param fine Use a finer step in determining lambda.  Of little value unless one 
-#' repeats the cross valiaiton many times to more finely tune the hyper parameters.  
-#' See the _glmnet_ documentation.  
-#' @param seed A seed for set.seed to assure one can get the same results twice.  If NULL 
+#' @param fine use a finer step in determining lambda.  Of little value unless one 
+#' repeats the cross validation many times to more finely tune the hyperparameters.  
+#' See the 'glmnet' package documentation.  
+#' @param seed a seed for set.seed() to assure one can get the same results twice.  If NULL 
 #' the program will generate a random seed.  Whether specified or NULL, the seed is stored in the output
 #' object for future reference.  
-#' @param foldid A vector of integers to associate each record to a fold.  Should be integers between 1 and folds_n.
-#' @param time Indicate whether or not to update progress in the console.  Default of
+#' @param foldid a vector of integers to associate each record to a fold.  The integers should be between 1 and folds_n.
+#' @param track indicate whether or not to update progress in the console.  Default of
 #' 0 suppresses these updates.  The option of 1 provides these updates.  In fitting 
 #' clinical data with non full rank design matrix we have found some R-packages to
 #' take a vary long time or seemingly be caught in infinite loops.  Therefore we allow
-#' the user to track the package and judge whether things are moving forward or 
+#' the user to track the program progress and judge whether things are moving forward or 
 #' if the process should be stopped. 
+#' @param ties method for handling ties in Cox model for relaxed model component.  Default 
+#' is "efron", optionally "breslow".  For penalized fits "breslow" is 
+#' always used as in the 'glmnet' package.
+#' @param time    track progress by printing to console elapsed and split times.  Suggested to use
+#' track option instead as time options will be eliminated.   
+#' @param ... Additional arguments that can be passed to glmnet() 
 #' 
 #' @details
-#' #' This is main program for model derivation.  As currently implemented the 
-#' package requires the data to be input as #' vectors and matrices with no missing values 
-#' (NA).  All data vectors and matrices must be numerical.  For categorical variables one
-#' should first construct corresponding numerical variables to represent these 
-#' categories.  To take advantage of the lasso model, one can use one hot coding
-#' assigning an indicator for each level of each categorical varaible, or creating 
+#' This is the main program for model derivation.  As currently implemented the 
+#' package requires the data to be input as vectors and matrices with no missing values 
+#' (NA).  All data vectors and matrices must be numerical.  For factors (categorical variables) one
+#' should first construct corresponding numerical variables to represent the factor 
+#' levels.  To take advantage of the lasso model, one can use one hot coding
+#' assigning an indicator for each level of each categorical variable, or creating 
 #' as well other contrasts variables suggested by the subject matter.
 #'  
-#' @return A cross validated relaxed lasso model fit.
+#' @return A cross validation informed relaxed lasso model fit.
 #' 
 #' @author Walter Kremers (kremers.walter@mayo.edu)
 #' 
@@ -70,7 +76,8 @@
 #' plot(cv.glmnetr.fit, coefs=1)
 #' summary(cv.glmnetr.fit)
 #' 
-cv.glmnetr = function( xs, start, y_, event, family="cox", lambda=NULL, gamma=c(0,0.25,0.50,0.75,1), folds_n=10, limit=2, fine=0, time=0, seed=NULL, foldid=NULL) {
+cv.glmnetr = function( xs, start, y_, event, family="cox", lambda=NULL, gamma=c(0,0.25,0.50,0.75,1), folds_n=10, limit=2, fine=0, 
+                        track=0, seed=NULL, foldid=NULL, ties="efron", time=NULL, ... ) {
 
   if (is.null(gamma)) { gamma=c(0,0.25,0.50,0.75,1) }
   if (!(0 %in% gamma)) { gamma=c(0, gamma)}
@@ -82,7 +89,17 @@ cv.glmnetr = function( xs, start, y_, event, family="cox", lambda=NULL, gamma=c(
   #  cat(paste0(" gamma_n = ", gamma_n, "\n")) 
   #  family = "cox" 
   
-  if (time==1) { time_start = difftime2() }
+#  nvars = dim(xs)[2]
+#  if (is.null(dfmax)) { dfmax = nvars + 1 }
+#  if (is.null(penalty.factor)) {penalty.factor = rep(1,nvars)}
+  
+  if (ties != "breslow") { ties="efron" }
+  
+  if (!is.null(time)) {
+    track=time
+    cat(" Please use track option instead of time option.  time option will be dropped in future versions.")
+  }
+  if (track==1) { time_start = difftime2() }
   
   # coxcontrol = survival::coxph.control()                                        ## if switch to coxph.fit 
   # glmcontrol = glm.control()                                                    ## if switch to glm.fit 
@@ -134,17 +151,17 @@ cv.glmnetr = function( xs, start, y_, event, family="cox", lambda=NULL, gamma=c(
   }
   
   ##============================================================================  initial panalized fit 
-  if (time==1) {
+  if (track==1) {
     cat(paste0("  Fitting cv.glmnet() with relax=FALSE to get range for lambda", "\n"))
   }
   if (family=="cox") {                                                          ## TODO1 - move to inside of glmnetr 
     if ( is.null(start) ) { 
-      cv.glmnet.fit.f = cv.glmnet( xs, Surv(       y_, event), family="cox", lambda=lambda, relax=FALSE ) 
+      cv.glmnet.fit.f = cv.glmnet( xs, Surv(       y_, event), family="cox", lambda=lambda, relax=FALSE, ... ) 
     } else {         
-      cv.glmnet.fit.f = cv.glmnet( xs, Surv(start, y_, event), family="cox", lambda=lambda, relax=FALSE )   
+      cv.glmnet.fit.f = cv.glmnet( xs, Surv(start, y_, event), family="cox", lambda=lambda, relax=FALSE, ... )   
     }
   } else {
-    cv.glmnet.fit.f = cv.glmnet( xs, y_ , family=family , relax=FALSE) 
+    cv.glmnet.fit.f = cv.glmnet( xs, y_ , family=family , relax=FALSE, ... ) 
   }
   
   ## limit==1 is generally enough, probably ==0 nice plots for confirmation ## 
@@ -165,34 +182,34 @@ cv.glmnetr = function( xs, start, y_, event, family="cox", lambda=NULL, gamma=c(
   #  df.l.rank = sum(cv.glmnet.fit.f$df < rankMatrix(xs)[1])
   #  lamda = lambda[1:min(lambda_n, df.l.rank)]
   
-  if (time==1) { time_last = difftime2(time_start) }
+  if (track==1) { time_last = difftime2(time_start) }
   
   if (fine==1) {
-    ratio = sqrt(cv.glmnet.fit.f$lambda[2]/cv.glmnet.fit.f$lambda[1])
+    ratio = sqrt(cv.glmnet.fit.f$lambda[2]/cv.glmnet.fit.f$lambda[1]) 
     lambda = sort( c(lambda, ratio*lambda) , decreasing=TRUE) 
     lambda_n = length(lambda)
     
     if (family=="cox") {                                                          ## TODO1 - move to inside of glmnetr 
       if ( is.null(start) ) { 
-        cv.glmnet.fit.f = cv.glmnet( xs, Surv(       y_, event), family="cox", lambda=lambda, relax=FALSE ) 
+        cv.glmnet.fit.f = cv.glmnet( xs, Surv(       y_, event), family="cox", lambda=lambda, relax=FALSE, ... ) 
       } else {         
-        cv.glmnet.fit.f = cv.glmnet( xs, Surv(start, y_, event), family="cox", lambda=lambda, relax=FALSE ) 
+        cv.glmnet.fit.f = cv.glmnet( xs, Surv(start, y_, event), family="cox", lambda=lambda, relax=FALSE, ... ) 
       }
     } else {
-      cv.glmnet.fit.f   = cv.glmnet( xs, y_ , family=family , relax=FALSE) 
+      cv.glmnet.fit.f   = cv.glmnet( xs, y_ , family=family , relax=FALSE, ...) 
     }
   } 
   
-  glmnetr.fit = glmnetr( xs, start, y_, event, lambda=lambda, gamma=gamma, object=cv.glmnet.fit.f, time=0, family=family) 
+  glmnetr.fit = glmnetr( xs, start, y_, event, lambda=lambda, gamma=gamma, object=cv.glmnet.fit.f, track=0, family=family, ...) 
   
 #  if (family!="cox") { length(glmnetr.fit$a0g0) }
   
-  if (time==1) { cat(paste0("Split for Beta g:0  ")) ; time_last = difftime2(time_start, time_last) }
+  if (track==1) { cat(paste0("Split for Beta g:0  ")) ; time_last = difftime2(time_start, time_last) }
   
-  devratiolist = glmnetr_devratio( cv.glmnet.fit.f, glmnetr.fit, xs_new=xs, start_new=start, y_new=y_, event_new=event, family=family) 
+  devratiolist = glmnetr_devratio( cv.glmnet.fit.f, glmnetr.fit, xs_new=xs, start_new=start, y_new=y_, event_new=event, family=family, ties=ties) 
   devratio     = devratiolist$devratio 
   
-  if (time==1) { cat(paste0("Split for dev.ratio ")) ; time_last = difftime2(time_start, time_last) }
+  if (track==1) { cat(paste0("Split for dev.ratio ")) ; time_last = difftime2(time_start, time_last) }
   
   neventsg0 = 0 
   
@@ -206,7 +223,7 @@ cv.glmnetr = function( xs, start, y_, event, family="cox", lambda=NULL, gamma=c(
   ##============================================================================  begin folds  
   for (i_ in 1:folds_n) {
     ##=== begin folds ==========================================================
-    if (time==1) {
+    if (track==1) {
       cat(paste0("\n", " ########## Entering Cross Validation fold  ", i_, "  of  " , folds_n , "  ############################" , "\n"))
     }
     ##### set up train and test data sets in matrix form for glmnet & stepreg #####
@@ -249,7 +266,7 @@ cv.glmnetr = function( xs, start, y_, event, family="cox", lambda=NULL, gamma=c(
       test_data  = data.frame(testy_ , testxs )
     }
     
-    glmnetr.fit.train = glmnetr( trainxs, trainstart, trainy_, trainevent, lambda, gamma, object=NULL, time=0, family=family) 
+    glmnetr.fit.train = glmnetr( trainxs, trainstart, trainy_, trainevent, lambda, gamma, object=NULL, track=0, family=family, ties=ties, ... ) 
     #    names(glmnetr.fit.train) 
     #    colSums(glmnetr.fit.train$betag1!=0)
     #    sum( abs( glmnetr.fit.train$betag0[,9] - glmnetr.fit.train$betag0[,10] ) ) 
@@ -257,7 +274,7 @@ cv.glmnetr = function( xs, start, y_, event, family="cox", lambda=NULL, gamma=c(
     # object=glmnetr.fit.train ; xs_new=testxs ; start_new=teststart ; y_new=testy_ ; event_new=testevent ; 
     ll_1fold.fit = glmnetrll_1fold( object=glmnetr.fit.train, 
                                     xs_new=testxs, start_new=teststart, y_new=testy_, event_new=testevent, 
-                                    family=family, lambda_n=lambda_n, gamma=gamma) 
+                                    family=family, lambda_n=lambda_n, gamma=gamma, ties=ties) 
     
     #    print ( "here 01" )
     #    print ( ll_1fold.fit$cvloglik_r )
@@ -283,7 +300,7 @@ cv.glmnetr = function( xs, start, y_, event, family="cox", lambda=NULL, gamma=c(
     
     if ( sum(deviance < 0) > 0 ) { print( sum(testevent)) }
     
-    if (time==1) { time_last = difftime2(time_start, time_last) }
+    if (track==1) { time_last = difftime2(time_start, time_last) }
     ##=== end folds ============================================================
   } ## end of fold ########################################################################
   
@@ -484,6 +501,10 @@ cv.glmnetr = function( xs, start, y_, event, family="cox", lambda=NULL, gamma=c(
   
   call <- match.call()
   
+  if        (family=="cox"     ) { nevents=sum(event)
+  } else if (family=="binomial") { nevents=sum(y_) 
+  } else                         { nevents=NA         }
+  
   glmnet.fit = list(a0       = glmnetr.fit$a0g1[1:lambda_n] ,
                     beta     = glmnetr.fit$betag1[,1:lambda_n] , 
                     df       = nzero , 
@@ -495,7 +516,9 @@ cv.glmnetr = function( xs, start, y_, event, family="cox", lambda=NULL, gamma=c(
                     npasses  = NULL ,
                     jerr     = NULL ,
                     offset   = NULL ,
-                    nobs     = nobs )
+                    nobs     = nobs 
+                    )
+  
   #  glmnet.fit$beta     = glmnetr.fit$betag1[,1:lambda_n]        ##  cv.glmnet.fit.f$glmnet.fit$beta[,1:lambda_n]    
   #  glmnet.fit$df       = nzero                                  ##  cv.glmnet.fit.f$glmnet.fit$df[1:lambda_n]  
   #  glmnet.fit$lambda   = lambda                                 ##  cv.glmnet.fit.f$glmnet.fit$lambda[1:lambda_n]  
@@ -533,10 +556,13 @@ cv.glmnetr = function( xs, start, y_, event, family="cox", lambda=NULL, gamma=c(
   name = "Partial Likelihood Deviance" ; 
   names(name) = "deviance"
   
-  returnlist = list(lambda=lambda, cvm=cvm.dev[gamma_n,], cvsd=cvsd.dev[gamma_n,], cvup=cvup.dev[gamma_n,], cvlo=cvlo.dev[gamma_n,], nzero=nzero, 
-                    call=call, name=name, glmnet.fit=glmnet.fit, 
-                    lambda.min=lambda.min.g1, lambda.1se=lambda.1se.g1, index=index.g1, relaxed=relaxed_base,
-                    cv.glmnet.fit.f=cv.glmnet.fit.f, xscolumns= dim(xs)[2], xsdf=rankMatrix(xs)[1], seed=seed, foldid=foldid, family=family)
+  sample=list(family=family, n=dim(xs)[1], nevents=nevents, xs.columns=dim(xs)[2], xs.df=rankMatrix(xs)[1])
+  
+  returnlist = list( lambda=lambda, cvm=cvm.dev[gamma_n,], cvsd=cvsd.dev[gamma_n,], cvup=cvup.dev[gamma_n,], cvlo=cvlo.dev[gamma_n,], nzero=nzero, 
+                     call=call, name=name, glmnet.fit=glmnet.fit, 
+                     lambda.min=lambda.min.g1, lambda.1se=lambda.1se.g1, index=index.g1, relaxed=relaxed_base,
+                     cv.glmnet.fit.f=cv.glmnet.fit.f, xscolumns= dim(xs)[2], xsdf=rankMatrix(xs)[1], seed=seed, folds_n=folds_n, foldid=foldid, 
+                     sample = sample )
   class(returnlist) = c("cv.glmnetr") 
   return(returnlist) 
 }
@@ -546,30 +572,36 @@ cv.glmnetr = function( xs, start, y_, event, family="cox", lambda=NULL, gamma=c(
 ## get relaxed glmnet model fit for (whole data) inlcuding for both gamma=0 and gamma=1 #######################
 ## object = cv.glmnet.fit.f 
 ## xs = trainxs ; start = trainstart ; y_ = trainy_ ; lambda=NULL ; gamma=c(0,0.25,0.50,0.75,1) ;
-## xs_tmp = xs ; start_tmp = start ; y_tmp = y_ ; lambda=NULL ; gamma=c(0,0.25,0.50,0.75,1) ; object=NULL ; time=0 ; family="gaussian" 
+## xs_tmp = xs ; start_tmp = start ; y_tmp = y_ ; lambda=NULL ; gamma=c(0,0.25,0.50,0.75,1) ; object=NULL ; track=0 ; family="gaussian" 
 
 #' Fit relaxed part of lasso model
 #' 
 #' @description
-#' This function derives the relaxed lasso fits and optionally calls glmnet() to 
+#' Derive the relaxed lasso fits and optionally calls glmnet() to 
 #' derive the fully penalized lasso fit.
 #'
 #' @param xs_tmp predictor (X) matrix
 #' @param start_tmp start time in case Cox model and (Start, Stop) time for use in model  
 #' @param y_tmp outcome (Y) variable, in case of Cox model (stop) time 
-#' @param event_tmp event variablee in case of Cox model  
+#' @param event_tmp event variable in case of Cox model  
 #' @param family one of "cox", "gaussian" or "binomial" 
-#' @param lambda lambda vector, as in _glmnet_, default is NULL
-#' @param gamma gamma vector, as with _glmnet_, default c(0,0.25,0.50,0.75,1) 
-#' @param object an output object from _glmnet_ using relax=FALSE with the model fits for
-#'    the fully penalized lass fits, i.e. gamma=1.  Defualt is NULL in which case these are derived 
+#' @param lambda lambda vector, as in glmnet(), default is NULL
+#' @param gamma gamma vector, as with glmnet(), default c(0,0.25,0.50,0.75,1) 
+#' @param object an output object from glmnet() using relax=FALSE with the model fits for
+#'    the fully penalized lasso models, i.e. gamma=1.  Default is NULL in which case these are derived 
 #'    within the function. 
-#' @param time Indicate whether or not to update progress in the console.  Default of
+#' @param track Indicate whether or not to update progress in the console.  Default of
 #' 0 suppresses these updates.  The option of 1 provides these updates.  In fitting 
 #' clinical data with non full rank design matrix we have found some R-packages to
-#' take a vary long time or seemingly be caught in infinite loops.  Therefore we allow
+#' take a vary long time or possibly get caught in infinite loops.  Therefore we allow
 #' the user to track the package and judge whether things are moving forward or 
 #' if the process should be stopped. 
+#' @param ties method for handling ties in Cox model for relaxed model component.  Default 
+#' is "efron", optionally "breslow".  For penalized fits "breslow" is 
+#' always used as in the 'glmnet' package.
+#' @param time    track progress by printing to console elapsed and split times.  Suggested to use
+#' track option instead as time options will be eliminated. 
+#' @param ... Additional arguments that can be passed to glmnet() 
 #'
 #' @return A list with two matrices, one for the model coefficients with
 #'     gamma=1 and the other with gamma=0.  
@@ -592,12 +624,23 @@ cv.glmnetr = function( xs, start, y_, event, family="cox", lambda=NULL, gamma=c(
 #' glmnetr.fit = glmnetr( xs, NULL, y_, event, family="cox")
 #' plot(glmnetr.fit)
 #'
-glmnetr = function(xs_tmp, start_tmp, y_tmp, event_tmp, family="cox", lambda=NULL, gamma=c(0,0.25,0.50,0.75,1), object=NULL, time=0) {
+glmnetr = function(xs_tmp, start_tmp, y_tmp, event_tmp, family="cox", lambda=NULL, gamma=c(0,0.25,0.50,0.75,1), 
+                   object=NULL, track=0, ties="efron", time=NULL, ... ) {
 
 #  cv.glmnet.fit.f$glmnet.fit$a0
 #  cv.glmnet.fit.f$glmnet.fit$relaxed$a0
   
-  if (time==1) { time_start = difftime2() }
+#  nvars = dim(xs_tmp)[2]
+#  if (is.null(dfmax)) { dfmax = nvars + 1 }
+#  if (is.null(penalty.factor)) {penalty.factor = rep(1,nvars)}
+  
+  coxcontrol = survival::coxph.control()   
+  
+  if (!is.null(time)) {
+    track=time
+    cat(" Please use track option instead of time option.  time option will be dropped in future versions.")
+  }
+  if (track==1) { time_start = difftime2() }
   
   xs_tmp_ncol = dim(xs_tmp)[2]
   
@@ -606,26 +649,28 @@ glmnetr = function(xs_tmp, start_tmp, y_tmp, event_tmp, family="cox", lambda=NUL
   } else {
     if (family=="cox") {
       if ( is.null(start_tmp) ) { 
-        cv.glmnet.fit = cv.glmnet( xs_tmp, Surv(y_tmp, event_tmp), family="cox", lambda=lambda, gamma=gamma, relax=FALSE) 
+        cv.glmnet.fit = cv.glmnet( xs_tmp, Surv(y_tmp, event_tmp), family="cox", lambda=lambda, gamma=gamma, relax=FALSE, ... ) 
       } else {
-        cv.glmnet.fit = cv.glmnet( xs_tmp, Surv(start_tmp, y_tmp, event_tmp), family="cox", lambda=lambda, gamma=gamma, relax=FALSE ) 
+        cv.glmnet.fit = cv.glmnet( xs_tmp, Surv(start_tmp, y_tmp, event_tmp), family="cox", lambda=lambda, gamma=gamma, relax=FALSE, ... ) 
       }
     } else {
-      cv.glmnet.fit = cv.glmnet( xs_tmp, y_tmp , family=family, lambda=lambda, relax=FALSE) 
+      cv.glmnet.fit = cv.glmnet( xs_tmp, y_tmp , family=family, lambda=lambda, relax=FALSE, ... ) 
     }
   }
 
   lambda = cv.glmnet.fit$lambda 
   lambda_n = length( lambda )    
     
-  if (time==1) { time_last = difftime2(time_start) }
+  if (track==1) { time_last = difftime2(time_start) }
   
   a0g1 = NULL 
   
-  dim(cv.glmnet.fit$glmnet.fit$beta)
   betag1 = cv.glmnet.fit$glmnet.fit$beta[,1:lambda_n]                         ## beta for gamma=1, un-relaxed model 
+#  dimbeta=dim(cv.glmnet.fit$glmnet.fit$beta)
+#  betag1[,dimbeta[2]]
+#  betag1[,2]
+#  c(1:dimbeta[2]) [betag1[,2]!=0]
   if (family != "cox") { a0g1 = cv.glmnet.fit$glmnet.fit$a0[1:lambda_n] }
-      
   bnames=list()
   for (col_ in 1:lambda_n) { 
     bname = rownames(betag1)[ (betag1[,col_]!=0) ]
@@ -635,8 +680,11 @@ glmnetr = function(xs_tmp, start_tmp, y_tmp, event_tmp, family="cox", lambda=NUL
     
   a0g0 = NULL
   
+  betalast  = c(rep(0,dim(betag1)[1]))
+  
   #---------------------------------------------------------------------------
   for (col_ in 1:lambda_n) { 
+#  for (col_ in 1:8) {     
     bname = bnames[[col_]]  
     bname
     if (length(bname) == 0) { 
@@ -648,39 +696,26 @@ glmnetr = function(xs_tmp, start_tmp, y_tmp, event_tmp, family="cox", lambda=NUL
     } else {
       if ( length(bname) != length(bnamelast) ) {
         same = FALSE
-      } else if (sum((bname != bnamelast) != 0)) {
+      } else if (sum(bname != bnamelast) != 0) {
         same = FALSE 
+      } else {
+        same = TRUE
       }
     }
       
     if ((same==FALSE ) & (bnamenone==FALSE)) { 
       if (family=="cox") {
+        x_tmp = as.matrix( xs_tmp[,(betag1[,col_]!=0)] ) 
+        colnames(x_tmp) = colnames(xs_tmp)[(betag1[,col_]!=0)]
+        betainit = betalast[(betag1[,col_]!=0)]
         if ( is.null(start_tmp) ) { 
-          if (bnamenone) { 
-            dataf = as.data.frame( cbind( y_tmp, event_tmp, one=c(1) ) )
-            form2 = formula( paste("Surv(" , colnames(dataf)[1] ,  ", " , colnames(dataf)[2] , ") ~ one ") )  
-          } else { 
-            dataf = as.data.frame( cbind( y_tmp, event_tmp, xs_tmp ) ) 
-            form2 = formula( paste("Surv(" , colnames(dataf)[1] ,  ", " , colnames(dataf)[2] , ") ~ ", paste(bname, collapse = " + " ) ) )  
-          }
+          fit2  = survival::coxph.fit( x_tmp, Surv( y_tmp , event_tmp), strata=NULL, init=betainit, control=coxcontrol, resid=FALSE, method=ties ) 
         } else { 
-          if (bnamenone) { 
-            dataf = as.data.frame( cbind( start_tmp, y_tmp, event_tmp, one=c(1) ) )
-            form2 = formula( paste("Surv(" , colnames(dataf)[1] ,  ", " , colnames(dataf)[2],  ", " , colnames(dataf)[3]  , ") ~ one") ) 
-          } else {
-            dataf = as.data.frame( cbind( start_tmp, y_tmp, event_tmp, xs_tmp ) )
-            form2 = formula( paste("Surv(" , colnames(dataf)[1] ,  ", " , colnames(dataf)[2],  ", " , colnames(dataf)[3]  , ") ~ ", paste(bname, collapse = " + " ) ) ) 
-            }
-          }
-          fit2 = coxph( form2 , dataf ) 
-      } else {
-        if (bnamenone) { 
-          dataf = as.data.frame( cbind( y_tmp, one=c(1) ) )
-          form2 = formula( paste( colnames(dataf)[1] , " ~ one ") )  
-        } else {
-          dataf = as.data.frame( cbind( y_tmp,  xs_tmp ) ) 
-          form2 = formula( paste( colnames(dataf)[1] ,  " ~ ", paste(bname, collapse = " + " ) ) )  
+          fit2  = survival::agreg.fit( x_tmp, Surv( start_tmp, y_tmp , event_tmp), strata=NULL, init=betainit, control=coxcontrol, resid=FALSE, method=ties )  
         }
+      } else {
+        dataf = as.data.frame( cbind( y_tmp,  xs_tmp ) ) 
+        form2 = formula( paste( colnames(dataf)[1] ,  " ~ ", paste(bname, collapse = " + " ) ) )  
         fit2 = glm( form2 , dataf, family=family) 
       }
       
@@ -700,10 +735,11 @@ glmnetr = function(xs_tmp, start_tmp, y_tmp, event_tmp, family="cox", lambda=NUL
            beta[ bnamei ] = fit2$coefficients[-1]
          } 
          beta 
+         beta[ is.na(beta) ] = 0 
        }
     }  
     
-    if  (col_ == 1) { 
+    if (col_ == 1) { 
       betag0 = beta  
       if (family != "cox") { a0g0 = a0 }
     } else { 
@@ -711,15 +747,17 @@ glmnetr = function(xs_tmp, start_tmp, y_tmp, event_tmp, family="cox", lambda=NUL
       if (family != "cox") { a0g0 = cbind(a0g0, a0) }
     }
     bnamelast = bname 
+    betalast  = beta
   }
   #---------------------------------------------------------------------------
     
-  if (time==1) { time_last = difftime2(time_start, time_last) }
+  if (track==1) { time_last = difftime2(time_start, time_last) }
 
   rownames(betag0) = xs_tmpnames 
+#  colnames(betag0) = colnames(betag1)
   colnames(betag0) = c(1:lambda_n)
   dim( betag0 )
-  betag0[is.na(betag0)] = 0 
+#  betag0[is.na(betag0)] = 0 
   if (family != "cox") {
     a0g0 = as.vector(a0g0)
     names(a0g0) = names(a0g1) 
@@ -735,10 +773,10 @@ glmnetr = function(xs_tmp, start_tmp, y_tmp, event_tmp, family="cox", lambda=NUL
 ## get log likelihood for various model fits on the relaxed (1-gamma)*betag0 + gamma*betag ####################
 ## object=glmnetr.fit.train ; xs_new=testxs ; start_new=teststart ; y_new=testy_ ; event_new=testevent; lambda_n=NULL; lambda=lambda; gamma=gamma ; family="gaussian" ; 
 
-#' Evaluation fit of leave out fold
+#' Evaluate fit of leave out fold
 #'
 #' @description
-#' This function derives the log likelihood for a leave out based upon the fit
+#' Derive the log likelihood for a leave out based upon the fit
 #' of the input object.
 #' 
 #' @param object an output object from _cv.glmnetr_  
@@ -749,6 +787,9 @@ glmnetr = function(xs_tmp, start_tmp, y_tmp, event_tmp, family="cox", lambda=NUL
 #' @param family Model family, one of "cox", "gaussian" or "binomial".  
 #' @param lambda_n length of the lambda vector.  
 #' @param gamma  The gamma vector.  
+#' @param ties method for handling ties in Cox model for relaxed model component.  Default 
+#' is "efron", optionally "breslow".  For penalized fits "breslow" is 
+#' always used as in the 'glmnet' package.
 #'
 #' @return Returns the log likelihood of object fit using new data.  
 #' 
@@ -756,7 +797,7 @@ glmnetr = function(xs_tmp, start_tmp, y_tmp, event_tmp, family="cox", lambda=NUL
 #' @importFrom survival coxph coxph.control  
 #'
 glmnetrll_1fold = function(object, xs_new, start_new, y_new, event_new, family="cox", 
-                           lambda_n=NULL, gamma=c(0,0.25,0.50,0.75,1)) {
+                           lambda_n=NULL, gamma=c(0,0.25,0.50,0.75,1), ties="efron") {
 
   nobs = dim(xs_new)[1]
   
@@ -772,9 +813,9 @@ glmnetrll_1fold = function(object, xs_new, start_new, y_new, event_new, family="
   one = rep(1, length(y_new)) 
   if (family == "cox") {
     if (is.null(start_new)) {
-      fitnull = coxph(Surv(y_new, event_new)~one, init = c(0), control=coxph.control(iter.max=0)) 
+      fitnull = coxph(Surv(y_new, event_new)~one, init = c(0), control=coxph.control(iter.max=0), ties=ties) 
     } else {
-      fitnull = coxph(Surv(start_new, y_new, event_new)~one, init = c(0), control=coxph.control(iter.max=0)) 
+      fitnull = coxph(Surv(start_new, y_new, event_new)~one, init = c(0), control=coxph.control(iter.max=0), ties=ties) 
     }
     loglik_null = fitnull$loglik[1]
     loglik_sat = cox.sat.dev(y_new, event_new) 
@@ -808,7 +849,7 @@ glmnetrll_1fold = function(object, xs_new, start_new, y_new, event_new, family="
 #  print(dim(object$betag1))
   for (ja_ in 1:lambda_n_local) {
     for (ia_ in 1:gamma_n) {
-      gam = gamma[ia_]
+      gam = gamma[ia_] 
       beta_   = (1-gam) * object$betag0[,ja_] + gam * object$betag1[,ja_]
 #      length(beta_)  ; class (beta_) ; 
 #      beta_[beta_!=0]      
@@ -817,12 +858,13 @@ glmnetrll_1fold = function(object, xs_new, start_new, y_new, event_new, family="
       summary(score_new)
       if (family=="cox") { 
         if (is.null(start_new)) {
-          fit1 = coxph(Surv(y_new, event_new)~score_new    , init = c(1), control=coxph.control(iter.max=20)) 
+          fit1 = coxph(Surv(y_new, event_new)~score_new    , init = c(1), control=coxph.control(iter.max=0), ties=ties)               ## 16FEB2023 
         } else {
-          fit1 = coxph(Surv(start_new, y_new, event_new)~score_new    , init = c(1), control=coxph.control(iter.max=20)) 
+          fit1 = coxph(Surv(start_new, y_new, event_new)~score_new    , init = c(1), control=coxph.control(iter.max=0), ties=ties)    ## 16FEB2023 
         }
-#        cvdevian_r[ia_,ja_] = coxnet.deviance(score_new,Surv(y_new,event_new))                
-        cvdevian_r[ia_,ja_] = 2*(loglik_sat[1] - fit1$loglik[1]) 
+#        cvdevian_r[ia_,ja_] = coxnet.deviance(score_new,Surv(y_new,event_new)) 
+        if (ties == "breslow") { cvdevian_r[ia_,ja_] = 2*(loglik_sat[2] - fit1$loglik[1]) 
+        } else                 { cvdevian_r[ia_,ja_] = 2*(loglik_sat[1] - fit1$loglik[1]) } 
       } else if (family=="gaussian") {
         cvdevian_r[ia_,ja_] = sum((y_new-score_new)^2) ; # var(y_new) ; var(score_new) ; 
       } else if (family=="binomial") {
@@ -860,14 +902,17 @@ glmnetrll_1fold = function(object, xs_new, start_new, y_new, event_new, family="
 #' 
 #' @description fit models to derive the devaince ratios.  
 #'
-#' @param object  - A _glmnet_ output object with relax=FALSE, i.e model fit for gamma=1. 
-#' @param object2 - A _glmnetr_ output object with relaxed fits, i.e model fit for gamma=0. 
-#' @param xs_new  - predictor matrix 
-#' @param start_new - start times in case of usage in Cox model.  May be NULL.  
-#' @param y_new   - outcome vector. 
-#' @param event_new - event indicator in case of Cox model.  
-#' @param family  - Model family, one of "cox", "gaussian" or "binomial".   
-#'
+#' @param object    a glmnet() output object with relax=FALSE, i.e model fit for gamma=1. 
+#' @param object2   a glmnetr() output object with relaxed fits, i.e model fit for gamma=0. 
+#' @param xs_new    predictor matrix 
+#' @param start_new start times in case of usage in Cox model.  Else should be NULL.  
+#' @param y_new     outcome vector. 
+#' @param event_new event indicator in case of Cox model.  Else should be NULL.
+#' @param family    model family, one of "cox", "gaussian" or "binomial".   
+#' @param ties method for handling ties in Cox model for relaxed model component.  Default 
+#' is "efron", optionally "breslow".  For penalized fits "breslow" is 
+#' always used as in the 'glmnet' package.
+#' 
 #' @return - Deviance ratios.  
 #' 
 # @importFrom survival coxph coxph.control residuals.coxph 
@@ -876,19 +921,20 @@ glmnetrll_1fold = function(object, xs_new, start_new, y_new, event_new, family="
 #' @importFrom survival coxph coxph.control  
 #' 
 # object=cv.glmnet.fit.f ; object2=glmnetr.fit ; xs_new=xs ; start_new=start ; y_new=y_ ; event_new=event ; family=family ; 
-glmnetr_devratio = function( object, object2, xs_new, start_new, y_new, event_new, family) {
+glmnetr_devratio = function( object, object2, xs_new, start_new, y_new, event_new, family, ties="efron") {
 
   one = rep(1, length(y_new))
   
   if (family == "cox") {
     if (is.null(start_new)) {
-      fitnull = coxph(Surv(y_new, event_new)~one, init = c(0), control=coxph.control(iter.max=0)) 
+      fitnull = coxph(Surv(y_new, event_new)~one, init = c(0), control=coxph.control(iter.max=0), ties=ties) 
     } else {
-      fitnull = coxph(Surv(start_new, y_new, event_new)~one, init = c(0), control=coxph.control(iter.max=0)) 
+      fitnull = coxph(Surv(start_new, y_new, event_new)~one, init = c(0), control=coxph.control(iter.max=0), ties=ties) 
     } 
     loglik_null = fitnull$loglik[1]
     loglik_sat = cox.sat.dev(y_new, event_new) 
-    nulldev     = 2*(loglik_sat - loglik_null)
+    if (ties == "breslow") { nulldev = 2*(loglik_sat[2] - loglik_null)
+    } else                 { nulldev = 2*(loglik_sat[1] - loglik_null) }
   } else if (family == "binomial") {
     fitnull = glm(y_new ~ one ) 
     loglik_null = logLik(fitnull)[1]
@@ -922,9 +968,9 @@ glmnetr_devratio = function( object, object2, xs_new, start_new, y_new, event_ne
       score = xs_new %*% beta_ 
       if (family != "cox") { score = score + (1-gam)*object2$a0g0[ja_] + gam*object2$a0g1[ja_] }
       if        ( ( family=="cox") &   is.null(start_new)  ) { 
-        fit1 = coxph(Surv(y_new, event_new)~score, init = c(1),control=coxph.control(iter.max=0)) 
+        fit1 = coxph(Surv(y_new, event_new)~score, init = c(1),control=coxph.control(iter.max=0), ties=ties) 
       } else if ( ( family=="cox") & (!is.null(start_new)) ) { 
-        fit1 = coxph(Surv(start_new, y_new, event_new)~score, init = c(1),control=coxph.control(iter.max=0)) 
+        fit1 = coxph(Surv(start_new, y_new, event_new)~score, init = c(1),control=coxph.control(iter.max=0), ties=ties) 
       } else if (family=="binomial") {
         p_ = 1/(1+exp(-score)) 
         loglik = ( t(log(p_))%*%y_new + t(log(1-p_))%*%(1-y_new) )
@@ -934,7 +980,8 @@ glmnetr_devratio = function( object, object2, xs_new, start_new, y_new, event_ne
         fit1 = glm( y_new ~ score )    
       } 
       if (family=="cox") { 
-        dev[ja_, gam+1] = 2*(loglik_sat[1] - fit1$loglik[1])
+        if (ties == "breslow") { dev[ja_, gam+1] = 2*(loglik_sat[2] - fit1$loglik[1])
+        } else                 { dev[ja_, gam+1] = 2*(loglik_sat[1] - fit1$loglik[1]) }
       } else if (family %in% c("binomial","gaussian")) {
         dev[ja_, gam+1] = - 2*loglik 
       } else {  
@@ -969,12 +1016,12 @@ glmnetr_devratio = function( object, object2, xs_new, start_new, y_new, event_ne
 #' Generate example data 
 #' 
 #' @description
-#' This function generates an example data set with specified number of observations, 
-#' and predictors.  The first column in teh dsing matrix is identically equal to 1
+#' Generate an example data set with specified number of observations, 
+#' and predictors.  The first column in the design matrix is identically equal to 1
 #' for an intercept.  Columns 2 to 5 are for the 4 levels of a character variable, 
-#' 6 to 11 for the 6 levels of a character variable.  Columns 12 to 17 are for 3
-#' binomial predictors, again over paramtereized.  Such over paramtereization
-#' can cause difficulties with the _glmnet()_ of the glmnet package.  
+#' 6 to 11 for the 6 levels of another character variable.  Columns 12 to 17 are for 3
+#' binomial predictors, again over parameterized.  Such over parameterization
+#' can cause difficulties with the glmnet() of the 'glmnet' package.  
 #'
 #' @param nrows Sample size (>=100) for simulated data, default=1000.
 #' @param ncols Number of columns (>=17) in design matrix, i.e. predictors, default=100. 
@@ -1073,21 +1120,23 @@ glmnetr.simdata = function(nrows=1000, ncols=100, beta=NULL) {
 
 #' Calculate the CoxPH saturated log-likelihood
 #'
-#' @description This function calculates the saturated log-likelihood for the Cox 
+#' @description Calculate the saturated log-likelihood for the Cox 
 #' model using both the Efron and Breslow approximations for the case where all ties
-#' at a common event time have the same weights (exp(X%*%B)).  For the simple case 
-#' without ties the saturated log-likelihood is 0 as the contribution to the log-likelihood 
-#' at that time point can be made arbitrarily close to 1 by assigning a large weight 
-#' to the record corresponding to an event.  Similarly, in the 
-#' case of ties one can assign a much larger weight to be associated with one of the
-#' event times such that the associated record contributes a 1 to the likelihood.  Next one can 
-#' assigns a very large weight to a second tie, but smaller than the first tie considered,
-#' and this too will contribute a 1 to the likelihood.  Continuing in this way for this
-#' and all time points with ties, 
+#' at a common event time have the same weights (exp(X*B)).  For 
+#' the simple case without ties 
+#' the saturated log-likelihood is 0 as the contribution to the log-likelihood at 
+#' each event time point can be made arbitrarily close to 1 by assigning a much larger 
+#' weight to the record with an 
+#' event.  Similarly, in the case of ties 
+#' one can assign a much larger weight to be associated with one of the event times 
+#' such that the associated record contributes a 1 to the likelihood.  Next one 
+#' can assign a very large weight to a second tie, but smaller than the first tie 
+#' considered, and this too will contribute a 1 to the 
+#' likelihood.  Continuing in this way for this and all time points with ties, 
 #' the partial log-likelihood is 0, just like for the no-ties case.  Note, this is 
 #' the same argument with which we derive the log-likelihood of 0 for the no ties
 #' case. Still, to be consistent with others we derive the saturated log-likelihood
-#' with ties under the constraint that all ties carry the same weights.
+#' with ties under the constraint that all ties at each event time carry the same weights.
 #'
 #' @param y_ Time variable for a survival analysis, whether or not there is a start time
 #' @param e_ Event indicator with 1 for event 0 otherwise. 
@@ -1105,6 +1154,65 @@ cox.sat.dev =  function(y_, e_) {
   sat.dev = c(loglik_sat_ef , loglik_sat_br )
   names(sat.dev) = c("loglik_sat_efron", "loglik_sat_breslow")
   return( sat.dev )
+}
+
+###############################################################################################################
+###############################################################################################################
+
+#' Get elapsed time in c(hour, minute, secs) 
+#'
+#' @param time1 start time
+#' @param time2 stop time
+#'
+#' @return Returns a vector of elapsed time in (hour, minute, secs) 
+#'
+difftime1 = function(time1, time2) {
+  hour = difftime(time1, time2, units="hour") ;   
+  class(hour) = NULL ; 
+  hour   = floor( hour) 
+  minute = difftime(time1, time2, units="min") ;   
+  class(minute) = NULL ; 
+  minute = floor( minute %% 60) 
+  secs   = difftime(time1, time2, units="secs") ;   
+  class(secs) = NULL ; 
+  secs = floor( secs %% 60) 
+  return(c(hour, minute, secs))
+}
+
+###############################################################################################################
+###############################################################################################################
+
+#' Output to console the elapsed and split times  
+#'
+#' @param time_start beginning time for printing elapsed time 
+#' @param time_last last time for calculating split time
+#'
+#' @return Time of program invocation 
+#' 
+#' @export 
+#'
+#' @examples
+#' time_start = difftime2()
+#' time_last = difftime2(time_start)
+#' time_last = difftime2(time_start,time_last)
+#' time_last = difftime2(time_start,time_last)
+#'
+difftime2 = function(time_start=NULL, time_last=NULL) {
+  time_sys = Sys.time()
+  time_elapse = difftime1(time_sys, time_start)
+  if (is.null(time_start)) { 
+    cat(paste0("Start at Sys.time = ", time_sys,  " \n"))
+  } else if (is.null(time_last)) { 
+    cat(paste0("Sys.time = ", time_sys, 
+               ",  elapsed time = " , time_elapse[1], ":", time_elapse[2], ":", time_elapse[3] , " h:m:s",  " \n"))
+  } else { 
+    time_split  = difftime1(time_sys, time_last ) 
+    cat(paste0("Sys.time = ", time_sys, 
+               ",  elapsed time = " , time_elapse[1], ":", time_elapse[2], ":", time_elapse[3] , " h:m:s",
+               ",  time split = "  , time_split[1] , ":", time_split[2] , ":", time_split[3] , " h:m:s", " \n"))
+  } 
+  time_last = time_sys ; 
+  return(time_last)
 }
 
 ###############################################################################################################

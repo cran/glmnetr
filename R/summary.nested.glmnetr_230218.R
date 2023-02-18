@@ -1,19 +1,21 @@
 ####################################################################################################################################
 ####################################################################################################################################
-#' Summary of the fit of a cross validated tuned relaxed lasso model fit, inferred by nested cross validation.  .
+#' Summarize a a nested.glmnetr() output object
 #'
 #' @description 
-#' Summarize the model fit from a nested.glmnetr output object, i.e. a nested, 
-#' cross-validated relaxed lasso model.  Else summarize the cross-validated 
-#' model fit.    
+#' Summarize the model fit from a nested.glmnetr() output object, i.e. the fit of 
+#' a cross-validation informed relaxed lasso model fit, inferred by nested cross 
+#' validation.  Else summarize the cross-validated model fit.    
 #'
-#' @param object A nested.glmnetr output object.  
-#' @param cvfit  Default is FALSE to describe the evaluation of the cross validated relaxed lasso model.  
-#' Option of TRUE will describe the cross validation tuned relaxed lasso model itself. 
+#' @param object a nested.glmnetr() output object.  
+#' @param cvfit  default of FALSE to summarize fit of a cross validation informed 
+#' relaxed lasso model fit, inferred by nested cross validation.  Option of TRUE 
+#' will describe the cross validation informed relaxed lasso model itself. 
 #' @param printg1 TRUE to also print out the fully penalized lasso beta, else to suppress.  
 #' Only applies to cvfit=TRUE.
-#' @return - A fit summary, or a model summary.  
 #' @param ... Additional arguments passed to the summary function.  
+#' 
+#' @return - a nested cross validation fit summary, or a cross validation model summary.  
 #' 
 #' @seealso
 #'   \code{\link{glmnetr.compcv}} , \code{\link{summary.cv.stepreg}} , \code{\link{nested.glmnetr}} 
@@ -39,7 +41,7 @@ summary.nested.glmnetr = function(object, cvfit=FALSE, printg1=FALSE, ...) {
   } else {
     
     tuning        = object$tuning      
-    names (object$sample)[1] = "family" 
+#    names (object$sample)[1] = "family" 
     family        = object$sample[1] 
     if (tuning[4]==1) { 
       lassonzerocv  = object$lassonzerocv
@@ -47,12 +49,24 @@ summary.nested.glmnetr = function(object, cvfit=FALSE, printg1=FALSE, ...) {
       lassolincalcv = object$lassolincalcv
       lassoagreecv  = object$lassoagreecv
       lasso.naive.agree = object$lasso.naive.agree
+      lassoAveNZero  = colMeans(lassonzerocv)  
       lassoAveDevian = colMeans(lassodeviancv)  
       lassoAveLincal = colMeans(lassolincalcv)  
       lassoAveAgree  = colMeans(lassoagreecv) 
-      lassoAveNZero  = colMeans(lassonzerocv)  
     } 
-    if ((tuning[5] == 1) | (tuning[6]==1)) {
+    if (tuning[5]==1) { 
+      rpartnzerocv  = object$rpartnzerocv
+      rpartdeviancv = object$rpartdeviancv
+      rpartlincalcv = object$rpartlincalcv
+      rpartagreecv  = object$rpartagreecv
+      rpart.nzero   = object$rpart.nzero
+      rpart.agree.naive = object$rpart.agree.naive
+      rpartAveNZero  = colMeans(rpartnzerocv)  
+      rpartAveDevian = colMeans(rpartdeviancv)  
+      rpartAveLincal = colMeans(rpartlincalcv)  
+      rpartAveAgree  = colMeans(rpartagreecv) 
+    } 
+    if ((tuning[6] == 1) | (tuning[7]==1)) {
       stepdeviancv  = object$stepdeviancv
       stepagreecv   = object$stepagreecv 
       step_dfcv     = object$step_dfcv
@@ -62,8 +76,8 @@ summary.nested.glmnetr = function(object, cvfit=FALSE, printg1=FALSE, ...) {
       StepAve_df    = colMeans( step_dfcv   )
       StepAve_p     = colMeans( step_pcv    )
     }
-    if (tuning[5]==1) { func.fit.aic      = object$func.fit.aic      }
-    if (tuning[6]==1) { cv.stepreg.fit    = object$cv.stepreg.fit    }  
+    if (tuning[6]==1) { func.fit.aic      = object$func.fit.aic      }
+    if (tuning[7]==1) { cv.stepreg.fit    = object$cv.stepreg.fit    }  
   
     cat(paste0("\n"  , " Sample information including number of records, "))     
     if (family %in% c("cox","binomial")) { cat(paste0("events,")) }
@@ -74,15 +88,15 @@ summary.nested.glmnetr = function(object, cvfit=FALSE, printg1=FALSE, ...) {
 #    cat(paste0("\n"  , " Number of columns in design (predictor, X) matrix, and df (rank) of design matrix: ", "\n") )
 #    print( object$sample[3:4] ) 
     
-    if ((tuning[5]==0) & (tuning[6]==0)) { 
-      cat(paste0("\n"  , " Tuning parameters for lasso model: ", "\n") )
-      print(object$tuning[c(2,7)]) 
+    if ((tuning[6]==0) & (tuning[7]==0)) { 
+      cat(paste0("\n"  , " Tuning parameters for lasso/rpart model: ", "\n") )
+      print(object$tuning[c(2,8)]) 
     } else { 
       cat(paste0("\n"  , " Tuning parameters for models: ", "\n") )
       print(object$tuning) 
     }
     
-#    if (tuning[6]==1) {
+#    if (tuning[7]==1) {
 #      cat(paste0("\n", " Average deviance for null model", "\n") )    ## pull other data applicable to all models 
 #      print( round(StepAveDevian[1], digits = 4 ) ) 
 #    }
@@ -100,15 +114,49 @@ summary.nested.glmnetr = function(object, cvfit=FALSE, printg1=FALSE, ...) {
       cat(paste0("\n", "      linear calibration coefficient : ", "\n") )
       print( round( lassoAveLincal , digits = 4) ) 
       
-      cat(paste0("\n", "      agreement (concordance for Cox and binomial, r-square for guassian): ", "\n") )
+      # In summary.nested.glmnetr state only "concordance" or "R-square" in output
+      
+      if (family %in% c("cox","binomial")) { 
+        cat(paste0("\n", "      agreement (concordance):         ", "\n") )
+      } else { 
+        cat(paste0("\n", "      agreement (r-square):            ", "\n") )
+      } 
+      
       print( round( lassoAveAgree , digits = 4) ) 
       
-      cat(paste0("\n", " Naive agreement for cross validation tuned lasso model : ",  "\n") )
+      cat(paste0("\n", " Naive agreement for cross validation informed lasso model : ",  "\n") )
       names(lasso.naive.agree) = c("lasso.1se", "lasso.min", "lasso.1seR", "lasso.minR", "lasso.1seR0", "lasso.minR0") 
       print( round( lasso.naive.agree , digits=4) )
     }                                                                             ## how to get rid of [1,]  ??
-    
-    if (tuning[6]==1) {
+
+    if (tuning[5] == 1) { 
+      cat(paste0("\n" , " Nested Cross Validation averages for RPART : ", "\n") )
+
+      cat(paste0("\n", "    average number of terms used in cv informed models : ", "\n") )
+      names(rpartAveNZero) = c("cp=0.00", "cp=0.01", "cp=0.02") 
+      print(round( rpartAveNZero, digits=1)) 
+      
+      if (family %in% c("cox","binomial")) { 
+        cat(paste0("\n", "    average agreement (concordance):         ", "\n") )
+      } else { 
+        cat(paste0("\n", "    agreement (r-square):            ", "\n") )
+      } 
+      
+      names(rpartAveAgree) = c("cp=0.00", "cp=0.01", "cp=0.02") 
+      print( round( rpartAveAgree , digits = 4) ) 
+      
+      cat(paste0("\n", " Cross validation informed RPART model : ",  "\n") )
+      
+      cat(paste0("\n", "   number of terms used in model : ", "\n") )
+      names(rpart.nzero) = c("cp=0.00", "cp=0.01", "cp=0.02") 
+      print(round( rpart.nzero, digits=1)) 
+      
+      cat(paste0("\n", "   naive agreement : ",  "\n") )
+      names(rpart.agree.naive) = c("cp=0.00", "cp=0.01", "cp=0.02") 
+      print( round( rpart.agree.naive , digits=4) )
+    }                                                                             ## how to get rid of [1,]  ??
+        
+    if (tuning[7]==1) {
 #      cv.stepreg.fit = object$cv.stepreg.fit
 #      cv.stepreg.fit.df = cv.stepreg.fit$best.df    #func.fit.df
       cat(paste0("\n", " Nested Cross Validation stepwise regression model (df): ", "\n") )   
@@ -139,7 +187,7 @@ summary.nested.glmnetr = function(object, cvfit=FALSE, printg1=FALSE, ...) {
       }
     }
     
-    if (tuning[5]==1) {
+    if (tuning[6]==1) {
       cat(paste0("\n", " Cross Validation results for stepwise regression model: (AIC)", "\n") )    
       cat(paste0("      Average deviance : ", round(StepAveDevian[3],  digits = 4), "\n") )    
       cat(paste0("      Average model df : ", round( StepAve_df[3], digits=2 ), "\n") )
@@ -170,18 +218,18 @@ summary.nested.glmnetr = function(object, cvfit=FALSE, printg1=FALSE, ...) {
 #' @param object  A nested.glmnetr output object.
 #' @param xs_new The predictor matrix.  If NULL, then betas are provided.  
 #' @param lam The lambda value for choice of beta.  If NULL, then 
-#' lambda.min is used from the cross validated tuned relaxed model.  We
+#' lambda.min is used from the cross validation informed relaxed model.  We
 #' use the term lam instead of lambda as lambda usually denotes a vector 
 #' in the package.    
 #' @param gam The gamma value for choice of beta.  If NULL, then 
-#' gamma.min is used from the cross validated tuned relaxed model.  We
+#' gamma.min is used from the cross validation informed relaxed model.  We
 #' use the term gam instead of gamma as gamma usually denotes a vector 
 #' in the package.    
 #' @param comment Default of TRUE to write to console information on lam and gam selected for output.
 #' FALSE will suppress this write to console.  
 #' @param ... Additional arguments passed to the predict function.  
 #'
-#' @return Either the XS*Beta estimates based upon the predictor matrix, 
+#' @return Either the xs_new*Beta estimates based upon the predictor matrix, 
 #' or model coefficients. 
 #' 
 #' @seealso
@@ -212,7 +260,7 @@ predict.nested.glmnetr = function( object, xs_new=NULL, lam=NULL, gam=NULL, comm
 #' A glmnetr specifc paired t-test
 #'
 #' @description 
-#' Perform a paired t-test as called from glmnetr.compcv.  
+#' Perform a paired t-test as called from glmnetr.compcv().  
 #'
 #' @param a One term
 #' @param b A second term 
@@ -259,8 +307,9 @@ glmnetr.compcv0 = function(a,b) {
 glmnetr.compcv = function(object) {
   tuning        = object$tuning
   dolasso = tuning[4]
-  doaic   = tuning[5]
-  dostep  = tuning[6]
+  dorpart = tuning[5]
+  doaic   = tuning[6]
+  dostep  = tuning[7]
   lassoagreecv  = object$lassoagreecv
   stepagreecv   = object$stepagreecv
   if (dolasso == 1) {

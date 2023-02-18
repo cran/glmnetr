@@ -161,16 +161,16 @@ plot.glmnetr = function(x, gam=NULL, lambda.lo=NULL, title=NULL,comment=TRUE, ..
 #' 
 #' @description 
 #' By default, with coefs=FALSE, plots the average deviances as function of lam (lambda) and gam (gamma), and also 
-#' indicates the gam and lam which minimize diviance based upon either a cv.glmnetr() or nested.glmneter() output object.
-#' Optionally, with coefs=TRUE, plots the relaxes lasso coefficients.  
+#' indicates the gam and lam which minimize deviance based upon a cv.glmnetr() output object.
+#' Optionally, with coefs=TRUE, plots the relaxed lasso coefficients.  
 #'
-#' @param x a cv.glmnetr or nested.glmnetr output object.  
+#' @param x a cv.glmnetr()  output object.  
 #' @param gam a specific level of gamma for plotting.  By default gamma.min will be used.  
 #' @param lambda.lo a lower limit of lambda when plotting.  
-#' @param plup An indicator to plot the upper 95 percent two-sided confidence limits.  
-#' @param title A title for the plot.  
-#' @param coefs Default of FALSE plots deviances, option of TRUE plots coefficients.  
-#' @param comment Default of TRUE to write to console information on lam and gam selected for output.
+#' @param plup   an indicator to plot the upper 95 percent two-sided confidence limits.  
+#' @param title  a title for the plot.  
+#' @param coefs  default of FALSE plots deviances, option of TRUE plots coefficients.  
+#' @param comment default of TRUE to write to console information on lam and gam selected for output.
 #' FALSE will suppress this write to console. 
 #' @param ... Additional arguments passed to the plot function.  
 #'
@@ -179,7 +179,7 @@ plot.glmnetr = function(x, gam=NULL, lambda.lo=NULL, title=NULL,comment=TRUE, ..
 #' then the gamma.min from the deviance minimizing (lambda.min, gamma.min) pair 
 #' will be used, and the corresponding lambda.min will be indicated by a vertical
 #' line, and the lambda minimizing deviance under the restricted set of models 
-#' where gamma=0 will indicated by a second vertical line.    
+#' where gamma=0 will be indicated by a second vertical line.    
 #' 
 #' @seealso
 #'   \code{\link{plot.glmnetr}} , \code{\link{plot.nested.glmnetr}} , \code{\link{cv.glmnetr}} 
@@ -260,7 +260,7 @@ plot.cv.glmnetr = function(x, gam=NULL, lambda.lo=NULL, plup=0, title=NULL, coef
   minyterm = floor(1000*mincvm)/1000
 
   # llmin = log(lambda.min)
-  family = object$family 
+  family = object$sample$family 
   if (family=="cox") { ylab="deviance/event" } else { ylab="deviance/record" }
   plot(log(statlist[[1]][[1]][1]), statlist[[1]][[2]][1], xlim=c(minxterm, maxxterm) , ylim=c(minyterm, maxyterm), 
        main=NULL, xlab="log(lambda)", ylab=ylab ) 
@@ -309,7 +309,8 @@ plot.cv.glmnetr = function(x, gam=NULL, lambda.lo=NULL, plup=0, title=NULL, coef
 ####################################################################################################
 ####################################################################################################
 
-#' Plot the cross validated relaxed lasso deviances or coefficients from a nested.glmnetr call.  
+#' Plot the cross validated relaxed lasso deviances or coefficients from a nested.glmnetr call.  See 
+#' plot.cv.glmnetr().    
 #'
 #' @param x A nested.glmnetr output object 
 #' @param gam A specific level of gamma for plotting.  By default gamma.min will be used.  
@@ -343,13 +344,13 @@ plot.cv.glmnetr = function(x, gam=NULL, lambda.lo=NULL, plup=0, title=NULL, coef
 #' plot(fit3, coefs=TRUE)
 #' }
 #' 
-plot.nested.glmnetr = function(x, gam=NULL, lambda.lo=NULL, title=NULL, plup=0, coefs=FALSE, comment=TRUE, ...) {
+plot.nested.glmnetr = function(x, gam=NULL, lambda.lo=NULL, title=NULL, plup=0, coefs=FALSE, comment=TRUE, ... ) {
   object = x 
   tuning  = object$tuning
   dolasso = tuning[4]
   if (dolasso==1) {
     cv.glmnetr.fit = object$cv.glmnet.fit
-    plot(cv.glmnetr.fit, gam=gam, lambda.lo=lambda.lo, plup=plup, title=title, coefs=coefs,comment=comment) 
+    plot(cv.glmnetr.fit, gam=gam, lambda.lo=lambda.lo, plup=plup, title=title, coefs=coefs,comment=comment, ... ) 
     #    else { plot.glmnetr(cv.glmnetr.fit, gam=gam, lambda.lo=lambda.lo, title=title) }
   } else { 
     cat(paste0(" No relaxed lasso for plotting" , "\n")) 

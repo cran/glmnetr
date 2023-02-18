@@ -1,7 +1,7 @@
 ################################################################################################################################################################
 ################################################################################################################################################################
 
-#' Title  Cross validated tuned stepwise regression.   
+#' Cross validation informed stepwise regression model fit.   
 #'
 #' @param xs_cv   predictor input - an n by p matrix, where n (rows) is sample size, and p (columns) 
 #' the number of predictors.  Must be in matrix form for complete data, no NA's, no Inf's, etc.,
@@ -11,20 +11,20 @@
 #' #' Must be a vector of length same as number of sample size. 
 #' @param event_cv  event indicator, 1 for event, 0 for census, Cox model only.
 #' Must be a numeric vector of length same as sample size.
-#' @param steps_n  number of steps done in stepwise regression fitting 
-#' @param folds_n  number of folds for each level of cross validation 
+#' @param steps_n  Maximun number of steps done in stepwise regression fitting.  If 0, then takes the value rank(xs_cv).   
+#' @param folds_n  number of folds for cross validation 
 #' @param method   method for choosing model in stepwise procedure, "loglik" or "concordance".
 #' Other procedures use the "loglik".     
 #' @param family   model family, "cox", "binomial" or "gaussian" 
-#' @param foldid A vector of integers to associate each record to a fold.  Should be integers between 1 and folds_n.
-#' @param time 1 to output stepwise fit program, 0 (default) to suppress 
-#' @param time 1 to update fit progress in the console, 0 (default) to suppress. 
+#' @param foldid a vector of integers to associate each record to a fold.  The integers should be between 1 and folds_n.
+#' @param track indicate whether or not to update progress in the console.  Default of
+#' 0 suppresses these updates.  The option of 1 provides these updates.  
 #' In fitting clinical data with non full rank design matrix we have found some 
-#' R-packages to take a vary long time or seemingly be caught in infinite loops.  
-#' Therefore we allow the user to track the package and judge whether things are 
+#' R-packages to take a very long time.  Therefore we allow the user to track the 
+#' program progress and judge whether things are 
 #' moving forward or if the process should be stopped. 
 #'
-#' @return cross validated stepwise regression tuned by number of model terms or p
+#' @return cross validation infomred stepwise regression model fit tuned by number of model terms or p-value for inclusion.
 #' 
 #' @export
 #' 
@@ -41,11 +41,11 @@
 #' dim(xs)
 #' y_=sim.data$yt 
 #' event=sim.data$event
-# for this example we use small numbers for steps_n and folds_n to shorten run time 
-#' cv.stepreg.fit = cv.stepreg(xs, NULL, y_, event, steps_n=10, folds_n=3, time=0)
+#' # for this example we use small numbers for steps_n and folds_n to shorten run time 
+#' cv.stepreg.fit = cv.stepreg(xs, NULL, y_, event, steps_n=10, folds_n=3, track=0)
 #' summary(cv.stepreg.fit)
 #' 
-cv.stepreg = function(xs_cv, start_cv=NULL, y_cv, event_cv, steps_n=0, folds_n=10, method="loglik", family="cox", foldid=NULL,time=0) {
+cv.stepreg = function(xs_cv, start_cv=NULL, y_cv, event_cv, steps_n=0, folds_n=10, method="loglik", family="cox", foldid=NULL,track=0) {
 
   xs_cv_ncol = dim(xs_cv)[2]    
   nobs_cv = dim(xs_cv)[1]   
@@ -73,7 +73,7 @@ cv.stepreg = function(xs_cv, start_cv=NULL, y_cv, event_cv, steps_n=0, folds_n=1
   
   ## i_cv = 1 
   for (i_cv in 1:folds_n) {
-    if (time>=1) { cat(paste0(" ## Cross Validation fold  ", i_cv, "  of  " , folds_n , "  ##" , "\n")) }
+    if (track>=1) { cat(paste0(" ## Cross Validation fold  ", i_cv, "  of  " , folds_n , "  ##" , "\n")) }
     
     ##### set up train and test data sets in matrix form for glmnet & stepreg #####
     trainxs_cv = xs_cv[(folds_index_cv!=i_cv),]   
@@ -104,7 +104,7 @@ cv.stepreg = function(xs_cv, start_cv=NULL, y_cv, event_cv, steps_n=0, folds_n=1
     ###### START STEPWISE fits #####################################################
 ##    print( "HERE cv 2" ) 
 ##  xs_st=trainxs_cv ; start_time_st=trainstart_cv ; y_st=trainy_cv ; event_st=trainevent_cv ; steps_n=steps_n ; method=method ; family=family ;
-    stepreg.fit = stepreg(xs_st=trainxs_cv, start_time_st=trainstart_cv, y_st=trainy_cv, event_st=trainevent_cv, steps_n=steps_n, method=method, family=family, time=time)  
+    stepreg.fit = stepreg(xs_st=trainxs_cv, start_time_st=trainstart_cv, y_st=trainy_cv, event_st=trainevent_cv, steps_n=steps_n, method=method, family=family, track=track)  
 #    class( stepreg.fit )
     class( stepreg.fit ) = "data.frame" 
 #    typeof(stepreg.fit)
@@ -275,8 +275,8 @@ cv.stepreg = function(xs_cv, start_cv=NULL, y_cv, event_cv, steps_n=0, folds_n=1
   
   ##===========================================================================================##
 
-  if (time>=1) { cat(paste0(" ## Stepwise fit on full data set" , "\n")) } 
-  stepreg.fit.all = stepreg(xs_st=xs_cv, start_time_st=start_cv, y_st=y_cv, event_st=event_cv, steps_n=steps_n, family=family, time=time)  
+  if (track>=1) { cat(paste0(" ## Stepwise fit on full data set" , "\n")) } 
+  stepreg.fit.all = stepreg(xs_st=xs_cv, start_time_st=start_cv, y_st=y_cv, event_st=event_cv, steps_n=steps_n, family=family, track=track)  
   class(stepreg.fit.all) = "data.frame" 
   stepreg.fit.all.best = stepreg.fit.all[(stepreg.fit.all$best==1) , ] ; 
   ##### get model specification same as that of in stepreg() function ##### 
@@ -434,12 +434,12 @@ cv.stepreg = function(xs_cv, start_cv=NULL, y_cv, event_cv, steps_n=0, folds_n=1
 ################################################################################################################################################################
 ################################################################################################################################################################
 
-#' Summarize some results from a cv.stepwise() output object.  
+#' Summarize results from a cv.stepreg() output object.  
 #'
-#' @param object A cv.stepwise() output object
+#' @param object A cv.stepreg() output object
 #' @param ... Additional arguments passed to the summary function.   
 #'
-#' @return Summary of a stepwise regression 
+#' @return Summary of a stepreg() (stepwise regression) output object.   
 #' 
 #' @export
 #' 
@@ -453,11 +453,11 @@ cv.stepreg = function(xs_cv, start_cv=NULL, y_cv, event_cv, steps_n=0, folds_n=1
 #' dim(xs)
 #' y_=sim.data$yt 
 #' event=sim.data$event
-# for this example we use small numbers for steps_n and folds_n to shorten run time 
-#' cv.stepreg.fit = cv.stepreg(xs, NULL, y_, event, steps_n=10, folds_n=3, time=0)
+#' # for this example we use small numbers for steps_n and folds_n to shorten run time 
+#' cv.stepreg.fit = cv.stepreg(xs, NULL, y_, event, steps_n=10, folds_n=3, track=0)
 #' summary(cv.stepreg.fit)
 #' 
-#' #' 
+#' 
 summary.cv.stepreg = function(object, ...) {
   data1 = object$stepreg.fit.all.best ## [(object$best==1),]
   if ( ( dim(data1)[2] %% 2) ==0 ) { cox=0 } else { cox=1 }
@@ -483,3 +483,53 @@ summary.cv.stepreg = function(object, ...) {
 
 ################################################################################################################################################################
 ################################################################################################################################################################
+
+#' Beta's or predicteds based upon a cv.stepreg() output object. 
+#' 
+#' @description 
+#' Give predicteds or Beta's based upon a cv.stepreg() output object. If an input data matrix is 
+#' specified the X*Beta's are output.  If an input data matrix is not specified then 
+#' the Beta's are output.  In the first column values are given based upon df as a tuning 
+#' parameter and in the second column values based upon p as a tuning parameter.
+#'
+#' @param object cv.stepreg() output object 
+#' @param xs dataset for predictions.  Must have the same columns as the input predictor matrix in the call to cv.stepreg(). 
+#' @param ... pass through parameters 
+#'
+#' @return a matrix of beta's or predicteds
+#' 
+#' @export
+#' 
+predict.cv.stepreg = function(object, xs=NULL, ...) {
+  data1 = object$stepreg.fit.all.best ## [(object$best==1),]
+  if ( ( dim(data1)[2] %% 2) ==0 ) { cox=0 } else { cox=1 }
+  if (cox==1) { 
+    k_ = dim(data1)[2]/2 - 3.5
+    data2 = data1[ ,(k_+8):(2*k_+7)] 
+  } else {
+    k_ = dim(data1)[2]/2 - 4
+    data2 = data1[ ,(k_+8):(2*k_+8)] 
+  }
+
+  best.df = object$best.df  
+  best.p  = object$best.p 
+  df.p    = object$df.p 
+#  cat(paste0("\n", " CV best df = ", best.df, ", CV best p enter = ", best.p, " for ", df.p, " predictors \n     in the full data model, from ", k_ , " candidate predictors", "\n\n")) 
+  betas = data2[c(best.df, df.p),]
+  rownames(betas) = c("df","p")  
+  betas = t(betas) 
+  if (!is.null(xs)) { 
+    if (cox!=1) {
+      xs = cbind(rep(1,dim(xs)[1]),xs)
+      colnames(xs)[1] = "Int" 
+    }
+    rturn = xs %*% betas 
+  } else{ 
+    rturn = betas 
+  } 
+  return(rturn)  
+}
+
+# object = cv.stepwise.fit ; xs=NULL ; 
+
+

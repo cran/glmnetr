@@ -4,21 +4,21 @@
 #' the number of predictors.  Must be in matrix form for complete data, no NA's, no Inf's, etc.,
 #' and not a data frame. 
 #' @param start start time, Cox model only - class numeric of length same as number of patients (n)
-#' @param y_ output vector: time, or stop time for Cox model, Y_ 0 or 1 for binomal (logistic), numeric for gaussian. 
+#' @param y_ output vector: time, or stop time for Cox model, y_ 0 or 1 for binomial (logistic), numeric for gaussian. 
 #' Must be a vector of length same as number of sample size. 
 #' @param event event indicator, 1 for event, 0 for census, Cox model only.
 #' Must be a numeric vector of length same as sample size.
-#' @param steps_n number of steps done in stepwise regression fitting 
+#' @param steps_n maximum number of steps done in stepwise regression fitting 
 #' @param family model family, "cox", "binomial" or "gaussian" 
 #' @param object A stepreg() output.  If NULL it will be derived.  
-#' @param time Indicate whether or not to update progress in the console.  Default of
+#' @param track Indicate whether or not to update progress in the console.  Default of
 #' 0 suppresses these updates.  The option of 1 provides these updates.  In fitting 
 #' clinical data with non full rank design matrix we have found some R-packages to
-#' take a vary long time or seemingly be caught in infinite loops.  Therefore we allow
+#' take a very long time or possibly get caught in infinite loops.  Therefore we allow
 #' the user to track the package and judge whether things are moving forward or 
 #' if the process should be stopped.  
 #'
-#' @return The identified model in form of a glm() or coxph() output object, and an 
+#' @return The identified model in form of a glm() or coxph() output object, with an 
 #' entry of the stepreg() output object.
 #' 
 #' @export
@@ -39,7 +39,8 @@
 #' norm.aic.fit = aicreg(xs, NULL, y_, NULL, family="gaussian", steps_n=40) 
 #' summary(norm.aic.fit)
 #' 
-aicreg = function(xs, start, y_, event, steps_n=steps_n, family=family, object=NULL, time=0) {
+# track=track added to stepreg call 221220
+aicreg = function(xs, start, y_, event, steps_n=steps_n, family=family, object=NULL, track=0) {
   if (!is.null(object)) {
     #  stepreg.fit.all.best = as.matrix( cv.stepreg.fit.all$stepreg.fit.all.best ) 
     if (inherits(object,"cv.stepreg")) { 
@@ -48,8 +49,8 @@ aicreg = function(xs, start, y_, event, steps_n=steps_n, family=family, object=N
       stepreg.fit.all.best = object$stepreg.fit.all.best 
     }
   } else {
-    if (time >= 1) { cat(paste0("\n", " ########## Derive stepwise model on all data ################################################" , "\n")) } 
-    stepreg.fit.all  = stepreg(xs, start, y_, event, steps_n=steps_n, family=family)  
+    if (track >= 1) { cat(paste0("\n", " ########## Derive stepwise model on all data ################################################" , "\n")) } 
+    stepreg.fit.all  = stepreg(xs, start, y_, event, steps_n=steps_n, family=family, track=track)  
     class(stepreg.fit.all) = "data.frame" 
     stepreg.fit.all.best = stepreg.fit.all[(stepreg.fit.all$best==1) , ] 
   }

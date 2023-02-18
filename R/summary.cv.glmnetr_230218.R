@@ -1,14 +1,14 @@
 ###############################################################################################################
 ###############################################################################################################
-#' Output summary of a _cv.glmnetr_ output object.  
+#' Output summary of a cv.glmnetr() output object.  
 #' 
 #' @description 
-#' Summarize the cross-validated model fit to the R console.  The fully penalized
+#' Summarize the cross-validation informed model fit.  The fully penalized
 #' (gamma=1) beta estimate will not be given by default but can too be output  
 #' using printg1=TRUE.  
 #'
-#' @param object A _cv.glmnetr_ output object.  
-#' @param printg1 TRUE to also print out the fully penalized lasso beta, else to suppress.  
+#' @param object a cv.glmnetr() output object.  
+#' @param printg1 TRUE to also print out the fully penalized lasso beta, else FALSE to suppress.  
 #' @param orderall By default (orderall=FALSE) the order terms enter into the lasso model 
 #' is given for the number of terms that enter in lasso minimizing loss model.  If 
 #' orderall=TRUE then all terms that are included in any lasso fit are described.    
@@ -108,12 +108,15 @@ summary.cv.glmnetr = function(object, printg1="FALSE", orderall=FALSE, ...) {
 ###############################################################################################################
 ###############################################################################################################
 
-#' Give predicteds based upon the _glmnetr_ output object contained in the cv.glmnetr output object.
+#' Give predicteds based upon a cv.glmnetr() output object.
 #' 
 #' @description 
-#' Give predicteds based upon the _glmnetr_ output object contained in the cv.glmnetr output object.
+#' Give predicteds based upon a cv.glmnetr() output object. By default lambda and gamma 
+#' are chosen as the minimizing values for the relaxed lasso model.  If gam=1 and lam=NULL 
+#' then the best unrelaxed lasso model is chosen and if gam=0 and lam=NULL then
+#' the best fully relaxed lasso model is selected.  
 #' 
-#' @param object  A cv.glmnetr or nested.glmnetr output object.
+#' @param object  A cv.glmnetr (or nested.glmnetr) output object.
 #' @param xs_new The predictor matrix.  If NULL, then betas are provided.  
 #' @param lam The lambda value for choice of beta.  If NULL, then 
 #' lambda.min is used from the cross validated tuned relaxed model.  We
@@ -127,8 +130,8 @@ summary.cv.glmnetr = function(object, printg1="FALSE", orderall=FALSE, ...) {
 #' FALSE will suppress this write to console.    
 #' @param ... Additional arguments passed to the predict function.  
 #'
-#' @return Either predicteds (XS*beta estimates based upon the predictor matrix XS)  
-#' or model coefficients, based upon a cv.glmnetr output object.  When 
+#' @return Either predicteds (xs_new*beta estimates based upon the predictor matrix xs_new)  
+#' or model coefficients, based upon a cv.glmnetr() output object.  When 
 #' outputting coefficients (beta), creates a list 
 #' with the first element, beta_, including 0 and non-0 terms and the 
 #' second element, beta, including only non 0 terms. 
@@ -157,7 +160,8 @@ predict.cv.glmnetr = function( object, xs_new=NULL, lam=NULL, gam=NULL, comment=
   #  lam=NULL ; gam=NULL 
   #  lam="lambda.1se" ; gam="gamma.1se" 
   
-  family = object$family 
+#  family = object$family 
+  family = object$sample$family 
   lamgam = getlamgam(object, lam, gam, comment)
   lam    = lamgam$lam
   gam    = lamgam$gam
@@ -203,15 +207,25 @@ predict.cv.glmnetr = function( object, xs_new=NULL, lam=NULL, gam=NULL, comment=
 
 ###################################################################################################
 
-#' get lam and gam 
-#'
-#' @param object - glmnetr object as input
-#' @param lam value for lam, may be NULL
-#' @param gam value for gam, may be MULL 
+#' get numerical values for lam and gam 
+#' 
+#' @description 
+#' This functin derives the numerical values for lam and gam (lambda and gamma) for usage in plot and 
+#' predict() functions.  If the input variables lam and gam are unspecified then 
+#' the cross validation informed lambda and gamma values ('lambda.min' and 'gamma.mim) 
+#' which minimize the cross validation deviance, are returned.  One may also give
+#' lam='lambda.1se' and gam='gamma.1se' to identify the corresponding numerical 
+#' values.  Importantly one may also simply specify gam=1 (and lam=NULL) to get the best lasso fit 
+#' from the unrelaxed lasso model (gamma=1), or gam=0 (and lam=NULL) to get the best lasso fit
+#' from the fully relaxed lasso model (gamma=0).  
+#' 
+#' @param object glmnetr object as input
+#' @param lam value for lam, may be NULL, typically NULL.
+#' @param gam value for gam, may be MULL, typically NULL, 0 or 1. 
 #' @param comment Default of TRUE to write to console information on lam and gam selected for output.
 #' FALSE will suppress this write to console.    
 #'
-#' @return numerical values for lam and gam for useage in plot and predict 
+#' @return numerical values for lam and gam for use in plot(), predict() and summary() functions 
 #'
 getlamgam = function(object, lam, gam, comment) {
   lambda_index = NULL
@@ -249,12 +263,18 @@ getlamgam = function(object, lam, gam, comment) {
 }
 
 ############################################################################################################
-#' Get coefficients or predictions using a glmnetr output object
+#' Get predicteds or coefficients using a glmnetr output object
+#' 
+#' @description 
+#' Give predicteds based upon a glmnetr() output object. Because the glmnetr() function 
+#' has no cross validation information, lambda and gamma must be specified.  To choose 
+#' lambda and gamma based upon cross validation one may use the cv.glmnetr() or nested.glmnetr() 
+#' and the corresponding predict() functions.  
 #'
 #' @param object A glmnetr output object
 #' @param xs_new A desing matrix for predictions
-#' @param lam The value for lambda for determining the lasso fit
-#' @param gam The value for gamma for determining the lasso fit 
+#' @param lam The value for lambda for determining the lasso fit.  Required.  
+#' @param gam The value for gamma for determining the lasso fit. Required.   
 #' @param ... Additional arguments passed to the predict function.  
 #'
 #' @return Coefficients or predictions using a glmnetr output object.  When
@@ -303,63 +323,3 @@ predict.glmnetr = function( object, xs_new=NULL, lam=NULL, gam=NULL, ...) {
 
 ###############################################################################################################
 ###############################################################################################################
-
-#' Get elapsed time in c(hour, minute, secs) 
-#'
-#' @param time1 start time
-#' @param time2 stop time
-#'
-#' @return Returns a vector of elapsed time in (hour, minute, secs) 
-#'
-difftime1 = function(time1, time2) {
-  hour = difftime(time1, time2, units="hour") ;   
-  class(hour) = NULL ; 
-  hour   = floor( hour) 
-  minute = difftime(time1, time2, units="min") ;   
-  class(minute) = NULL ; 
-  minute = floor( minute %% 60) 
-  secs   = difftime(time1, time2, units="secs") ;   
-  class(secs) = NULL ; 
-  secs = floor( secs %% 60) 
-  return(c(hour, minute, secs))
-}
-
-###############################################################################################################
-###############################################################################################################
-
-#' Output elapsed time and split split  
-#'
-#' @param time_start beginning time for printing elapsed time 
-#' @param time_last last time for printing time split
-#'
-#' @return Time of call for input, as well as time-start and time-last 
-#' 
-#' @export 
-#'
-#' @examples
-#' time_start = difftime2()
-#' time_last = difftime2(time_start)
-#' time_last = difftime2(time_start,time_last)
-#' time_last = difftime2(time_start,time_last)
-#'
-difftime2 = function(time_start=NULL, time_last=NULL) {
-  time_sys = Sys.time()
-  time_elapse = difftime1(time_sys, time_start)
-  if (is.null(time_start)) { 
-    cat(paste0("Start at Sys.time = ", time_sys,  " \n"))
-  } else if (is.null(time_last)) { 
-    cat(paste0("Sys.time = ", time_sys, 
-               ",  elapsed time = " , time_elapse[1], ":", time_elapse[2], ":", time_elapse[3] , " h:m:s",  " \n"))
-  } else { 
-    time_split  = difftime1(time_sys, time_last ) 
-    cat(paste0("Sys.time = ", time_sys, 
-               ",  elapsed time = " , time_elapse[1], ":", time_elapse[2], ":", time_elapse[3] , " h:m:s",
-               ",  time split = "  , time_split[1] , ":", time_split[2] , ":", time_split[3] , " h:m:s", " \n"))
-  } 
-  time_last = time_sys ; 
-  return(time_last)
-}
-
-###############################################################################################################
-###############################################################################################################
-

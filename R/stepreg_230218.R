@@ -1,6 +1,6 @@
 ##############################################################################################################################
 ##############################################################################################################################
-#' Title  Fit the steps of a stepwise regression.  
+#' Fit the steps of a stepwise regression.  
 #'
 #' @param xs_st predictor input - an n by p matrix, where n (rows) is sample size, and p (columns) 
 #' the number of predictors.  Must be in matrix form for complete data, no NA's, no Inf's, etc.,
@@ -14,9 +14,9 @@
 #' @param method method for choosing model in stepwise procedure, "loglik" or "concordance".
 #' Other procedures use the "loglik".     
 #' @param family model family, "cox", "binomial" or "gaussian" 
-#' @param time 1 to output stepwise fit program, 0 (default) to suppress 
+#' @param track 1 to output stepwise fit program, 0 (default) to suppress 
 #'
-#' @return does a stepwise regression of depth specified by steps_n
+#' @return does a stepwise regression of depth maximum depth steps_n
 #' 
 #' @export
 #' 
@@ -37,7 +37,7 @@
 #' y_=sim.data$yt  
 #' norm.step.fit = stepreg(xs, NULL, y_, NULL, family="gaussian", steps_n=40) 
 #' 
-stepreg = function(xs_st, start_time_st=NULL, y_st, event_st, steps_n=0, method="loglik", family=NULL, time=0) {
+stepreg = function(xs_st, start_time_st=NULL, y_st, event_st, steps_n=0, method="loglik", family=NULL, track=0) {
   
 #  if  ( is.null(start_time_st)) { print("HERE step 0 : start_time_st=NULL") }
   
@@ -78,12 +78,14 @@ stepreg = function(xs_st, start_time_st=NULL, y_st, event_st, steps_n=0, method=
   dframe   = as.data.frame( cbind(y_st, xs_st) ) 
 #  colnames(dframe)
   
+  betalast = NULL 
 # i_ = 1 ; j_ = 1 ;   ## for testing only 
 # i_ = 2 ; j_ = 1 ; 
   ##### begin i_ loop ##########################################################
-  if (time>=1) { cat ("Calculating stepwise model step : ") }
+  if (track>=1) { cat ("Calculating stepwise model step : ") }
   for (i_ in 1:steps_n)  { 
-    if (time>=1) { cat ( i_, " ") } 
+#  for (i_ in 1:10)  { 
+    if (track>=1) { cat ( i_, " ") } 
     for (j_ in 1:xsk) {
       if (riskvarsp[j_] == 0) {
         riskvarsnewp = as.numeric( riskvarsp ) ;                                ## initialize risk factor for new model (present indicator) from last best fit
@@ -102,20 +104,21 @@ stepreg = function(xs_st, start_time_st=NULL, y_st, event_st, steps_n=0, method=
       
 ##        if ( (i_==1) & (j_ %in% c((0:20)*10+1) ) ) cat ("HERE start_time_st = ", start_time_st[1:10], "\n" )
         if (family == "cox") {
-          init = rep(0,dim(riskm)[2])
+          if (is.null(betalast)) { init = rep(0,dim(riskm)[2]) 
+          } else { init = betalast[ (riskvarsnewp==1) ] ; length(init) } 
           if (is.null(start_time_st)) { 
             fit1 = survival::coxph.fit(riskm ,Surv(                y_st,  event_st), strata=NULL, init=init,
-                                       control=coxcontrol, method="efron", rownames=NULL)  
+                                       control=coxcontrol, method="efron", rownames=NULL, resid=FALSE)  
             clist =  concordancefit(Surv(       y_st, event_st), -fit1$linear.predictors)   
           } else {  
             init = c(rep(0,dim(riskm)[2]))
             fit1 = survival::agreg.fit(riskm ,Surv( start_time_st, y_st, event_st), strata=NULL, init=init,  
-                                      control=coxcontrol, method="efron", rownames=NULL) 
+                                      control=coxcontrol, method="efron", rownames=NULL, resid=FALSE) 
             clist = concordancefit(Surv(start_time_st, y_st, event_st), -fit1$linear.predictors)     ## get concordances  --  allows extension to shose best by C instead of loglik
 #           if ( (i_==1) & (j_ %in% c(0:5) ) ) cat ("HERE step 0.2" , "\n" )
           }
           if (rankMatrix(riskm) < 1e-12) { fit1$coefficients = rep(0,dim(riskm)[2]) } 
-          fit1$coefficients[is.na(fit1$coefficients)] = 0                       # assing missing coefficients value 0          
+          fit1$coefficients[is.na(fit1$coefficients)] = 0                       # assign missing coefficients value 0          
           loglik = fit1$loglik 
           names(loglik) = c("loglik.null", "loglik")
           concord = c(as.numeric( clist[1] ), sqrt( as.numeric( clist[4] ) ) )    ## check this XXX
@@ -235,7 +238,7 @@ stepreg = function(xs_st, start_time_st=NULL, y_st, event_st, steps_n=0, method=
     modsumi_ = modsum[(modsum$ii==i_),]                                         ## model summaries for step i_ 
 #    modsumi_ 
     if (toupper(method)=="LOGLIK") { 
-      imax = which.max( modsumi_$loglik )                                      ## find best model log likelihood,  in this iteration by
+      imax = which.max( modsumi_$loglik )                                       ## find best model log likelihood,  in this iteration by
     } else {
       imax = which.max( modsumi_$concordance )                                  ## find best model concordance,  in this iteration by
     }
@@ -245,12 +248,14 @@ stepreg = function(xs_st, start_time_st=NULL, y_st, event_st, steps_n=0, method=
     modsumlast 
     riskvarsp =  modsumlast[ 8:(xsk+7)]                                         ## predictors in best model (present indicators)
     riskvarsp
+    if (family=="cox") { betalast = modsumlast[(xsk+8):(2*xsk+7)]
+    } else { betalast = modsumlast[(xsk+8):(2*xsk+8)] }
 #    riskvarsi = c(1:xsk)[riskvarsp==1]
 #    riskvarsi 
 
   }  
   ##### end i_ loop ############################################################ 
-  if (time>=1) { cat ("\n") }
+  if (track>=1) { cat ("\n") }
   
 ##  colnames(modsum)[6] = "Concordance"
 ##  colnames(modsum)[7] = "C STD"
@@ -267,9 +272,9 @@ stepreg = function(xs_st, start_time_st=NULL, y_st, event_st, steps_n=0, method=
 ##============================================================================================================================
 ##============================================================================================================================
 
-#' preds_1 function 
+#' Get predictors form a stepwise regression model. 
 #'
-#' @param modsumbest matrix with best predictors based upon umber of model terms 
+#' @param modsumbest matrix with best predictors based upon number of model terms 
 #' @param k_ Value for number of predictors in model 
 #' @param risklist Riskset list 
 #' @param risklistl Number of terms (length) in the riskset 
@@ -286,10 +291,10 @@ preds_1 = function (modsumbest, k_, risklist, risklistl) {
 
 ##### get lists for all best models of different sizes #########################
 
-#' Title Get the best models for the steps of a stepwise fit 
+#' Get the best models for the steps of a stepreg() fit 
 #'
-#' @param modsum Model summmary
-#' @param risklist Riskset list 
+#' @param modsum model summmary
+#' @param risklist riskset list 
 #'
 #' @return best predictors at each step of a stepwise regerssion
 #' 
@@ -311,12 +316,12 @@ best.preds = function(modsum, risklist) {
 ##############################################################################################################################
 ##############################################################################################################################
 
-#' Title Give a brief summary of the steps in a stepwise regression fit
+#' Briefly summarize steps in a stepreg() output object, i.e. a stepwise regression fit
 #'
 #' @param object A stepreg() output object 
 #' @param ... Additional arguments passed to the summary function.  
 #'
-#' @return Summarize a stepreg object
+#' @return Summarize a stepreg() object
 #' 
 #' @export
 summary.stepreg = function(object, ...) {

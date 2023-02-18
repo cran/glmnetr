@@ -1,7 +1,7 @@
 ---
 title: "Using glmnetr"
 author: "Walter K. Kremers, Mayo Clinic, Rochester MN"
-date: "10 December 2022"
+date: "18 February 2023"
 output: pdf_document 
 vignette: >
   %\VignetteIndexEntry{Using glmnetr}
@@ -10,24 +10,25 @@ vignette: >
 ---
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-library(survival)
 library(glmnet)
+library(survival)
 library(Matrix)
-source("~/Documents/LASSO/glmnetr/R/aicreg_221210.R"                , echo=TRUE)
-source("~/Documents/LASSO/glmnetr/R/cv.glmnetr_221210.R"            , echo=TRUE)
-source("~/Documents/LASSO/glmnetr/R/cv.stepreg_221210.R"            , echo=TRUE)
-source("~/Documents/LASSO/glmnetr/R/nested.glmnetr_221210.R"        , echo=TRUE)
-source("~/Documents/LASSO/glmnetr/R/plot.cv.glmnetr_221210.R"       , echo=TRUE)
-source("~/Documents/LASSO/glmnetr/R/stepreg_221210.R"               , echo=TRUE)
-source("~/Documents/LASSO/glmnetr/R/summary.cv.glmnetr_221210.R"    , echo=TRUE)
-source("~/Documents/LASSO/glmnetr/R/summary.nested.glmnetr_221210.R", echo=TRUE)
+library(rpart)
+source("~/Documents/LASSO/glmnetr/R/aicreg_230218.R"                , echo=TRUE)
+source("~/Documents/LASSO/glmnetr/R/cv.glmnetr_230218.R"            , echo=TRUE)
+source("~/Documents/LASSO/glmnetr/R/cv.stepreg_230218.R"            , echo=TRUE)
+source("~/Documents/LASSO/glmnetr/R/nested.glmnetr_230218.R"        , echo=TRUE)
+source("~/Documents/LASSO/glmnetr/R/plot.cv.glmnetr_230218.R"       , echo=TRUE)
+source("~/Documents/LASSO/glmnetr/R/stepreg_230218.R"               , echo=TRUE)
+source("~/Documents/LASSO/glmnetr/R/summary.cv.glmnetr_230218.R"    , echo=TRUE)
+source("~/Documents/LASSO/glmnetr/R/summary.nested.glmnetr_230218.R", echo=TRUE)
 ```
 # The Package
 |     For some datasets, for example when there are collinearities in the design matrix x, _glmnet_ may have very long run times when fitting the relaxed lasso model, making it difficult to get solutions either from _cv.glmnet_ or even _glmnet_.  In this package, _glmnetr_, we provide a workaround and solve for the unpenalized relaxed model where gamma=0 for the linear, logsitc and Cox regression model structures using the _stats_ glm() function and the R _survival_ pacakge coxph() function.  If you are not fitting relaxed lasso models, or if you are able to reasonably quickly get convergence using _glmnet_, then this package may not be of much benefit to you.  Note, while this package may allow one to fit relaxed lasso models that have difficulties converging using _glmnet_, this package does not afford the full function and versatility of _glmnet_. 
 |     In addition to fitting the relaxed lasso model this package also includes the function cv.glmnetr() to perform a cross validation (CV) to identify hyperparameters for a lasso fit, much like the cv.glmnet() function of the _glmnet_ package.  Additionally, the package includes the function nested.glmnetr() to perform a nested CV to assess the fit of a cross validation informed lasso model fit.  If though you are fitting not a relaxed lasso model but an elastic-net model, then the R-packages _nestedcv_ ( https://cran.r-project.org/package=nestedcv ), 'glmnetSE' ( https://cran.r-project.org/package=glmnetSE ) or others may provide greater functionality when performing a nested CV.
 |     As with the _glmnet_ package, this package passes most relevant information to the output object which can be evaluated using plot, summary and predict functions.  Use of the _glmnetr_ package has many similarites to the _glmnet_ package and it is recommended that the user of _glmnetr_ first become familiar with the _glmnet_ package ( https://cran.r-project.org/package=glmnet ), with the "An Introduction to glmnet" and "The Relaxed Lasso" being especially helpful in this regard.      
 # Data requirements 
-|     The basic data elements for input to the _glmnetr_ analysis programs are similar to those of _glmnet_ and include 1) a matrix of predictors and 2) an outcome variable or variables in vector form.  For the estimation of the "fully" relaxed models (where gamma=0) the package is set up to fit the "gaussian" and "binomial" models using the _stats_ glm() function and Cox survival models using the the coxph() function of the _survival_ package.  When fitting the Cox model the outcome model variable is interpreted as the "time" variable in the Cox model, and one must also specify 3) a variable for event, agian in vector form, and optionally 4) a variable for start time, also in vector form.  Row i of the predictor matrix and element i of the outcome vector(s) are to include the data for the same sampling unit.
+|     The basic data elements for input to the _glmnetr_ analysis programs are similar to those of _glmnet_ and include 1) a matrix of predictors and 2) an outcome variable or variables in vector form.  For the estimation of the "fully" relaxed models (where gamma=0) the package is set up to fit the "gaussian" and "binomial" models using the _stats_ glm() function and Cox survival models using the the coxph() function of the _survival_ pacakge.  When fitting the Cox model the outcome model variable is interpreted as the "time" variable in the Cox model, and one must also specify 3) a variable for event, agian in vector form, and optionally 4) a variable for start time, also in vector form.  Row i of the predictor matrix and element i of the outcome vector(s) are to include the data for the same sampling unit.
 # An example dataset 
 |     To demonstrate usage of _glmnetr_ we first generate a data set for analysis, run an analysis and evaluate using the plot(), summary() and predict() functions.    
 |     The code 
@@ -57,9 +58,9 @@ print(xs[1:10,c(1:12,18:20)])
 |     To fit a relaxed lasso model and get reasonable hyperparameters for lambda and gamma, and summarize the cross-validated "tuned" model fit, we can use the function cv.glmnet() and summary() functions. 
 ```{r  Fit a relaxed lasso model informed by cross validation }
 # Fit a relaxed lasso model informed by cross validation 
-cv.cox.fit = suppressWarnings( cv.glmnetr(xs, NULL, y_, event, family="cox") ) 
+cv.cox.fit = suppressWarnings( cv.glmnetr(xs, NULL, y_, event, family="cox", track=0) ) 
 ```
-Note, in the derivation of the relaxed lasso model fits, individual coefficients may be unstable even when the model may be stable which elicits warning messages.  Thus we "wrapped" the call to cv.glmnetr() within the suppressWarnings() function to suppress excessive warning messages in this vignette.   The first term in the call to cv.glmnetr(), xs, is the design matrix for predictors.  The second input term, here NULL, is for the start time in case (start, stop) time data setup is used in a Cox survival model. The third term is the outcome variable for the linear regression or logistic  regression model and the time of event or censoring in case of the Cox model, and finally the forth term is the event indicator variable for the Cox model taking the value 1 in case of an event or 0 in case of censoring at time y_.  The forth term would be NULL for either linear or logistic regression.  Currently the options for family are "guassian" for linear regression , "binomial" for logistic regression (both using the _stats_ glm() function) and "cox" for the Cox proportional hazards regression model using the coxph() function of the R _survival_ package.  |
+Note, in the derivation of the relaxed lasso model fits, individual coefficients may be unstable even when the model may be stable which elicits warning messages.  Thus we "wrapped" the call to cv.glmnetr() within the suppressWarnings() function to suppress excessive warning messages in this vignette.   The first term in the call to cv.glmnetr(), xs, is the design matrix for predictors.  The second input term, here NULL, is for the start time in case (start, stop) time data setup is used in a Cox survival model. The third term is the outcome variable for the linear regression or logistic  regression model and the time of event or censoring in case of the Cox model, and finally the forth term is the event indicator variable for the Cox model taking the value 1 in case of an event or 0 in case of censoring at time y_.  The forth term would be NULL for either linear or logistic regression.  Currently the options for family are "guassian" for linear regression , "binomial" for logistic regression (both using the _stats_ glm() function) and "cox" for the Cox proportional hazards regression model using the coxph() function of the R _survival_ package.  If one sets track=1 the program will update progres in the R console, else for track=0 it will not.   |
     Before numerically summarizing the model fit, or inspecting the coefficient estimates, we plot the average deviances using the plot function.  
 ```{r  Plot cross validation average deviances for a relaxed lasso model }
 # Plot cross validation average deviances for a relaxed lasso model  
@@ -121,7 +122,8 @@ predict(cox.fit,lam=lam,gam=1)$beta
 
 ```{r  Nested cross-validation model evaluation}
 # A nested cross validation to evaluate a cross validation informed lasso model fit 
-nested.cox.fit = suppressWarnings(nested.glmnetr(xs,NULL,y_,event,family="cox")) 
+# nested.cox.fit = nested.glmnetr(xs,NULL,y_,event,family="cox",track=1) 
+nested.cox.fit = suppressWarnings(nested.glmnetr(xs,NULL,y_,event,family="cox",track=0)) 
 summary(nested.cox.fit)
 #names(nested.cox.fit)
 ```
@@ -163,7 +165,7 @@ Again, the plots and summary outputs from the nested.glmnetr() output are sightl
 # xs = simdata$xs      # just as a comment as we did this above
 yg = simdata$y_        # vector of Gaussian (normal) outcomes
 # run a linear regression lasso model
-cv.lin.fit = suppressWarnings(cv.glmnetr(xs,NULL,yg,NULL,family="gaussian"))
+cv.lin.fit = suppressWarnings(cv.glmnetr(xs,NULL,yg,NULL,family="gaussian",track=0))
 summary(cv.lin.fit)
 # plot(cv.lin.fit, coefs=TRUE)
 #
@@ -171,7 +173,7 @@ summary(cv.lin.fit)
 # xs = simdata$xs      # just as a comment as we did this above
 yb = simdata$yb        # vector of binomial (0 or 1) outcomes
 # run a logistic regression lasso model
-cv.bin.fit = suppressWarnings(cv.glmnetr(xs,NULL,yb,NULL,family="binomial")) 
+cv.bin.fit = suppressWarnings(cv.glmnetr(xs,NULL,yb,NULL,family="binomial",track=0)) 
 summary(cv.bin.fit)
 # plot(cv.bin.fit, coefs=TRUE) 
 ```
