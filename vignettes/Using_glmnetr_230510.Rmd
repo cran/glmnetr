@@ -1,7 +1,7 @@
 ---
 title: "Using glmnetr"
 author: "Walter K. Kremers, Mayo Clinic, Rochester MN"
-date: "18 February 2023"
+date: "10 May 2023"
 output: pdf_document 
 vignette: >
   %\VignetteIndexEntry{Using glmnetr}
@@ -14,14 +14,19 @@ library(glmnet)
 library(survival)
 library(Matrix)
 library(rpart)
-source("~/Documents/LASSO/glmnetr/R/aicreg_230218.R"                , echo=TRUE)
-source("~/Documents/LASSO/glmnetr/R/cv.glmnetr_230218.R"            , echo=TRUE)
-source("~/Documents/LASSO/glmnetr/R/cv.stepreg_230218.R"            , echo=TRUE)
-source("~/Documents/LASSO/glmnetr/R/nested.glmnetr_230218.R"        , echo=TRUE)
-source("~/Documents/LASSO/glmnetr/R/plot.cv.glmnetr_230218.R"       , echo=TRUE)
-source("~/Documents/LASSO/glmnetr/R/stepreg_230218.R"               , echo=TRUE)
-source("~/Documents/LASSO/glmnetr/R/summary.cv.glmnetr_230218.R"    , echo=TRUE)
-source("~/Documents/LASSO/glmnetr/R/summary.nested.glmnetr_230218.R", echo=TRUE)
+library(torch)
+source("~/Documents/LASSO/glmnetr/R/aicreg_230218.R"              , echo=TRUE)
+source("~/Documents/LASSO/glmnetr/R/ann_tab_cv_230509.R"          , echo=TRUE)
+source("~/Documents/LASSO/glmnetr/R/cv.glmnetr_230508.R"          , echo=TRUE)
+source("~/Documents/LASSO/glmnetr/R/cv.stepreg_230218.R"          , echo=TRUE)
+#source("~/Documents/LASSO/glmnetr/R/globalVariables_230509.R"     , echo=TRUE)
+source("~/Documents/LASSO/glmnetr/R/nested.glmnetr_230508.R"      , echo=TRUE)
+source("~/Documents/LASSO/glmnetr/R/plot.cv.glmnetr_230508.R"     , echo=TRUE)
+source("~/Documents/LASSO/glmnetr/R/predict_ann_tab_230508.R"     , echo=TRUE)
+source("~/Documents/LASSO/glmnetr/R/stepreg_230218.R"             , echo=TRUE)
+source("~/Documents/LASSO/glmnetr/R/summary.cv.glmnetr_230508.R"  , echo=TRUE)
+source("~/Documents/LASSO/glmnetr/R/summary.nested.glmnetr_230508.R", echo=TRUE)
+source("~/Documents/LASSO/glmnetr/R/xgbm_tuned_230322.R"          , echo=TRUE)
 ```
 # The Package
 |     For some datasets, for example when there are collinearities in the design matrix x, _glmnet_ may have very long run times when fitting the relaxed lasso model, making it difficult to get solutions either from _cv.glmnet_ or even _glmnet_.  In this package, _glmnetr_, we provide a workaround and solve for the unpenalized relaxed model where gamma=0 for the linear, logsitc and Cox regression model structures using the _stats_ glm() function and the R _survival_ pacakge coxph() function.  If you are not fitting relaxed lasso models, or if you are able to reasonably quickly get convergence using _glmnet_, then this package may not be of much benefit to you.  Note, while this package may allow one to fit relaxed lasso models that have difficulties converging using _glmnet_, this package does not afford the full function and versatility of _glmnet_. 

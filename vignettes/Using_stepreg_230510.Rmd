@@ -1,7 +1,7 @@
 ---
 title: "Using stepreg"
 author: "Walter K. Kremers, Mayo Clinic, Rochester MN"
-date: "18 February 2023" 
+date: "10 May 2023" 
 output: pdf_document 
 vignette: >
   %\VignetteIndexEntry{Using stepreg}
@@ -14,14 +14,19 @@ library(glmnet)
 library(survival)
 library(Matrix)
 library(rpart)
-source("~/Documents/LASSO/glmnetr/R/aicreg_230218.R"                , echo=TRUE)
-source("~/Documents/LASSO/glmnetr/R/cv.glmnetr_230218.R"            , echo=TRUE)
-source("~/Documents/LASSO/glmnetr/R/cv.stepreg_230218.R"            , echo=TRUE)
-source("~/Documents/LASSO/glmnetr/R/nested.glmnetr_230218.R"        , echo=TRUE)
-source("~/Documents/LASSO/glmnetr/R/plot.cv.glmnetr_230218.R"       , echo=TRUE)
-source("~/Documents/LASSO/glmnetr/R/stepreg_230218.R"               , echo=TRUE)
-source("~/Documents/LASSO/glmnetr/R/summary.cv.glmnetr_230218.R"    , echo=TRUE)
-source("~/Documents/LASSO/glmnetr/R/summary.nested.glmnetr_230218.R", echo=TRUE)
+library(torch)
+source("~/Documents/LASSO/glmnetr/R/aicreg_230218.R"              , echo=TRUE)
+source("~/Documents/LASSO/glmnetr/R/ann_tab_cv_230509.R"          , echo=TRUE)
+source("~/Documents/LASSO/glmnetr/R/cv.glmnetr_230508.R"          , echo=TRUE)
+source("~/Documents/LASSO/glmnetr/R/cv.stepreg_230218.R"          , echo=TRUE)
+#source("~/Documents/LASSO/glmnetr/R/globalVariables_230509.R"     , echo=TRUE)
+source("~/Documents/LASSO/glmnetr/R/nested.glmnetr_230508.R"      , echo=TRUE)
+source("~/Documents/LASSO/glmnetr/R/plot.cv.glmnetr_230508.R"     , echo=TRUE)
+source("~/Documents/LASSO/glmnetr/R/predict_ann_tab_230508.R"     , echo=TRUE)
+source("~/Documents/LASSO/glmnetr/R/stepreg_230218.R"             , echo=TRUE)
+source("~/Documents/LASSO/glmnetr/R/summary.cv.glmnetr_230508.R"  , echo=TRUE)
+source("~/Documents/LASSO/glmnetr/R/summary.nested.glmnetr_230508.R", echo=TRUE)
+source("~/Documents/LASSO/glmnetr/R/xgbm_tuned_230322.R"          , echo=TRUE)
 ```
 # The Package
 |     The stepreg() and cv.stepreg() funcitons in the _glmnetr_ package were written for convenience and stability as opposed to speed or broad applicability.  When fitting lasso models we wanted to compare these to standard stepwise regression models.  Keeping a more modern approach we tune by either number of terms included in the model (James, Witten, Hastie and Tibshirani, An Introduction to Statistical Learning with applications in R, 2nd ed., Springer, New York, 2021) or by the p critical value for  model inclusion, as this too is a common tuning parameter when fitting stepwise models.  

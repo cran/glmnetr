@@ -33,6 +33,7 @@
 #' @importFrom graphics abline axis lines
 #'
 #' @examples
+#' \donttest{
 #' set.seed(82545037)
 #' sim.data=glmnetr.simdata(nrows=200, ncols=100, beta=NULL)
 #' xs=sim.data$xs 
@@ -40,6 +41,7 @@
 #' event=sim.data$event
 #' glmnetr.fit = glmnetr( xs, NULL, y_, event, family="cox")
 #' plot(glmnetr.fit)
+#' }
 #' 
 plot.glmnetr = function(x, gam=NULL, lambda.lo=NULL, title=NULL,comment=TRUE, ...) {
   object = x 
@@ -47,7 +49,7 @@ plot.glmnetr = function(x, gam=NULL, lambda.lo=NULL, title=NULL,comment=TRUE, ..
     tuning  = object$tuning
     dolasso = tuning[4]
     if (dolasso==1) { 
-      object = object$cv.glmnet.fit 
+      object = object$cv_glmnet_fit 
     } else { 
       cat(paste0(" No relaxed lasso for plotting" , "\n")) 
       stop 
@@ -196,9 +198,9 @@ plot.glmnetr = function(x, gam=NULL, lambda.lo=NULL, title=NULL,comment=TRUE, ..
 #' y_=sim.data$y_ 
 #' event=sim.data$event
 #' # for this example we use a small number for folds_n to shorten run time 
-#' cv.glmnetr.fit = cv.glmnetr(xs, NULL, y_, NULL, family="gaussian", folds_n=3, limit=2) 
-#' plot(cv.glmnetr.fit)
-#' plot(cv.glmnetr.fit, coefs=1)
+#' cv_glmnetr_fit = cv.glmnetr(xs, NULL, y_, NULL, family="gaussian", folds_n=3, limit=2) 
+#' plot(cv_glmnetr_fit)
+#' plot(cv_glmnetr_fit, coefs=1)
 #' 
 plot.cv.glmnetr = function(x, gam=NULL, lambda.lo=NULL, plup=0, title=NULL, coefs=FALSE, comment=TRUE, ...) {
   object = x 
@@ -349,9 +351,9 @@ plot.nested.glmnetr = function(x, gam=NULL, lambda.lo=NULL, title=NULL, plup=0, 
   tuning  = object$tuning
   dolasso = tuning[4]
   if (dolasso==1) {
-    cv.glmnetr.fit = object$cv.glmnet.fit
-    plot(cv.glmnetr.fit, gam=gam, lambda.lo=lambda.lo, plup=plup, title=title, coefs=coefs,comment=comment, ... ) 
-    #    else { plot.glmnetr(cv.glmnetr.fit, gam=gam, lambda.lo=lambda.lo, title=title) }
+    cv_glmnetr_fit = object$cv_glmnet_fit
+    plot(cv_glmnetr_fit, gam=gam, lambda.lo=lambda.lo, plup=plup, title=title, coefs=coefs,comment=comment, ... ) 
+    #    else { plot.glmnetr(cv_glmnetr_fit, gam=gam, lambda.lo=lambda.lo, title=title) }
   } else { 
     cat(paste0(" No relaxed lasso for plotting" , "\n")) 
   }

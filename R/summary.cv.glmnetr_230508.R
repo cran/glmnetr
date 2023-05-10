@@ -33,7 +33,7 @@
 #' summary(cv.glmnetr.fit)
 #' 
 summary.cv.glmnetr = function(object, printg1="FALSE", orderall=FALSE, ...) {
-  if (inherits(object,"nested.glmnetr")) { object = object$cv.glmnet.fit.f }
+  if (inherits(object,"nested.glmnetr")) { object = object$cv.glmnet.fit }
   
   gamma = object$relaxed$gamma 
   
@@ -153,7 +153,7 @@ summary.cv.glmnetr = function(object, printg1="FALSE", orderall=FALSE, ...) {
 #' predict(cv.glmnetr.fit)
 #' 
 predict.cv.glmnetr = function( object, xs_new=NULL, lam=NULL, gam=NULL, comment=TRUE, ...) {
-  if (inherits(object,"nested.glmnetr")) { object = object$cv.glmnet.fit.f }
+  if (inherits(object,"nested.glmnetr")) { object = object$cv.glmnet.fit }
   #  object=cv.cox.fit ; xs_new=NULL; lam=NULL; gam=NULL; comment=TRUE ;
   #  object=cv.cox.fit ; xs_new=NULL; lam=NULL; gam=0; comment=TRUE ;
   #  object = cv.glmnetr.fit.hp
@@ -167,7 +167,7 @@ predict.cv.glmnetr = function( object, xs_new=NULL, lam=NULL, gam=NULL, comment=
   gam    = lamgam$gam
   lambda_index = lamgam$lambda_index
   lambdas      = lamgam$lambdas
-  lamgam
+  lamgam$lambdas[lamgam$lambda_index]
   
   if (inherits(lam,"numeric") & inherits(gam,"numeric")) {
     if (is.null(lambda_index)) { 
@@ -258,7 +258,8 @@ getlamgam = function(object, lam, gam, comment) {
   } else if (inherits(lam,"numeric") & inherits(gam,"numeric")) {
     lambda_index = max(c(1:length(lambdas))[ (lam<=lambdas) ])
   }  else {cat(paste0( "class(lam)=", class(lam), " class(gam)=",class(gam), "\n"))}
-  returnlist = list(lam=lam, gam=gam, lambda_index=lambda_index, lambdas=list(lambdas)) 
+#  returnlist = list(lam=lam, gam=gam, lambda_index=lambda_index, lambdas=list(lambdas))                     ## CHANGE 28MAR23 
+  returnlist = list(lam=lam, gam=gam, lambda_index=lambda_index, lambdas=(lambdas))                          ## CHANGE 28MAR23
   return(returnlist)
 }
 
@@ -288,6 +289,7 @@ getlamgam = function(object, lam, gam, comment) {
 #' @export
 #'
 #' @examples
+#' \donttest{
 #' set.seed(82545037)
 #' sim.data=glmnetr.simdata(nrows=200, ncols=100, beta=NULL)
 #' xs=sim.data$xs 
@@ -296,6 +298,7 @@ getlamgam = function(object, lam, gam, comment) {
 #' glmnetr.fit = glmnetr( xs, NULL, y_, event, family="cox")
 #' betas = predict(glmnetr.fit,NULL,exp(-2),0.5 )
 #' betas$beta
+#' }
 #' 
 predict.glmnetr = function( object, xs_new=NULL, lam=NULL, gam=NULL, ...) {
   if (is.null(gam)) {gam=1} 
