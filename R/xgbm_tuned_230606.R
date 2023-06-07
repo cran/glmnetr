@@ -98,7 +98,10 @@ xgb.simple = function(train.xgb.dat,
 #' associated with censoring are assigned the NEGATIVE of the time of censoring.  In    
 #' this way information about time and status are communicated in a single vector
 #' instead of two vectors.  The xgb.tuned() function does not handle (start,stop) 
-#' time, i.e. interval, data.  
+#' time, i.e. interval, data.  To tune the xgboost model we use the mlrMBO package
+#' which "suggests" the DiceKriging and rgenoud packages, but doe not install 
+#' these.  Still, for xgb.tuned() to run it seems that one should install the 
+#' DiceKriging and rgenoud packages.  
 #' 
 #' @param train.xgb.dat The data to be used for training the XGBoost model
 #' @param booster for now just "gbtree" (default) 
@@ -126,12 +129,11 @@ xgb.simple = function(train.xgb.dat,
 #' sim.data=glmnetr.simdata(nrows=1000, ncols=100, beta=NULL)
 #' Surv.xgb = ifelse( sim.data$event==1, sim.data$yt, -sim.data$yt )
 #' data.full <- xgboost::xgb.DMatrix(data = sim.data$xs, label = Surv.xgb)
-#' # for this example we use a small number for folds_n and nrounds to shorten run time 
-#' # this may still take a minute or so 
-#' xgbfit = xgb.tuned( data.full, objective = "survival:cox", folds_xgb=5, nrounds=20)
-#' preds = predict(xgbfit, sim.data$xs)
-#' summary( preds ) 
-#' preds[1:8]
+#' # for this example we use a small number for folds_n and nrounds to shorten 
+#' # run time.  This may still take a minute or so.  
+#' # xgbfit=xgb.tuned(data.full,objective="survival:cox",folds_xgb=5,nrounds=20)
+#' # preds = predict(xgbfit, sim.data$xs)
+#' # summary( preds ) 
 #' }
 #' 
 xgb.tuned = function(train.xgb.dat,   

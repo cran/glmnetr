@@ -328,7 +328,8 @@ prednn_tl = function (lassomod, nnmodel, datain, lasso=1) {
 #' gelu() or sigmoid().  Optionally an offset term may be included. Model "family" may 
 #' be "cox" to fit a generalization of the Cox proportional hazards model, "binomial" 
 #' to fit a generalization of the logistic regression model and "gaussian" to fit a 
-#' generalization of linear regression model for a quantitative response.   
+#' generalization of linear regression model for a quantitative response.  See the 
+#' corresponding vignette for examples.     
 #' 
 #' @param myxs     predictor input - an n by p matrix, where n (rows) is sample size, and p (columns) 
 #' the number of predictors.  Must be in matrix form for complete data, no NA's, no Inf's, etc.,
@@ -376,18 +377,6 @@ prednn_tl = function (lassomod, nnmodel, datain, lasso=1) {
 #' 
 #' @export
 #'
-#' @examples
-#' \donttest{
-#' simdata=glmnetr.simdata(nrows=1000, ncols=100, beta=NULL)
-#' # for this example we use a small number for folds_n to shorten run time 
-#' xs = simdata$xs
-#' y_ = simdata$yt 
-#' event = simdata$event 
-#' cox_ann_fit1 = ann_tab_cv(myxs=xs, mystart=NULL, myy=y_, myevent=event, family="cox", fold_n=5)
-#' cox_ann_fit1$model
-#' cox_ann_fit1$modelsum 
-#' }
-#' 
 ann_tab_cv = function(myxs, mystart=NULL, myy, myevent=NULL, myoffset=NULL, family="binomial", fold_n=5, 
                       epochs=200, eppr=40, lenz1=16, lenz2=8, actv=1, drpot=0, mylr=0.005, wd=0, l1=0, lasso=0, adjustw=1, minloss=1, gotoend=0) { 
 

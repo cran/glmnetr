@@ -1,8 +1,8 @@
 Title: Nested Cross Validation for the Relaxed Lasso and Other Machine
         Learning Models
 Package: glmnetr
-Version: 0.2-0
-Date: 2023-05-10
+Version: 0.2-1
+Date: 2023-06-06
 Depends: R (>= 3.4.0)
 Suggests: R.rsp
 VignetteBuilder: R.rsp
@@ -27,6 +27,6 @@ NeedsCompilation: no
 Copyright: Mayo Foundation for Medical Education and Research
 RoxygenNote: 7.2.3
 Encoding: UTF-8
-Packaged: 2023-05-10 17:44:48 UTC; kremers
+Packaged: 2023-06-07 03:41:10 UTC; kremers
 Repository: CRAN
-Date/Publication: 2023-05-10 18:40:02 UTC
+Date/Publication: 2023-06-07 10:50:02 UTC
