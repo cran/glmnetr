@@ -97,18 +97,22 @@ calceloss = function (xx,yy) {
 #' generalized linear model, e.g a Cox or logistic regression model 
 #' @param lasso 1 if the first column is the linear estimate from a linear model, 
 #' often a lasso model 
+#' @param lscale Scale used to allow ReLU to exend +/- lscale before capping the 
+#' inputted linear estimated 
+#' @param scale Scale used to transform the inital random paramter assingments by 
+#' dividing by scale
 #' @param trnspose 1 to transpose the matrix before returning, 0 to not. 
 #' @param rreturn 1 (default) to return an R (numeric) vector, 0 to return a torch tensor 
 #'
 #' @return a weight matrix in tensor format
 #' @export
 #'
-wtzero = function(tnsr, lasso=0, rreturn=1, trnspose=0 ) { 
+wtzero = function(tnsr, lasso=0, lscale=5, scale=1, rreturn=1, trnspose=0 ) { 
   weight_r = as.matrix(tnsr)
-  if (lasso < 0) { 
+  if (scale <= 0) { 
     weight_r = matrix( rep(0 ,dim(weight_r)[1] * dim(weight_r)[2]), nrow=dim(weight_r)[1], ncol=dim(weight_r)[2] ) 
-  } else if (lasso > 1) {
-    weight_r = weight_r / lasso 
+  } else if (scale > 1) {
+    weight_r = weight_r / scale 
   } 
   if (lasso != 0) {
     dmw = dim(weight_r) 
@@ -117,8 +121,8 @@ wtzero = function(tnsr, lasso=0, rreturn=1, trnspose=0 ) {
     weight_r[1,] = row0
     weight_r[2,] = row0
     weight_r[,1] = col0
-    weight_r[1,1] = 1 
-    weight_r[2,1] = -1 
+    weight_r[1,1] =  1/lscale  
+    weight_r[2,1] = -1/lscale  
     weight_r  
   }
   if (trnspose==1) { weight_r = t(weight_r) }
@@ -139,8 +143,8 @@ wtzero = function(tnsr, lasso=0, rreturn=1, trnspose=0 ) {
 #' generalized linear model, e.g a Cox or logistic regression model 
 #' @param lasso 1 if the first column is the lienar estimate from a linear model, 
 #' often a lasso model 
-#' @param trnspose 1 to transpose the matrix before returning, 0 to not. 
 #' @param rreturn 1 (default) to return an R (numeric) vector, 0 to return a torch tensor 
+#' @param trnspose 1 to transpose the matrix before returning, 0 to not. 
 #'
 #' @return a weight matrix in tensor format
 #' @export
@@ -182,24 +186,28 @@ wtmiddle = function(tnsr, lasso=0, rreturn=1, trnspose=0 ) {
 #' generalized linear model, e.g a Cox or logistic regression model 
 #' @param lasso 1 if the first column is the linear estimate from a linear model, 
 #' often a lasso model 
-#' @param trnspose 1 to transpose the matrix before returning, 0 to not. 
+#' @param lscale Scale used to allow ReLU to exend +/- lscale before capping the 
+#' inputted linear estimated 
+#' @param scale Scale used to transform the inital random paramter assingments by 
+#' dividing by scale
 #' @param rreturn 1 (default) to return an R (numeric) vector, 0 to return a torch tensor 
+#' @param trnspose 1 to transpose the matrix before returning, 0 to not. 
 #'
 #' @return a weight matrix in tensor format
 #' @export
 #'
-wtlast = function(tnsr, lasso=0, rreturn=1, trnspose=0 ) { 
+wtlast = function(tnsr, lasso=0, lscale=5, scale=1, rreturn=1, trnspose=0 ) { 
   weight_r = as.matrix(tnsr)
-  if (lasso < 0) { 
+  if (scale <= 0) { 
     weight_r = matrix( rep(0 ,dim(weight_r)[1] * dim(weight_r)[2]), nrow=dim(weight_r)[1], ncol=dim(weight_r)[2] ) 
-  } else if (lasso > 1) {
-    weight_r = weight_r / lasso 
+  } else if (scale > 1) {
+    weight_r = weight_r / scale 
   } 
   if (lasso != 0) {
     dmw = dim(weight_r) 
     col1 = c(rep(1,dmw[1]))  
-    weight_r[,1] = col1 
-    weight_r[,2] = -col1 
+    weight_r[,1] =  col1 * lscale  
+    weight_r[,2] = -col1 * lscale 
     weight_r  
   }
   if (trnspose==1) { weight_r = t(weight_r) }
@@ -355,14 +363,23 @@ prednn_tl = function (lassomod, nnmodel, datain, lasso=1) {
 #' @param drpot    fraction of weights to randomly zero out.  NOT YET implemented. 
 #' @param mylr     learning rate for the optimization step in the neural network model fit
 #' @param wd       a possible weight decay for the model fit, default 0 for not considered  
-#' @param l1       a possible L1 penaly weight for the model fit, default 0 for not considered  
+#' @param l1       a possible L1 penalty weight for the model fit, default 0 for not considered  
 #' @param lasso    1 to indicate the first column of the input matrix is an offset 
 #' term, often derived from a lasso model, else 0 (default)  
-#' @param adjustw  1 as default to re-adjust weights to account for the offset every 
+#' @param lscale Scale used to allow ReLU to exend +/- lscale before capping the 
+#' inputted linear estimated 
+#' @param scale Scale used to transform the inital random paramter assingments by 
+#' dividing by scale
+#' @param resetlw  1 as default to re-adjust weights to account for the offset every 
 #' epoch.  This is only used in case lasso is set to 1.  
 #' @param minloss default of 1 for minimizing loss, else maximizing agreement (concordance 
 #' for Cox and Binomial, R-square for Gaussian), as function of epochs by cross validaition  
 #' @param gotoend fit to the end of epochs.  Good for plotting and exploration 
+#' @param seed an optional a numerical/integer vector of length 2, for R and torch 
+#' random generators, default NULL to generate these.  Integers should be positive 
+#' and not more than 2147483647.
+#' @param foldid  a vector of integers to associate each record to a fold.  Should 
+#' be integers from 1 and fold_n.
 #' 
 #' @return an artificial neural network model fit 
 #' 
@@ -378,7 +395,8 @@ prednn_tl = function (lassomod, nnmodel, datain, lasso=1) {
 #' @export
 #'
 ann_tab_cv = function(myxs, mystart=NULL, myy, myevent=NULL, myoffset=NULL, family="binomial", fold_n=5, 
-                      epochs=200, eppr=40, lenz1=16, lenz2=8, actv=1, drpot=0, mylr=0.005, wd=0, l1=0, lasso=0, adjustw=1, minloss=1, gotoend=0) { 
+                      epochs=200, eppr=40, lenz1=16, lenz2=8, actv=1, drpot=0, mylr=0.005, wd=0, l1=0, 
+                      lasso=0, lscale=5, scale=1, resetlw=1, minloss=1, gotoend=0, seed=NULL, foldid=NULL) { 
 
 if (!(family %in% c("cox", "binomial", "gaussian"))) { 
   cat( "\n  ***** ann_cd_lin() is only set up for famlies cox, binomial or gaussian *****\n")
@@ -407,15 +425,18 @@ if (l1 > 0) {
 }
   
 #  myxs=xs_z0 ;  mystart=NULL ;  myy=y_ ;  myevent=NULL ;  myoffset=NULL ;  family="binomial" ;  fold_n=5 ;  
-#  epochs=200 ;  eppr=40 ;  lenz1=32 ;  lenz2=8 ;  actv=1 ;  mylr=0.005 ;  drpot=0 ;  wd=0 ;  lasso=0 ;  adjustw=0 ;  
+#  epochs=200 ;  eppr=40 ;  lenz1=32 ;  lenz2=8 ;  actv=1 ;  mylr=0.005 ;  drpot=0 ;  wd=0 ;  lasso=0 ;  resetlw=0 ;  
   
 nobs  = dim(myxs)[1]
 nfeat = dim(myxs)[2]
   
 if (family == "cox") {
 #  myy     = round(myy , digits = 8)
+#  cat(paste("dim(myy)=",length(myy)),"\n") 
+#  cat(paste("dim(myxs)= (",dim(myxs)[1], ",", dim(myxs)[2], ")\n")) 
   myorder = order(myy , decreasing = TRUE) 
-  myxs = myxs[myorder,]
+#  cat(paste("dim(myorder)=",length(myorder)),"\n")
+  myxs = as.matrix(myxs[myorder,])
   myy  = myy [myorder]
   myevent = myevent[myorder]
   if (!is.null(start)) {
@@ -450,10 +471,40 @@ cvaccuracy = matrix(rep( 0,(fold_n*epochs)), nrow=fold_n, ncol=epochs)
 cvagree    = matrix(rep( 0,(fold_n*epochs)), nrow=fold_n, ncol=epochs) 
 losstrain    = matrix(rep(10,(fold_n*epochs)), nrow=fold_n, ncol=epochs) 
 
-##--  set up the folds for the cross validation --------------------------------
-if   (family == "binomial") {  foldid = factor.foldid(myy    , fold_n)  ;  table(myy    , foldid) ;
-} else if (family == "cox") {  foldid = factor.foldid(myevent, fold_n)  ;  table(myevent, foldid) ;  
-} else {foldid = sample( rep( 1:fold_n , ceiling(nobs/fold_n) )[ 1:nobs ] , nobs ) ;  table(foldid)  ; }
+
+if (is.null(foldid)) {
+  if (is.null(seed)) {
+    seedr = round(runif(1)*1e9) 
+    seedt = round(runif(1)*1e9)
+  } else {
+    seedr = seed[1]
+    seedt = seed[2]
+  }
+  if (is.null(seedr)) { seedr = round(runif(1)*1e9) 
+  } else if (is.na(seedr))  { seedr = round(runif(1)*1e9) } 
+  if (is.null(seedt)) { seedt = round(runif(1)*1e9) 
+  } else if (is.na(seedt))  { seedt = round(runif(1)*1e9) } 
+  seed = c(seedr=seedr, seedt=seedt) 
+} else {
+  if (is.null(seed)) {
+    seedr = NA 
+    seedt = round(runif(1)*1e9)
+  }
+  seedr = seed[1]
+  seedt = seed[2]
+  if (is.null(seedt)) { seedt = round(runif(1)*1e9) 
+  } else if (is.na(seedt))  { seedt = round(runif(1)*1e9) } 
+  seed = c(seedr=seedr, seedt=seedt) 
+}
+
+torch_manual_seed( seedt ) 
+
+if (is.null(foldid)) {
+  ##--  set up the folds for the cross validation --------------------------------
+  if   (family == "binomial") {  foldid = factor.foldid(myy    , fold_n)  ;  table(myy    , foldid) ;
+  } else if (family == "cox") {  foldid = factor.foldid(myevent, fold_n)  ;  table(myevent, foldid) ;  
+  } else {foldid = sample( rep( 1:fold_n , ceiling(nobs/fold_n) )[ 1:nobs ] , nobs ) ;  table(foldid)  ; }
+}
 
 if        (actv == 1) { act_fn = nn_relu()      ; actvc = "relu" 
 } else if (actv == 2) { act_fn = nn_gelu()      ; actvc = "gelu" 
@@ -473,7 +524,7 @@ if        (family == "binomial"  ) { lastact_fn = nn_sigmoid()
 #--  this model piece (module) will allow input of adjusted weights  -----------
 
 my_nn_linear0 <- nn_module(
-  clasname = "my_nn_linear0",
+#  classname = "my_nn_linear0",
   initialize = function(weight, bias) {
 #    self$'weight' <- nn_parameter(weight)
 #    self$'bias' <- nn_parameter(bias)
@@ -502,11 +553,11 @@ my_nn_linear0 <- nn_module(
 ##### extract weight and bias matrices and store in R data so are not updated automatically ####
 # lasso = 0 
 trnspose = 0 
-weight0_r0 = wtzero( model0$parameters$`0.weight` , lasso, trnspose=trnspose)
+weight0_r0 = wtzero(   model0$parameters$`0.weight` , lasso, lscale, scale, trnspose=trnspose)
 weight3_r0 = wtmiddle( model0$parameters$`3.weight` , lasso, trnspose=trnspose)
-weight6_r0 = wtlast( model0$parameters$`6.weight` , lasso, trnspose=trnspose)
-bias0_r0 = bsint( model0$parameters$`0.bias` , lasso )
-bias3_r0 = bsint( model0$parameters$`3.bias` , lasso )
+weight6_r0 = wtlast(   model0$parameters$`6.weight` , lasso, lscale, scale, trnspose=trnspose)
+bias0_r0 = bsint( model0$parameters$`0.bias` , lasso  )
+bias3_r0 = bsint( model0$parameters$`3.bias` , lasso  )
 bias6_r0 = bsint( model0$parameters$`6.bias` , lasso=0)
 
 #-----------------------------------------------------
@@ -534,9 +585,9 @@ bias6 = torch_tensor(bias6_r0, dtype=torch_float(), requires_grad=TRUE)
 
 #-------------------------------------------------------------------------------
 # model$parameters$'3.weight'
-# model = adjustw_(lasso=0)
+# model = resetlw_(lasso=0)
 # model$parameters$'3.weight'
-# model = adjustw_(lasso=1)
+# model = resetlw_(lasso=1)
 # model$parameters$'3.weight'
 # weight3
 
@@ -733,10 +784,10 @@ for (fold in c(1:fold_n)) {
     }
     
     model$parameters$`0.weight`[1:5,1:5]
-    if ((adjustw ==1) & ((lasso < 0) | (lasso >=1))) { 
-      weight0_r = wtzero(   model$parameters$`0.weight` , lasso)
+    if ((resetlw ==1) & ((lasso < 0) | (lasso >=1))) { 
+      weight0_r = wtzero(   model$parameters$`0.weight` , lasso, lscale, scale)
       weight3_r = wtmiddle( model$parameters$`3.weight` , lasso)
-      weight6_r = wtlast(   model$parameters$`6.weight` , lasso)
+      weight6_r = wtlast(   model$parameters$`6.weight` , lasso, lscale, scale)
       bias0_r = bsint( model$parameters$`0.bias` , lasso )
       bias3_r = bsint( model$parameters$`3.bias` , lasso )
       bias6_r = bsint( model$parameters$`6.bias` , lasso ) 
@@ -1049,10 +1100,10 @@ for (i_ in 1:imax) {
     myoptim$step()      
   }
 
-  if ((adjustw ==1) & ((lasso < 0) | (lasso >=1))) { 
-    weight0_r = wtzero(   model$parameters$`0.weight` , lasso)
+  if ((resetlw ==1) & ((lasso < 0) | (lasso >=1))) { 
+    weight0_r = wtzero(   model$parameters$`0.weight` , lasso, lscale, scale)
     weight3_r = wtmiddle( model$parameters$`3.weight` , lasso)
-    weight6_r = wtlast(   model$parameters$`6.weight` , lasso)
+    weight6_r = wtlast(   model$parameters$`6.weight` , lasso, lscale, scale)
     bias0_r = bsint( model$parameters$`0.bias` , lasso )
     bias3_r = bsint( model$parameters$`3.bias` , lasso )
     bias6_r = bsint( model$parameters$`6.bias` , lasso ) 
@@ -1120,24 +1171,31 @@ for (i_ in 1:imax) {
 
 losslog = list(cvloss=cvloss, cvaccuracy= cvaccuracy, cvagree=cvagree, lossn=lossf, agreen=agreef) ;  
 
-if (nclass <= 2) { 
-  modelsumc = c(family, actvc) 
-  names(modelsumc) = c("family", "activation")  
-  modelsum = c(fold_n, epochs, lenz1, lenz2, actv, drpot, mylr, wd, l1, which_loss, which_agree,
-               cv_loss, cv_agree, cv_accuracy, loss$item(), agreef[i_], accuracyf[i_], agree0)
-  names(modelsum) = c("n folds", "epochs", "length Z1", "length Z2", "actv", "drpot", "mylr", "wd", "l1", 
-                      "which loss", "which agree", "CV loss", "CV concordance", "CV accuracy", 
-                      "naive loss", "naive concordance", "naive accuracy", "concordance i_=0" )
-} else {
-  modelsum = c(fold_n, epochs, lenz1, lenz2, which_loss, cv_loss, cv_accuracy, loss$item(), accuracy0) 
-  names(modelsum) = c("n folds", "epochs", "length Z1", "length Z2", "which loss", 
-                      "CV loss", "CV accuracy", "naive loss", "naive accuracy") 
-} 
+modelsumc = c(family, actvc) 
+names(modelsumc) = c("family", "activation")  
+modelsum = c(fold_n, epochs, lenz1, lenz2, actv, drpot, mylr, wd, l1, lasso, lscale, scale, 
+             which_loss, which_agree, cv_loss, cv_agree, cv_accuracy, 
+             loss$item(), agreef[i_], accuracyf[i_], agree0)
+names(modelsum) = c("n folds", "epochs", "length Z1", "length Z2", "actv", "drpot", "mylr", "wd", "l1",
+                    "lasso", "lscale", "scale", 
+                    "which loss", "which agree", "CV loss", "CV Agree", "CV accuracy", 
+                    "naive loss", "naive agree", "naive accuracy", "agree i_=0" )
 
 parminit = list(weight0_r = weight0_r0, weight3_r = weight3_r0, weight6_r = weight6_r0, 
                 bias0_r=bias0_r0, bias3_r=bias3_r0, bias6_r=bias6_r0)
 
-rlist = list(model=model, modelsum=modelsum, modelsumc=modelsumc, parminit=parminit, losslog=losslog )
+weight0_r = as.matrix( model$parameters$`0.weight` )
+weight3_r = as.matrix( model$parameters$`3.weight` )
+weight6_r = as.matrix( model$parameters$`6.weight` )
+bias0_r  = as.numeric( model$parameters$`0.bias` )
+bias3_r  = as.numeric( model$parameters$`3.bias` )
+bias6_r  = as.numeric( model$parameters$`6.bias` )
+
+parmfinal= list(weight0_r = weight0_r, weight3_r = weight3_r, weight6_r = weight6_r, 
+                bias0_r=bias0_r, bias3_r=bias3_r, bias6_r=bias6_r)
+
+rlist = list(model=model, modelsum=modelsum, modelsumc=modelsumc, parminit=parminit, 
+             parmfinal=parmfinal, losslog=losslog, seed=seed )
 
 class(rlist) <- c("ann_tab_cv")
 
@@ -1153,7 +1211,7 @@ return( rlist )
 #' Fit multiple Artificial Neural Network models on "tabular" provided as a matrix, and 
 #' keep the best one.
 #' 
-#' @description Fit an multiple Artificial Neural Network model for analysis of "tabular" 
+#' @description Fit an multiple Artificial Neural Network models for analysis of "tabular" 
 #' data using ann_tab_cv() and select the best fitting model according to cross
 #' validaiton.   
 #'
@@ -1179,11 +1237,24 @@ return( rlist )
 #' @param drpot    fraction of weights to randomly zero out.  NOT YET implemented. 
 #' @param mylr     learning rate for the optimzaiton step in teh neural network model fit
 #' @param wd       weight decay for the model fit.  
+#' @param l1       a possible L1 penalty weight for the model fit, default 0 for not considered  
 #' @param lasso    1 to indicate the first collumn of the input matrix is an offset 
 #' term, often derived from a lasso model 
-#' @param adjustw  1 as default to re-adjust weights to account for the offset every 
+#' @param lscale Scale used to allow ReLU to exend +/- lscale before capping the 
+#' inputted linear estimated 
+#' @param scale Scale used to transform the inital random paramter assingments by 
+#' dividing by scale
+#' @param resetlw  1 as default to re-adjust weights to account for the offset every 
 #' epoch.  This is only used in case lasso is set to 1 
-#' @param bestof   how many models to run, from which the best fitting model will be selected.  
+#' @param minloss default of 1 for minimizing loss, else maximizing agreement (concordance 
+#' for Cox and Binomial, R-square for Gaussian), as function of epochs by cross validaition  
+#' @param gotoend fit to the end of epochs.  Good for plotting and exploration 
+#' @param bestof   how many models to run, from which the best fitting model will be selected.
+#' @param seed an optional a numerical/integer vector of length 2, for R and torch 
+#' random generators, default NULL to generate these.  Integers should be positive 
+#' and not more than 2147483647.
+#' @param foldid  a vector of integers to associate each record to a fold.  Should 
+#' be integers from 1 and fold_n.  
 #' 
 #' @return an artifical neural network model fit 
 #' 
@@ -1192,40 +1263,92 @@ return( rlist )
 #' 
 #' @export
 #'
-ann_tab_cv_best = function(myxs, mystart=NULL, myy, myevent=NULL, myoffset=NULL, family="binomial", fold_n=10, 
-                           epochs=200, eppr=40, lenz1=32, lenz2=8, mylr=0.005, 
-                           actv=1, wd=0, drpot=0, lasso=0, adjustw=1, bestof=10) {
-  
+ann_tab_cv_best = function(myxs, mystart=NULL, myy, myevent=NULL, myoffset=NULL, family="binomial", fold_n=5, 
+                           epochs=200, eppr=40, lenz1=32, lenz2=8, actv=1, drpot=0, mylr=0.005, wd=0, l1=0, 
+                           lasso=0, lscale=5, scale=1, resetlw=1, minloss=1, gotoend=0, bestof=10, seed=NULL, foldid=NULL) {
+  stratified = 1 
   bestof = max(1, bestof)
+  
+#  seedr = NA 
+  if (is.null(foldid)) {  ## foldid NOT SPECIFIED 
+    if (is.null(seed)) { 
+      seedr = round(runif(1)*1e9) 
+    } else {
+      seedr = seed[1]
+      if (is.null(seedr)) { seedr = round(runif(1)*1e9)
+      } else if (is.na(seedr)) { seedr = round(runif(1)*1e9) } 
+    }
+  } else {  ## foldid SPECIFIED  
+    seedr = seed[1] 
+    if (is.null(seedr)) { seedr = NA } 
+  }
+  
+  if (is.null(seed)) { 
+    seedt = round(runif(1)*1e9) 
+  } else {
+    seedt = seed[2]
+    if (is.null(seedt)) { seedt = round(runif(1)*1e9) 
+    } else if ( is.na(seedt) ) { seedt = round(runif(1)*1e9) } 
+#    torch_manual_seed( seedt ) 
+  }
+  
+  seed0 = c(seedr=seedr, seedt=seedt) 
+  seed0
+  
+  if (is.null(foldid)) { 
+    set.seed(seedr) 
+    nobs = length(myy)
+    if (stratified >= 1) {
+      if   (family == "binomial") {  foldid = factor.foldid(myy    , fold_n)  ;  table(myy    , foldid) ;
+      } else if (family == "cox") {  foldid = factor.foldid(myevent, fold_n)  ;  table(myevent, foldid) ;  
+      } else {foldid = sample( rep( 1:fold_n , ceiling(nobs/fold_n) )[ 1:nobs ] , nobs ) ;  
+      }
+      table(foldid)  ; 
+    } else {
+      foldid = sample( rep( 1:fold_n , ceiling(nobs/fold_n) )[ 1:nobs ] , nobs ) ; 
+    }
+  }
   
   if (eppr >= 0) { cat("\n Starting fit 1, for best of ", bestof ," model fits\n") }
   modeltemp = ann_tab_cv(myxs, mystart, myy, myevent, myoffset, family, fold_n, 
-                        epochs, eppr, lenz1, lenz2, actv, drpot, mylr, wd, lasso, adjustw) 
-  cvloss  = modeltemp$modelsum[6]
+                        epochs, eppr, lenz1, lenz2, actv, drpot, mylr, wd, l1, 
+                        lasso, lscale, scale, resetlw, minloss, gotoend, seed=c(NA,seed0[2]), foldid=foldid)
+  cvloss  = modeltemp$modelsum[15]
   modelbesttemp = modeltemp 
-  minloss = modeltemp$modelsum[6]
-  if (length(modeltemp$modelsum) == 12) { 
-    concor0 = rep(0,bestof) ; 
-    concor0[1] = modeltemp$modelsum[12] 
-  }
-#  print(modeltemp$modelsum[c(5:8)])
+  minloss = modeltemp$modelsum[15]
+  concor0 = rep(0,bestof) ; 
+  concor0[1] = modeltemp$modelsum[16] 
+  seed1 = modeltemp$seed 
+  seedts = rep(0,bestof)
+  seedts[1] = modeltemp$seed[2] 
+#  print(modeltemp$modelsum[c(15:20)])
   
   for (i_ in c(2:bestof)) {
     if (eppr >= 0) { cat(" Starting fit ", i_, ", for best of ", bestof ," model fits\n") }
     modeltemp = ann_tab_cv(myxs, mystart, myy, myevent, myoffset, family, fold_n, 
-                           epochs, eppr, lenz1, lenz2, actv, drpot, mylr, wd, lasso, adjustw) 
-    cvloss = modeltemp$modelsum[6]
-    if (length(modeltemp$modelsum) == 12) { concor0[i_] = modeltemp$modelsum[12] }
-#    print(modeltemp$modelsum[c(5:8)])
+                           epochs, eppr, lenz1, lenz2, actv, drpot, mylr, wd, l1, 
+                           lasso, lscale, scale, resetlw, minloss, gotoend, seed=c(NA,NA), foldid=foldid) 
+    cvloss = modeltemp$modelsum[15]
+    concor0[i_] = modeltemp$modelsum[16]
+    seedts[i_] = modeltemp$seed[2] 
+#    print(modeltemp$modelsum[c(15:20)])
     if (cvloss < minloss) {
       modelbesttemp = modeltemp 
-      minloss = modeltemp$modelsum[6]
+      minloss = cvloss 
     }
   }
   
+  seedbest = c(seed0[1], modelbesttemp$seed[2])
+  names(seedbest) = c("seedr", "seedt")
+
   modelsum = c(modelbesttemp$modelsum,bestof=bestof)
-  if (length(modeltemp$modelsum) == 12) { rlist = list( model=modelbesttemp$model, modelsum=modelsum, concor0 = concor0 )
-  } else { rlist = list( model=modelbesttemp$model, modelsum=modelsum, concor0 = concor0 ) }
+  rlist = list( model=modelbesttemp$model, modelsum=modelsum, modelsumc=modelbesttemp$modelsumc, 
+                parminit=modelbesttemp$parminit, parmfinal=modelbesttemp$parmfinal, 
+                losslog = modelbesttemp$losslog, seed=seedbest, concor0=concor0, seed0=seed0, seedts=seedts ) 
+  
+#   list(model=model, modelsum=modelsum, modelsumc=modelsumc, parminit=parminit, 
+#   parmfinal=parmfinal, losslog=losslog, seed=seed )  
+  
   return(rlist)
 }
 

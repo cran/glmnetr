@@ -1,9 +1,4 @@
-##### nested.glmnetr_230426 ###################################################################################################################
-## store folds and use same CV folds throughout for methods that allow, store these in a list 
-## modify fits 4 adn 5 for ANN, lasso terms plus lasso + 1 more hidden layer level, lasso offset + 2 more layer levels 
-## check factor.foldid() program for case where there are is only one level present  
-## random select n obs for use in case control like analysis for ann Cox model 
-## for using offset also rediervie the lasso model within the ANN routine as this becomes a hyperparamter
+##### nested.glmnetr_230714 ###################################################################################################################
 ###############################################################################################################################################
 #' Using nested cross validation, describe and compare fits of various cross validation informed machine learning models.
 #' 
@@ -38,41 +33,67 @@
 #' Must be a numeric vector of length same as sample size.
 #' @param family  model family, "cox", "binomial" or "gaussian" (default) 
 #' @param steps_n number of steps done in stepwise regression fitting 
-#' @param folds_n generally the number of folds for each level of cross validation.  If 
-#' a vector of length 2 the first element indicates the number of folds for cross 
-#' validation, and the second entry can take the value 1 to indicate
-#' that no nested cross validation is to be performed.  In this case the function 
-#' will only derive the models based upon the full data set.  This is useful for the 
-#' "lasso informed" Artificial Neural Network (ANN) models which are based upon 
-#' both a lasso fit and an ANN fit. See the predict_ann_tab() function regarding
-#' getting predicteds for this "lasso informed" models from a nested.glmnetr() output.  
+#' @param folds_n the number of folds for the outer loop of the nested cross 
+#' validation, and if not overridden by the individual model specifications, also 
+#' the number of folds for the inner loop of the nested cross validation, i.e. 
+#' the number of folds used in model derivation.  If a vector of length 2 the 
+#' first element indicates the number of folds for the nested cross 
+#' validation, and the second element can be assigned the value 0 to indicate
+#' that no nested cross validation is to be performed.  In this case the 
+#' nested.glmnetr() function will only derive the models based upon the full 
+#' data set.  This is useful for the "lasso informed" extreme gradient boosting models 
+#' (GBM) and Artificial Neural Network (ANN) models which are based upon both a 
+#' lasso fit and a GBM or ANN fit. See the predict_ann_tab() function regarding 
+#' getting predicteds for this "lasso informed" models from a nested.glmnetr() 
+#' output.  
 #' @param dolasso fit and do cross validation for lasso model, 0 or 1
-#' @param doxgb 1 to fit and evaluate cross validation informed XGBoost 
-#' model, and the number of folds used in model derivation will be the same as 
-#' folds_n.  0 (default) for no XGBoost model fits.  An integer > 1 to specify 
-#' number of folds used in model fit other than folds_n. If length(doxgb) > 1 then the
-#' maximum number of rounds (nrounds) when training the xgb model is set to doxgb[2], 
-#' where the default is 1000.  
+#' @param doxgb fit and evaluate a cross validation informed XGBoost (GBM) 
+#' model.  1 for yes, 0 for no (default).  By default the number of folds used when 
+#' training the GBM model will be the same as the number of folds used in the outer
+#' loop of the nested cross validation, and the maximum number of rounds when 
+#' training the GBM model is set to 1000.  To control these values one 
+#' may specify a list for the doxgb argument.  The list can have 
+#' elements $fold_n and $nrounds which specify the number of folds and the 
+#' maximum number of rounds when training the GBM model.  
 #' @param doann fit and evaluate a cross validation informed Artificial Neural Network 
-#' (ANN) model with two hidden levels.  1 for yes, 0 for no (default). To take some 
-#' control over the ANN fit specify a list can be passed as the arguement for doann.  The
-#' list can have elements $epochs, $epochs2, $myler, $myler2, $eppr, $eppr2, $lenv1, $lenz2, 
-#' $actv, $drpot, $wd, wd2, l1, l12, $fold_n, $minloss and $gotoend.  These different 
-#' values are then passed to the ann_tab_cv() function, with the meanings described 
-#' in the help for that function, with some exception.  When there are two similar 
-#' values like $epoch and $epoch2epoch the first applies to the ANN fits without transfer 
-#' learning and the second to the models fit with transfer learning from the lasso 
-#' model.  Elements of this list left unspecified will take default values.
+#' (ANN) model with two hidden levels.  1 for yes, 0 for no (default). By default 
+#' the number of folds used when training the ANN model will be the same as the 
+#' number of folds used in the outer loop of the nested cross validation.  To override 
+#' this one may specify a list for the doann argument where the element $fold_n 
+#' gives the number of folds used when training the ANN.  The list can have elements 
+#' $epochs, $epochs2, $myler, $myler2, $eppr, $eppr2, $lenv1, $lenz2, 
+#' $actv, $drpot, $wd, wd2, l1, l12, $lscale, $scale, $minloss and $gotoend.  These 
+#' arguments are then passed to the ann_tab_cv_best() function, with the 
+#' meanings described in the help for that function, with some exception.  When 
+#' there are two similar values like $epoch and $epoch2 the first applies to the 
+#' ANN models trained without transfer learning and the second to the models 
+#' trained with transfer learning from the lasso model.  Elements of this list 
+#' unspecified will take default values.  
 #' @param dorpart fit and do a nested cross validation for an RPART model.  As rpart() does its
 #' own approximation for cross validation there is no new functions for RPART itself. 
 #' @param doaic   fit and do cross validation for AIC fit, 0 or 1.   
 #' This is provided primarily as a reference.   
-#' @param ensemble fit a sort of ensemble model by fitting a lasso model and then using its 
-#' predictions as a) an additional term in the feature set or b) an offset 
-#' (base_margin in XGBoost) to the XGBoost model.  This is a vector of length 3, with
-#' position 1 indicating if the "standard" XGBoost model is to be fit, position 2 indicating 
-#' whether the lasso predictor is be included as an additional feature, and position 3 indicating whether 
-#' the lasso predictor should be included as an offset. 1 for yes, 0 (default) for no.
+#' @param ensemble This is a vector 8 characters long and specifies a set of ensemble 
+#' like model to be fit based upon the predicteds form a relaxed lasso model fit, by 
+#' either inlcjidng the predicteds as an additional term (feature) in the machine 
+#' learning model, or including the predicteds similar to an offset.  For XGBoost, 
+#' the offset is specified #' in the model with the "base_margin" in the XGBoost 
+#' call.  For the Artificial Neural Network models fit using the ann_tab_cv_best() function, 
+#' one can initialize model weights (parameters) to account for the predicteds in 
+#' prediction and either let these weights by modified each epoch or update and maintain 
+#' these weights during the fitting process.  For ensemble[1] = 1 a model is fit
+#' ignoring these predicteds, ensemble[2]=1 a model is fit including the predicteds 
+#' as an additional feature.  For ensemble[3]=1 a model is fit using the predicteds
+#' as an offset when running the xgboost model, or a model is fit including the 
+#' predicteds with initial weights corresponding to an offset, but then weights are 
+#' allowed to be tuned over the epochs.  For i >= 4 ensemble[i] only applies to 
+#' the neural network models.  For ensemble[4]=1 a model is fit like for 
+#' ensemble[3]=1 but the weights are reassigned to correspond to an offset after 
+#' each epoch.  For i in (5,6,7,8) ensemble[i] is similar to ensemble[i-4] except
+#' the original predictor (feature) set is replaced by the set of non-zero terms 
+#' in the relaxed lasso model fit. If ensemble is specified as 0 or NULL, then ensemble 
+#' is assigned c(1,0,0,0, 0,0,0,0).  If ensemble is specified as 1, then ensemble 
+#' is assigned c(1,1,1,1, 1,1,1,1).
 #' @param dostep  fit and do cross validation for stepwise regression fit, 0 or 1, 
 #' as discussed in James, Witten, Hastie and Tibshirani, 2nd edition.  
 #' @param method  method for choosing model in stepwise procedure, "loglik" or "concordance".
@@ -84,14 +105,20 @@
 #' will have minimal impact on the cross validation.  Default is 2 for moderate 
 #' limitation, 1 for less limitation, 0 for none.   
 #' @param fine    use a finer step in determining lambda.  Of little value unless one 
-#' repeats the cross valiaiton many times to more finely tune the hyper paramters.  
+#' repeats the cross validation many times to more finely tune the hyper paramters.  
 #' See the 'glmnet' package documentation  
 #' @param track   track progress by printing to console elapsed and split times
-#' @param seed    a seed for set.seed() to assure one can get the same results twice.  If NULL 
-#' the program will generate a random seed.  Whether specified or NULL, the seed is stored in the output
-#' object for future reference.  
-#' @param foldid  a vector of integers to associate each record to a fold.  Should be integers between 1 and folds_n.
-#' These will only be used in the outer folds. 
+#' @param seed an optional a numerical/integer vector of length 2, for R and torch 
+#' random generators, default NULL to generate these.  This can be used to repeat the
+#' analysis and get the same results.  The vector elements should positive 
+#' and not more than 2147483647.  Whether specified or NULL, the seed is stored 
+#' in the output object for future reference.  The stored seed is a list with two
+#' vectors seedr for the seeds used in generating the random fold splits, and seedt
+#' for generating the random initial weights and biases in the torch neural network 
+#' models.  the first element in each of these vectors is fot the all data fits and
+#' remaining elements for the outer folds of the nested cross validation.   
+#' @param foldid  a vector of integers to associate each record to a fold.  Should 
+#' be integers from 1 and folds_n.  These will only be used in the outer folds. 
 #' @param ties method for handling ties in Cox model for relaxed model component.  Default 
 #' is "efron", optionally "breslow".  For penalized fits "breslow" is 
 #' always used as in the 'glmnet' package.
@@ -134,7 +161,9 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", ste
                           dolasso=1, doxgb=0, doann=0, dorpart=0, dostep=0, doaic=0, ensemble=0, 
                           method="loglik", lambda=NULL, gamma=NULL, relax=TRUE, limit=1, fine=0, 
                           track=0, seed=NULL, foldid=NULL, ties="efron", stratified=1, time=NULL, ... ) {
-
+#  cat("nested 1 \n")
+#  print(class(seed))
+  
   if ( is.null(xs) ) { print(" xs cannot be NULL, program will stop ") ; stop ; }
   if (sum(is.na(xs))> 0) { print(" xs cannot have missing values, program will stop ") ; stop ; }
   if ( is.null(y_) ) { print(" y_ cannot be missing or NULL, program will stop ") ; stop ; }
@@ -145,7 +174,7 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", ste
     } else if (min(y_) < 0)          { print(" survival times cannot be negative for Cox model, program will stop ") ; stop ; 
     }
   }
-  
+
   if (is.null(folds_n)) { folds_n = 10 }
   if (length(folds_n) > 1) { 
     do_ncv = folds_n[2]  
@@ -155,35 +184,46 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", ste
   }
   folds_n = max(folds_n, 3)
 
+  ## set up doxgb ==============================================================  
   doxgb_ = 0 
-  folds_xgb = folds_n
+  folds_xgb = folds_n 
   nrounds = 1000 
-  if (is.null(doxgb)) { 
-    doxgb = 0 
-    }
-  if (doxgb[1] > 0) {  
+  if (is.null(doxgb)) { doxgb = 0 }
+  if ((!is.list(doxgb)) & ( doxgb[1] == 0 )) { 
+    doxgb_ = 0 
+    folds_xgb = doxgb[1]
+  } else if ((!is.list(doxgb)) & ( doxgb[1] >= 1 )) { 
     doxgb_ = 1 
-    if (doxgb[1] > 2) { folds_xgb = doxgb[1] } 
-    if (length(doxgb) == 1) {
-      nrounds = 1000 
-    } else {
-      nrounds = doxgb[2]
-    }
+    if (doxgb[1] >= 3) { folds_xgb = doxgb[1] } 
+  }
+  if ((!is.list(doxgb)) & ( length(doxgb) >= 2 )) { 
+    nrounds = doxgb[2] 
   }
   
-#  if (track >= 3) { cat(paste(" \n   doxgb_=", doxgb_, "  nrounds=", nrounds, "\n\n")) }
+  if (is.list(doxgb)) { 
+    doxgb_ = 1 
+    temp_ = list(fold_n=folds_n, nrounds=1000) 
+    if (is.null(doxgb$fold_n )) { folds_xgb = temp_$fold_n  ; doxgb$fold_n  = folds_xgb } else { fold_n  = doxgb$fold_n  }
+    if (is.null(doxgb$fold_n )) { nrounds  = temp_$nrounds ; doxgb$nrounds = nrounds  } else { nrounds = doxgb$nrounds }
+    if ( (fold_n > 0) & (fold_n < 3) ) { folds_xgb = folds_n  ; doxgb$fold_n  = folds_xgb }
+    if (fold_n == 0) { doxgb_ = 0 }
+  } else if (length(doxgb > 1)) { doxgb = list(fold_n=folds_xgb , nrounds=nrounds) }
   
+#  if (track >= 3) { cat(paste(" \n   doxgb_=", doxgb_, "  nrounds=", nrounds, "\n\n")) }
+  ## set up doann ==============================================================  
   doann_ = 0 
   if (is.null(doann)) { doann = 0 }
   if ((!is.list(doann)) & ( doann[1] >= 1 )) { doann_ = 1 ;  doann = as.list(doann) }
   if (is.list(doann)) { doann_ = 1 } 
   
+  eppr = NULL 
+  eppr2 = NULL 
   if (doann_ == 1) {
-    temp_ = list(epochs=200, epochs2=200, mylr=0.005, mylr2=0.001, eppr=-2,
-                 eppr2=-2, lenz1=16, lenz2=8, actv=1, drpot=0,
+    temp_ = list(epochs=200, epochs2=200, mylr=0.005, mylr2=0.001, eppr=-3, eppr2=-3,
+                 lenz1=16, lenz2=8, actv=1, drpot=0, lscale=5, scale=1, 
                  wd=0, wd2=0, l1=0, l12=0, fold_n=folds_n, 
                  minloss=0, gotoend=0, bestof=1) 
-    if (is.null(doann$epochs )) { epochs = temp_$epochs  ; doann$epochs  = epochs  } else { epochs = doann$epochs  }
+    if (is.null(doann$epochs )) { epochs = temp_$epochs  ; doann$epochs  = epochs  } else { epochs  = doann$epochs  }
     if (is.null(doann$epochs2)) { epochs2= temp_$epochs2 ; doann$epochs2 = epochs2 } else { epochs2 = doann$epochs2 }  
     if (is.null(doann$mylr   )) { mylr   = temp_$mylr    ; doann$mylr    = mylr    } else { mylr    = doann$mylr    }
     if (is.null(doann$mylr2  )) { mylr2  = temp_$mylr2   ; doann$mylr2   = mylr2   } else { mylr2   = doann$mylr2   }
@@ -197,20 +237,24 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", ste
     if (is.null(doann$wd2    )) { wd2    = temp_$wd2     ; doann$wd2     = wd2     } else { wd2     = doann$wd2     }
     if (is.null(doann$l1     )) { l1     = temp_$l1      ; doann$l1      = l1      } else { l1      = doann$l1      }
     if (is.null(doann$l12    )) { l12    = temp_$l12     ; doann$l1      = l12     } else { l12     = doann$l12     }
-    if (is.null(doann$fold_n )) { fold_n = temp_$fold_n  ; doann$fold_n  = fold_n  } else { fold_n  = doann$fold_n  }
+    if (is.null(doann$lscale )) { lscale = temp_$lscale  ; doann$lscale  = lscale  } else { lscale  = doann$lscale  }
+    if (is.null(doann$scale  )) { scale  = temp_$scale   ; doann$scale   = scale   } else { scale   = doann$scale   }
+    if (is.null(doann$fold_n )) { fold_ann = temp_$fold_n  ; doann$fold_n  = fold_ann  } else { fold_ann  = doann$fold_n  }
     if (is.null(doann$minloss)) { minloss= temp_$minloss ; doann$minloss = minloss } else { minloss = doann$minloss }
     if (is.null(doann$gotoend)) { gotoend= temp_$gotoend ; doann$gotoend = gotoend } else { gotoend = doann$gotoend }
     if (is.null(doann$bestof )) { bestof = temp_$bestof  ; doann$bestof  = bestof  } else { bestof  = doann$bestof  }
-    if (fold_n == 0) { fold_n = folds_n ; doann$fold_n = fold_n } 
-    if (fold_n == 1) { 
-      fold_n = 3
-      doann$fold_n = fold_n
+#    if (fold_ann == 0) { fold_ann = folds_n ; doann$fold_n = fold_ann } 
+    if (fold_ann == 0) { doann_ = 0 } 
+    if (fold_ann == 1) { 
+      fold_ann = 3
+      doann$fold_n = fold_ann
       cat(paste(" --- fold_n cannot be 1 and is so set to 3 ---"))
     }
-    if (track >= 0) {
-      cat(paste0(" epochs=", epochs, " epochs2=", epochs2, " mylr=", mylr, " mylr2=", mylr2, " eppr=", eppr, "\n" )) 
-      cat(paste0(" eppr2=", eppr2, " lenz1=", lenz1, " lenz2=", lenz2, " actv=", actv, " drpot=", drpot, "\n" )) 
-      cat(paste0(" wd=", wd, " wd2=", wd2, " l1=", l1, " l12=", l12, "fold_n=", fold_n, "\n minloss=", minloss, " gotoend=", gotoend, "\n" )) 
+    if ((track >= 1) & (doann_ == 1)) {
+      cat(paste0(" epochs=", epochs, " epochs2=", epochs2, " mylr=", mylr, " mylr2=", mylr2, " eppr=", eppr,
+                 " eppr2=", eppr2, " lenz1=", lenz1, " lenz2=", lenz2, " actv=", actv, " drpot=", drpot, "\n" )) 
+      cat(paste0(" wd=", wd, " wd2=", wd2, " l1=", l1, " l12=", l12, " lscale=", lscale, " scale=", scale, " fold_n=", fold_ann,  
+                 " minloss=", minloss, " gotoend=", gotoend, " bestof=", bestof, "\n" )) 
     }
   } 
 
@@ -218,27 +262,29 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", ste
     doann_ = 0 
     print("\n  ***** torch is NOT installed and so neural networks models will not be fit *****\n")
   }
-  
+
   if (!is.null(time)) {
     track=time
     cat(" Please use track option instead of time option.  time option will be dropped in future versions.")
   }
-  if (track  < 0) { eppr = -3 ; eppr2 = -3 ; }
-  if (track == 0) { eppr = -2 ; eppr2 = -2 ; }
+
+  if (track <= 0) { if (is.null(eppr)) { eppr = -3 } ;  if (is.null(eppr)) { eppr2 = -3 } }
+  if (track <= 0) { eppr = min(eppr, -2) ;  eppr2 = min(eppr2,-2) }
   if (track >= 1) { cat(paste0("\n", " ##############################################################################################" , "\n")) }
-  if (track >= 1) {
-    time_start = diff_time() 
-    time_last = NULL 
-  }
+  time_start = Sys.time()
+  time_last = NULL 
+  if (track >= 1) { time_start = diff_time() }
+  
+  ## general input check #######################################################
   
   if (ties != "breslow") { ties="efron" }
   
-  if (is.null(ensemble)  ) { ensemble = c(1,0,0) } 
-  if (length(ensemble)==1) { ensemble = c(rep(ensemble,3)) }
-  if (sum(ensemble)   ==0) { ensemble = c(1,0,0) } 
+  if ( is.null(ensemble) ) { ensemble = c(1, rep(0,7)) } 
+  if (sum(ensemble)   ==0) { ensemble = c(1, rep(0,7)) } 
+  if (length(ensemble)==1) { ensemble = c(rep(ensemble,8)) }
   temp_ = ensemble
-  lng = min(length(temp_), 8)
-  ensemble = rep(0,8) ; 
+  lng = min(length(temp_), 9)
+  ensemble = rep(0,9) ; 
   ensemble[1:lng] = temp_ 
 
   if (((doxgb_==1) | (doann_==1) | (dorpart==1)) & (sum(ensemble[c(2:8)]) >= 1)) { dolasso = 1 } 
@@ -248,7 +294,7 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", ste
   xs_ncol = dim(xs)[2]                                                          ## number of candidate predictor variables 
   nobs    = dim(xs)[1] 
   one     = c( rep(1, nobs) )
-  
+
 #  nvars = dim(xs)[2]
 #  if (is.null(dfmax)) { dfmax = nvars + 1 }
 #  if (is.null(penalty.factor)) {penalty.factor = rep(1,nvars)}
@@ -271,9 +317,39 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", ste
   if ( family %in% c("gausian", "gause", "normal") ) { family = "gaussian" }
   if ( family %in% c("COX", "cox", "coxph") ) { family = "cox" }
   
+  if (is.null(seed)) { 
+    seedr_ = round(runif(1)*1e9) 
+    seedt_ = round(runif(1)*1e9) 
+    seed = list(seedr=seedr_, seedt=seedt_)
+  } else if (is.list(seed)) {
+    seedr_ = seed$seedr[1] 
+    if (is.null(seedr_)) { 
+      seedr_ = round(runif(1)*1e9) 
+      seed$seedr[1] = seedr_ 
+    } else if (is.na(seedr_)) { 
+      seedr_ = round(runif(1)*1e9)
+      seed$seedr[1] = seedr_ 
+    }
+    seedt_ = seed$seedt[1] 
+    if (is.null(seedt_)) { 
+      seedt_ = round(runif(1)*1e9) 
+      seed$seedt[1] = seedt_ 
+    } else if (is.na(seedt_)) { 
+      seedt_ = round(runif(1)*1e9)
+      seed$seedt[1] = seedt_ 
+    }
+  } else {
+    seedr_ = seed[1]
+    seedt_ = seed[2]
+    if (is.null(seedr_)) { seedr_ = round(runif(1)*1e9) 
+    } else if (is.na(seedr_)) { seedr_ = round(runif(1)*1e9) }
+    if (is.null(seedt_)) { seedt_ = round(runif(1)*1e9) 
+    } else if (is.na(seedt_)) { seedt_ = round(runif(1)*1e9) } 
+    seed = list(seedr=seedr_, seedt=seedt_)
+  }
+
   if (is.null(foldid)) { 
-    if (is.null(seed)) { seed = round(runif(1)*1e9) }
-    set.seed(seed) 
+    set.seed(seedr_) 
     if (stratified >= 1) {
       if   (family == "binomial") {  foldid = factor.foldid(y_   , folds_n)  ;  table(y_   , foldid) ;
       } else if (family == "cox") {  foldid = factor.foldid(event, folds_n)  ;  table(event, foldid) ;  
@@ -286,14 +362,8 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", ste
   }
   
   if (doann_ == 1) { 
-    if (length(seed) == 1) { 
-      tseed = round(runif(1)*1e9) 
-      seed = c(seed, tseed) 
-    } else {
-      tseed = seed[2] 
-    }
-    torch_manual_seed( tseed ) 
-  } else { tseed = 0 }
+    torch_manual_seed( seedt_ ) 
+  } 
 
   ## log likelihoods & concordances from LASSO and relaxed lasso by Cross Validation 
   lasso.devian.cv = matrix ( data=rep(0,(7*folds_n)), nrow = folds_n, ncol = 7 ) 
@@ -339,12 +409,12 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", ste
   colnames(rpart.agree.cv)  = nms 
   
   ## log likelihoods & concordances from Neural Networks by Cross Validation   
-  ann.devian.cv   = matrix ( data=rep(1,(6*folds_n)), nrow = folds_n, ncol = 6 ) 
-  ann.cal.devian.cv=matrix ( data=rep(1,(6*folds_n)), nrow = folds_n, ncol = 6 ) 
-  ann.agree.cv    = matrix ( data=rep(0,(6*folds_n)), nrow = folds_n, ncol = 6 )
-  ann.intcal.cv   = matrix ( data=rep(0,(6*folds_n)), nrow = folds_n, ncol = 6 )
-  ann.lincal.cv   = matrix ( data=rep(0,(6*folds_n)), nrow = folds_n, ncol = 6 )
-  nms = c("Uninformed", "lasso terms", "lasso feat.", "init w's", "update w's", "offset") 
+  ann.devian.cv   = matrix ( data=rep(1,(8*folds_n)), nrow = folds_n, ncol = 8 ) 
+  ann.cal.devian.cv=matrix ( data=rep(1,(8*folds_n)), nrow = folds_n, ncol = 8 ) 
+  ann.agree.cv    = matrix ( data=rep(0,(8*folds_n)), nrow = folds_n, ncol = 8 )
+  ann.intcal.cv   = matrix ( data=rep(0,(8*folds_n)), nrow = folds_n, ncol = 8 )
+  ann.lincal.cv   = matrix ( data=rep(0,(8*folds_n)), nrow = folds_n, ncol = 8 )
+  nms = c("Uninformed", "lasso feat", "lasso w's", "lasso update", "lasso terms", "l/lasso feat", "l/lasso w's", "l/lasso update") 
   colnames(ann.devian.cv) = nms 
   colnames(ann.cal.devian.cv) = nms 
   colnames(ann.intcal.cv) = nms 
@@ -490,21 +560,29 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", ste
     
     if (family=="cox") { Surv.xgb = ifelse( event == 1, y_, -y_) }
     
-    if (ensemble[1] >=1) {
+    if (sum(ensemble[c(1,5)]) >= 1) {
       if (family=="cox") { full.xgb.dat <- xgb.DMatrix(data = xs, label = Surv.xgb)
       } else {             full.xgb.dat <- xgb.DMatrix(data = xs, label = y_)      }
     }
     
-    if ((ensemble[2] >= 1) | (ensemble[3] >= 1)) {
-      ofst = predict(cv_glmnet_fit_f, xs, lam="lambda.min", gam="gamma.min" )  ###### min RELAXED lasso as an offset #########
+    ## calibrate lasso ##
+    if (sum(ensemble[c(2:4,6:8)]) >= 1) {
+      lassopred0 = predict(cv_glmnet_fit_f, xs, lam="lambda.min" , gam="gamma.min" )
+      if (family=="cox") {
+        fit0 = coxph(Surv(y_, event) ~ lassopred0) 
+      } else if (family %in% c("binomial", "gaussian")) {
+        fit0 = glm(y_ ~ lassopred0, family=family) 
+      }
+      lassopred = predict(fit0, as.data.frame(lassopred0))
+      ofst = lassopred 
     }
     
-    if (ensemble[2] >= 1) {
+    if (sum(ensemble[c(2,6)]) >= 1) {
       if (family=="cox") { full.xgb.datF <- xgb.DMatrix(data = cbind(xs,ofst), label = Surv.xgb)
       } else {             full.xgb.datF <- xgb.DMatrix(data = cbind(xs,ofst), label = y_)      }
     }
     
-    if (ensemble[3] >= 1) {
+    if (sum(ensemble[c(3,4,7,8)]) >= 1) {
       if (family=="cox") { full.xgb.datO <- xgb.DMatrix(data = xs, label = Surv.xgb, base_margin=ofst)
       } else {             full.xgb.datO <- xgb.DMatrix(data = xs, label = y_, base_margin=ofst)      }
     }
@@ -569,33 +647,33 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", ste
       } else                           { objective = "reg:squarederror" }
       
       ## SIMPLE XGB model full data ################################################
-      if (ensemble[1] == 1) {
+      if (sum(ensemble[c(1,5)]) >= 1) {
         xgb.simple.fit = xgb.simple(full.xgb.dat, objective = objective, folds_xgb=folds_xgb, nrounds=nrounds)
         xgbperf = xgb_perform(xgb_model=xgb.simple.fit, xs_=full.xgb.dat, y=y_, evnt=event, family=family )
         xgb.devian.naive[1] = xgbperf[1] ;  xgb.lincal.naive[1] = xgbperf[2] ;  xgb.agree.naive [1] = xgbperf[3] 
       }
-      if (ensemble[2] == 1) {
+      if (sum(ensemble[c(2,6)]) >= 1) {
         xgb.simple.fitF = xgb.simple(full.xgb.datF, objective = objective, folds_xgb=folds_xgb, nrounds=nrounds)
         xgbperf = xgb_perform(xgb.simple.fitF, full.xgb.datF, y=y_, evnt=event, family=family )
         xgb.devian.naive[2] = xgbperf[1] ;  xgb.lincal.naive[2] = xgbperf[1] ;  xgb.agree.naive [2] = xgbperf[2]
       }
-      if (ensemble[3] == 1) {
+      if (sum(ensemble[c(3,4,7,8)]) >= 1) {
         xgb.simple.fitO = xgb.simple(full.xgb.datO, objective = objective, folds_xgb=folds_xgb, nrounds=nrounds)
         xgbperf = xgb_perform(xgb.simple.fitO, full.xgb.datO, y=y_, evnt=event, family=family )
         xgb.devian.naive[3] = xgbperf[1] ;  xgb.lincal.naive[3] = xgbperf[2] ;  xgb.agree.naive [3] = xgbperf[3]        
       }
       ## TUNED XGB fit full data ###################################################
-      if (ensemble[1] == 1) {
+      if (sum(ensemble[c(1,5)]) >= 1) {
         xgb.tuned.fit = xgb.tuned(full.xgb.dat, objective = objective, folds_xgb=folds_xgb, nrounds=nrounds)
         xgbperf = xgb_perform(xgb.tuned.fit, full.xgb.dat, y=y_, evnt=event, family=family )
         xgb.devian.naive[4] = xgbperf[1] ;  xgb.lincal.naive[4] = xgbperf[2] ;  xgb.agree.naive [4] = xgbperf[3] 
       }
-      if (ensemble[2] == 1) {
+      if (sum(ensemble[c(2,6)]) >= 1) {
         xgb.tuned.fitF = xgb.tuned(full.xgb.datF, objective = objective, folds_xgb=folds_xgb, nrounds=nrounds)
         xgbperf = xgb_perform(xgb.tuned.fitF, full.xgb.datF, y=y_, evnt=event, family=family )
         xgb.devian.naive[5] = xgbperf[1] ;  xgb.lincal.naive[5] = xgbperf[2] ;  xgb.agree.naive [5] = xgbperf[3] 
       }
-      if (ensemble[3] == 1) {
+      if (sum(ensemble[c(3,4,7,8)]) >= 1) {
         xgb.tuned.fitO = xgb.tuned(full.xgb.datO, objective = objective, folds_xgb=folds_xgb, nrounds=nrounds)
         xgbperf = xgb_perform(xgb.tuned.fitO, full.xgb.datO, y=y_, evnt=event, family=family )
         xgb.devian.naive[6] = xgbperf[1] ;  xgb.lincal.naive[6] = xgbperf[2] ;  xgb.agree.naive [6] = xgbperf[3] 
@@ -608,11 +686,6 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", ste
   ##### Neural Network fit ######################################################################################
   if (doann_ == 1) { 
     if (track >= 1) { cat(paste0("\n", " ########## Initial Neural Network fit on all data #############################################" , "\n")) }
-    ## 1 - uninformed NN                                 ## 1
-    ## 2 - limit to lasso variables                      ## 4
-    ## 3 - add lasso X*Beta as feature                   ## 2
-    ## 4 - include lasso structure in initial weights    ## 5
-    ## 5 - update weights each epoch                     ## 3
 
     ann_cox_perf = function(object, newdat=xs_z, newy, start, event, tol=tol_) {
       xbhat  = as.numeric( object$model(newdat) )  
@@ -669,9 +742,8 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", ste
       }
     }
     
-    ann_fit_1_f = NULL ;  ann_fit_2_f = NULL ;  ann_fit_3_f = NULL ;  ann_fit_4_f = NULL ; ann_fit_5_f = NULL ; ann_fit_6_f = NULL ; 
+    ann_fit_1_f = NULL ;  ann_fit_2_f = NULL ;  ann_fit_3_f = NULL ;  ann_fit_4_f = NULL ; ann_fit_5_f = NULL ; ann_fit_6_f = NULL ; ann_fit_7_f = NULL ; ann_fit_8_f = NULL ; 
     
-#    print(ensemble)
     xs_means = colMeans(xs)
     xs_c     = sweep(xs, 2, xs_means, FUN = "-") 
     xs_sds   = sqrt( colSums(xs_c^2) / (dim(xs)[1]-1) ) 
@@ -682,31 +754,34 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", ste
 #    table(round(diag(cov(xs_z)),digits=8))
     xs_z0 = xs_z[,(xs_sds_ > 1e-8)]                                              ## xs_sds or xs_sds_ ?? 
     ann_zb = list(xs_means=xs_means, xs_sds_=xs_sds_, tol=1e-8)
-      
-    if (sum(ensemble[2:6]) > 0) {
-      lassopred = predict(cv_glmnet_fit_f, xs, lam="lambda.min" , gam="gamma.min" )
-      lassobeta = predict(cv_glmnet_fit_f,     lam="lambda.min" , gam="gamma.min" )
+    
+    ## calibrate lasso ##
+    if (sum(ensemble[c(2:8)]) > 0) {
+      lassopred0 = predict(cv_glmnet_fit_f, xs, lam="lambda.min" , gam="gamma.min" )
+      lassobeta  = predict(cv_glmnet_fit_f,     lam="lambda.min" , gam="gamma.min" )
       if (family=="cox") {
-        fit0 = coxph(Surv(y_, event) ~ lassopred) 
-        calbeta = fit0$coefficients
-        lassopred = calbeta * lassopred 
+        fit0 = coxph(Surv(y_, event) ~ lassopred0) 
+        lassopred = predict(fit0, as.data.frame(lassopred0))
+        calbeta = c(mean(lassopred)-fit0$coefficients*mean(lassopred0), fit0$coefficients)
+#        summary( calbeta[1] + calbeta[2] * lassopred0 - lassopred)
       } else if (family %in% c("binomial", "gaussian")) {
-        fit0 = glm(y_ ~ lassopred, family=family) 
+        fit0 = glm(y_ ~ lassopred0, family=family) 
+        lassopred = predict(fit0, as.data.frame(lassopred0))
         calbeta = fit0$coefficients
-        lassopred = calbeta[1] + calbeta[2] * lassopred 
       }
+      xs_z0L = cbind(lasso=lassopred, xs_z0)                                    ## add lasso prediction as first column 
+      dim(xs_z0L)
       dim(xs_z)
-      if (family %in% c("binomial", "gaussian")) {
-        xs_z1 = xs_z[,(lassobeta[[1]] != 0)[2:length(lassobeta[[1]])]]          ## pick up non zero features, remove intercept from this list 
-      } else if (family == "cox") {
-        xs_z1 = xs_z[,(lassobeta[[1]] != 0)]
-      }
-      dim(xs_z1)
-      xs_z2 = cbind(lasso=lassopred,xs_z1)                                      ## add lasso prediction as first column 
-      dim(xs_z2)
-#      table(diag(cov(xs_z0)))
-#      table(diag(cov(xs_z1)))
-#      table(diag(cov(xs_z2)))
+      if (family == "cox") {
+        xs_z1 = as.matrix( xs_z[,(lassobeta[[1]] != 0)]                           )         ## pick up non zero features 
+      } else if (family %in% c("binomial", "gaussian")) {
+        xs_z1 = as.matrix( xs_z[,(lassobeta[[1]] != 0)[2:length(lassobeta[[1]])]] )         ## pick up non zero features, remove intercept from this list 
+      } 
+      dim(xs_z1) 
+      xs_z1L = cbind(lasso=lassopred,xs_z1)                                     ## add lasso prediction as first column 
+      dim(xs_z1L)
+#      table(diag(cov(xs_z1L)))
+      names(calbeta) = c("lassoB0", "lassoB1") 
       ann_zb$lassobeta=lassobeta ; ann_zb$calbeta=calbeta ; 
     }
     
@@ -718,54 +793,112 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", ste
     if (l1  < 0) { getl1  = 1 ; l1  = abs(l1 ) * cv_glmnet_fit_f$relaxed$lambda.min.g0 } 
     if (l12 < 0) { getl12 = 1 ; l12 = abs(l12) * cv_glmnet_fit_f$relaxed$lambda.min.g0 }
       
+    ## 1 - uninformed NN       
+    ## 2 - lasso feature
+    ## 3 - lasso weights
+    ## 4 - lasso updated weights
+    ## 5 - lasso terms
+    ## 6 - lasso terms & feat
+    ## 7 - lasso terms & weights 
+    ## 8 - lasso terms & updated weights
+    
     if (family %in% c("cox", "binomial", "gaussian")) {
 #     cat(paste(fold_n, family, epochs, eppr, wd, lenz1, lenz2, mylr) )
       if (ensemble[1] == 1) { 
         if (eppr >= -2) { cat(paste0("  ** fitting ANN uninformed **\n")) }
         ## xs_z0 - standardized data 
-        ann_fit_1_f = ann_tab_cv(myxs=xs_z0, mystart=start, myy=y_, myevent=event, fold_n=fold_n, family=family, 
-                                 epochs=epochs, eppr=eppr, lenz1=lenz1, lenz2=lenz2, mylr=mylr, actv=actv, drpot=drpot, wd=wd, l1=l1, minloss=minloss, gotoend=gotoend) 
+        ann_fit_1_f = ann_tab_cv_best(myxs=xs_z0, mystart=start, myy=y_, myevent=event, fold_n=fold_ann, family=family, 
+                                 epochs=epochs, eppr=eppr, lenz1=lenz1, lenz2=lenz2, mylr=mylr, actv=actv, 
+                                 drpot=drpot, wd=wd, l1=l1, scale=scale, minloss=minloss, gotoend=gotoend, bestof=bestof, 
+                                 seed = c(seedr_, seedt_) ) 
         ann_perf1 = ann_perform(ann_fit_1_f, xs_z0, y_, family, start, event)
       } else { ann_perf1 = c(10,10,0,0,0) }
-      if (ensemble[4] == 1) { 
-        if (eppr >= -2) { cat(paste0("  ** fitting ANN informed on relaxed lasso terms **\n")) }
-        ann_fit_2_f = ann_tab_cv(myxs=xs_z1, mystart=start, myy=y_, myevent=event, fold_n=fold_n, family=family, 
-                                 epochs=epochs, eppr=eppr, lenz1=lenz1, lenz2=lenz2, mylr=mylr, actv=actv, drpot=drpot, wd=wd, l1=l1, minloss=minloss, gotoend=gotoend) 
-        perfm2 = ann_perform(ann_fit_2_f, xs_z1, y_, family, start, event)
-      } else { perfm2 = c(10,10,0,0,0) }
-      if (ensemble[2] == 1) {
-        if (eppr >= -2)  { cat(paste0("  ** fitting ANN with feature X*Beta and relaxed lasso terms **\n")) } 
-        lenz1_ = lenz1 + 1 ; lenz2_ = lenz2 + 1 ; 
-        ann_fit_3_f = ann_tab_cv(myxs=xs_z2, mystart=start, myy=y_, myevent=event , fold_n=fold_n, family=family, 
-                                 epochs=epochs, eppr=eppr, lenz1=lenz1_, lenz2=lenz2_, mylr=mylr, actv=actv, drpot=drpot, wd=wd, l1=l1, minloss=minloss, gotoend=gotoend) 
-        ann_perf = ann_perform(ann_fit_3_f, xs_z2, y_, family, start, event)
-      } else { perfm3 = c(10,10,0,0,0) }
+      
+      if (ensemble[2] == 1) { 
+        if (eppr >= -2) { cat(paste0("  ** fitting ANN lasso feature **\n")) }
+        lenz1_ = lenz1 + 1 ; lenz2_ = lenz2 + 1 ;
+        ann_fit_2_f = ann_tab_cv_best(myxs=xs_z0L, mystart=start, myy=y_, myevent=event, fold_n=fold_ann, family=family, 
+                                 epochs=epochs, eppr=eppr, lenz1=lenz1_, lenz2=lenz2_, mylr=mylr, actv=actv, 
+                                 drpot=drpot, wd=wd, l1=l1, scale=scale, minloss=minloss, gotoend=gotoend, bestof=bestof, 
+                                 seed = c(seedr_, seedt_)) 
+        ann_perf2 = ann_perform(ann_fit_2_f, xs_z0L, y_, family, start, event)
+      } else { ann_perf2 = c(10,10,0,0,0) }
+      
       if (ensemble[3] == 1) { 
-        if (eppr >= -2) { cat(paste0("  ** fitting ANN including X*Beta from relaxed lasso in initial weight structure  **\n")) } 
+        if (eppr >= -2) { cat(paste0("  ** fitting ANN lasso weights **\n")) }
         lenz1_ = lenz1 + 2 ; lenz2_ = lenz2 + 2 ; 
-        ann_fit_4_f = ann_tab_cv(myxs=xs_z2, mystart=start, myy=y_, myevent=event, fold_n=fold_n, family=family, 
-                                 epochs=epochs2, eppr=eppr2, lenz1=lenz1_, lenz2=lenz2_, mylr=mylr2, actv=actv, drpot=drpot, wd=wd2, l1=l12,lasso=1, adjustw=0, minloss=minloss, gotoend=gotoend) 
-        perfm4 = ann_perform(ann_fit_4_f, xs_z2, y_, family, start, event)
-      } else { perfm4 = c(10,10,0,0,0) }
-      if (ensemble[5] == 1) {
-        if (eppr >= -2) { cat(paste0("  ** fitting ANN including X*Beta from relaxed lasso in weight structure each epoch **\n")) } 
+        ann_fit_3_f = ann_tab_cv_best(myxs=xs_z0L, mystart=start, myy=y_, myevent=event, fold_n=fold_ann, family=family, 
+                                 epochs=epochs2, eppr=eppr2, lenz1=lenz1_, lenz2=lenz2_, mylr=mylr2, actv=actv, 
+                                 drpot=drpot, wd=wd2, l1=l12, lasso=1, lscale=lscale, scale=scale, resetlw=0, minloss=minloss, gotoend=gotoend, bestof=bestof, 
+                                 seed = c(seedr_, seedt_)) 
+        ann_perf3 = ann_perform(ann_fit_3_f, xs_z0L, y_, family, start, event)
+      } else { ann_perf3 = c(10,10,0,0,0) }
+      
+      if (ensemble[4] == 1) { 
+        if (eppr >= -2) { cat(paste0("  ** fitting ANN lasso weights updated each epoch **\n")) }
         lenz1_ = lenz1 + 2 ; lenz2_ = lenz2 + 2 ; 
-        ann_fit_5_f = ann_tab_cv(myxs=xs_z2, mystart=start, myy=y_, myevent=event, fold_n=fold_n, family=family, 
-                                 epochs=epochs2, eppr=eppr2, lenz1=lenz1_, lenz2=lenz2_, mylr=mylr2, actv=actv, drpot=drpot, wd=wd2, l1=l12, lasso=1, adjustw=1, minloss=minloss, gotoend=gotoend) 
-        perfm5 = ann_perform(ann_fit_5_f, xs_z2, y_, family, start, event)
-      } else { perfm5 = c(10,10,0,0,0) }
-      if (ensemble[6] == 1.41456) {
+        ann_fit_4_f = ann_tab_cv_best(myxs=xs_z0L, mystart=start, myy=y_, myevent=event, fold_n=fold_ann, family=family, 
+                                 epochs=epochs2, eppr=eppr2, lenz1=lenz1_, lenz2=lenz2_, mylr=mylr2, actv=actv, 
+                                 drpot=drpot, wd=wd2, l1=l12, lasso=1, lscale=lscale, scale=scale, resetlw=1, minloss=minloss, gotoend=gotoend, bestof=bestof, 
+                                 seed = c(seedr_, seedt_)) 
+        ann_perf4 = ann_perform(ann_fit_4_f, xs_z0L, y_, family, start, event)
+      } else { ann_perf4 = c(10,10,0,0,0) }
+      
+      if (ensemble[5] == 1) { 
+        if (eppr >= -2) { cat(paste0("  ** fitting ANN lasso terms **\n")) }
+        ## xs_z0 - standardized data 
+        ann_fit_5_f = ann_tab_cv_best(myxs=xs_z1, mystart=start, myy=y_, myevent=event, fold_n=fold_ann, family=family, 
+                                 epochs=epochs, eppr=eppr, lenz1=lenz1, lenz2=lenz2, mylr=mylr, actv=actv, 
+                                 drpot=drpot, wd=wd, l1=l1, scale=scale, minloss=minloss, gotoend=gotoend, bestof=bestof, 
+                                 seed = c(seedr_, seedt_)) 
+        ann_perf5 = ann_perform(ann_fit_5_f, xs_z1, y_, family, start, event)
+      } else { ann_perf5 = c(10,10,0,0,0) }
+      
+      if (ensemble[6] == 1) { 
+        if (eppr >= -2) { cat(paste0("  ** fitting ANN lasso terms, lasso feature **\n")) }
+        lenz1_ = lenz1 + 1 ; lenz2_ = lenz2 + 1 ;
+        ann_fit_6_f = ann_tab_cv_best(myxs=xs_z1L, mystart=start, myy=y_, myevent=event, fold_n=fold_ann, family=family, 
+                                 epochs=epochs, eppr=eppr, lenz1=lenz1_, lenz2=lenz2_, mylr=mylr, actv=actv, 
+                                 drpot=drpot, wd=wd, l1=l1, scale=scale, minloss=minloss, gotoend=gotoend, bestof=bestof, 
+                                 seed = c(seedr_, seedt_)) 
+        ann_perf6 = ann_perform(ann_fit_6_f, xs_z1L, y_, family, start, event)
+      } else { ann_perf6 = c(10,10,0,0,0) }
+      
+      if (ensemble[7] == 1) { 
+        if (eppr >= -2) { cat(paste0("  ** fitting ANN lasso terms, lasso weights **\n")) }
+        lenz1_ = lenz1 + 2 ; lenz2_ = lenz2 + 2 ; 
+        ann_fit_7_f = ann_tab_cv_best(myxs=xs_z1L, mystart=start, myy=y_, myevent=event, fold_n=fold_ann, family=family, 
+                                 epochs=epochs2, eppr=eppr2, lenz1=lenz1_, lenz2=lenz2_, mylr=mylr2, actv=actv, 
+                                 drpot=drpot, wd=wd2, l1=l12,lasso=1, lscale=lscale, scale=scale, resetlw=0, minloss=minloss, gotoend=gotoend, bestof=bestof, 
+                                 seed = c(seedr_, seedt_)) 
+        ann_perf7 = ann_perform(ann_fit_7_f, xs_z1L, y_, family, start, event)
+      } else { ann_perf7 = c(10,10,0,0,0) }
+      
+      if (ensemble[8] == 1) { 
+        if (eppr >= -2) { cat(paste0("  ** fitting ANN lasso terms, lasso weights updated each epoch **\n")) }
+        lenz1_ = lenz1 + 2 ; lenz2_ = lenz2 + 2 ; 
+        ann_fit_8_f = ann_tab_cv_best(myxs=xs_z1L, mystart=start, myy=y_, myevent=event, fold_n=fold_ann, family=family, 
+                                 epochs=epochs2, eppr=eppr2, lenz1=lenz1_, lenz2=lenz2_, mylr=mylr2, actv=actv, 
+                                 drpot=drpot, wd=wd2, l1=l12,lasso=1, lscale=lscale, scale=scale, resetlw=1, minloss=minloss, gotoend=gotoend, bestof=bestof, 
+                                 seed = c(seedr_, seedt_)) 
+        ann_perf8 = ann_perform(ann_fit_8_f, xs_z1L, y_, family, start, event)
+      } else { ann_perf8 = c(10,10,0,0,0) }
+      
+      if (ensemble[9] == 1.41456) {
         if (eppr >= -2) { cat(paste0("  ** fitting ANN including X*Beta as offset - DOESN'T WORK properly **\n")) } 
-        ann_fit_6_f = ann_tab_cv(myxs=xs_z1, mystart=start, myy=y_, myevent=event, fold_n=fold_n, family=family, 
-                                 epochs=epochs2, eppr=eppr2, lenz1=lenz1, lenz2=lenz2, mylr=mylr2, actv=actv, drpot=drpot, wd=wd, l1=l1, minloss=minloss, gotoend=gotoend) 
-        perfm6 = ann_perform(ann_fit_6_f, xs_z1, y_, family, start, event)   ## offset=lassopred, 
-      } else { perfm6 = c(10,10,0,0,0)  }
-      ann.devian.naive  = c( perfm1[1] , perfm2[1] , perfm3[1] , perfm4[1] , perfm5[1] , perfm6[1] )
-      ann.cal.devian.naive=c(perfm1[2] , perfm2[2] , perfm3[2] , perfm4[2] , perfm5[2] , perfm6[2] )    
-      ann.agree.naive   = c( perfm1[3] , perfm2[3] , perfm3[3] , perfm4[3] , perfm5[3] , perfm6[3] )
-      ann.lincal.naive  = c( perfm1[4] , perfm2[4] , perfm3[4] , perfm4[4] , perfm5[4] , perfm6[4] )
-      ann.intcal.naive  = c( perfm1[5] , perfm2[5] , perfm3[5] , perfm4[5] , perfm5[5] , perfm6[5] )
-      nms = c("Uninformed", "lasso terms", "lasso feat.", "init w's", "update w's", "offset") 
+        ann_fit_9_f = ann_tab_cv_best(myxs=xs_z1L, mystart=start, myy=y_, myevent=event, fold_n=fold_ann, family=family, 
+                                 epochs=epochs2, eppr=eppr2, lenz1=lenz1, lenz2=lenz2, mylr=mylr2, actv=actv, 
+                                 drpot=drpot, wd=wd, l1=l1, scale=scale, minloss=minloss, gotoend=gotoend, bestof=bestof, 
+                                 seed = c(seedr_, seedt_)) 
+        ann_perf9 = ann_perform(ann_fit_9_f, xs_z1, y_, family, start, event)   ## offset=lassopred, 
+      } else { ann_perf9 = c(10,10,0,0,0)  }
+      
+      ann.devian.naive  = c( ann_perf1[1], ann_perf2[1], ann_perf3[1], ann_perf4[1], ann_perf5[1], ann_perf6[1], ann_perf7[1], ann_perf8[1] )
+      ann.cal.devian.naive=c(ann_perf1[2], ann_perf2[2], ann_perf3[2], ann_perf4[2], ann_perf5[2], ann_perf6[2], ann_perf7[2], ann_perf8[2] )    
+      ann.agree.naive   = c( ann_perf1[3], ann_perf2[3], ann_perf3[3], ann_perf4[3], ann_perf5[3], ann_perf6[3], ann_perf7[3], ann_perf8[3] )
+      ann.lincal.naive  = c( ann_perf1[4], ann_perf2[4], ann_perf3[4], ann_perf4[4], ann_perf5[4], ann_perf6[4], ann_perf7[4], ann_perf8[4] )
+      ann.intcal.naive  = c( ann_perf1[5], ann_perf2[5], ann_perf3[5], ann_perf4[5], ann_perf5[5], ann_perf6[5], ann_perf7[5], ann_perf8[5] )
+      nms = c("Uninformed", "lasso feat", "lasso w's", "lasso update", "lasso terms", "l/lasso feat", "l/lasso w's", "l/lasso update") 
       names(ann.devian.naive)  = nms 
       names(ann.cal.devian.naive) = nms
       names(ann.intcal.naive)  = nms
@@ -779,7 +912,7 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", ste
   if (dorpart==1) { 
     if (track >= 1) { cat(paste0("\n", " ########## Initial RPART fit on all data #############################################" , "\n")) }
 
-    rpart.train.00 = NULL ; rpart.trainO.00 = NULL ; rpart.trainF.00 = NULL ;
+    rpart.fit.00 = NULL ; rpart.fitO.00 = NULL ; rpart.fitF.00 = NULL ;
     
     rpart.devian.naive = c(0,0,0, 0,0,0, 0,0,0)
     rpart.nzero.naive  = c(0,0,0, 0,0,0, 0,0,0)
@@ -790,54 +923,42 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", ste
     names(rpart.devian.naive)  = nms 
     names(rpart.nzero.naive )  = nms
     names(rpart.lincal.naive)  = nms
-    names(rpart.agree.naive )   = nms
+    names(rpart.agree.naive )  = nms
 
-    #<--------------------------------------------------------------------------
-    trainxs = xs 
-    testxs = xs 
-    trainstart = start 
-    teststart = start 
-    trainy_ = y_ 
-    testy_  = y_ 
-    trainevent = event 
-    testevent  = event 
-    #<--------------------------------------------------------------------------
+    df.xs = as.data.frame(xs)
     
-    df.trainxs = as.data.frame(trainxs) 
-    df.testxs  = as.data.frame(testxs) 
-    
-    if ((ensemble[2] == 1) | (ensemble[3] == 1)) { 
-#     trainofst = predict(cv_glmnet_fit  , trainxs, lam="lambda.min" , gam="gamma.min" )  ###### min RELAXED lasso as an offset #####
-#     testofst  = predict(cv_glmnet_fit  , testxs , lam="lambda.min" , gam="gamma.min" )  ###### min RELAXED lasso as an offset #####
-      trainofst = predict(cv_glmnet_fit_f, trainxs, lam="lambda.min" , gam="gamma.min" )  ###### min RELAXED lasso as an offset #####
-      length(trainofst) ; 
-      testofst  = predict(cv_glmnet_fit_f, testxs , lam="lambda.min" , gam="gamma.min" )  ###### min RELAXED lasso as an offset #####
-      length(testofst) ; 
-      trainxsO  = cbind(trainxs,ofst=trainofst) 
-      dim(xs) ; dim(trainxs) ; dim(trainxsO) ; length(trainofst) ; 
-      testxsO   = cbind(testxs ,ofst=testofst) 
-      df.trainxsO = as.data.frame(trainxsO)
-      df.testxsO  = as.data.frame(testxsO )
-#      dim(df.testxsO) ; dim(df.trainxsO)
+    ## calibrate lasso ##
+    if (sum(ensemble[c(2:4,6:8)]) >= 1) { 
+      ofst0 = predict(cv_glmnet_fit_f, xs, lam="lambda.min" , gam="gamma.min" )  ###### min RELAXED lasso as an offset #####
+      if (family=="cox") {
+        fit0 = coxph(Surv(y_, event) ~ ofst0) 
+      } else if (family %in% c("binomial", "gaussian")) {
+        fit0 = glm(y_ ~ ofst0, family=family) 
+      }
+      ofst  = predict(fit0, as.data.frame(ofst0))
+      xsO   = cbind(xs, ofst=ofst) 
+      df.xsO = as.data.frame(xsO)
     }
     
-    rpart_cox_perf = function(rpart_model, dframe, y__, tol=1e-5) {
+    rpart_cox_perf = function(rpart_model, dframe, ofst=NULL, y__, tol=1e-5) {
       hrhat  = predict(rpart_model, dframe, type="vector")  
       hrhat[(hrhat<tol)] = tol
       hrhat[(hrhat>(1/tol))] = 1/tol 
       xbhat = log(hrhat) 
+      if (!is.null(ofst)) { xbhat = xbhat + ofst } 
       fit1 = coxph( y__ ~ xbhat, init=c(1), control=coxph.control(iter.max=0)) 
       fit2 = coxph( y__ ~ xbhat)   
       return( c(devian= -2*fit1$loglik[1]/fit1$nevent, lincal= fit2$coefficients[1], 
                 agree= fit2$concordance[6]) )
     }
     
-    rpart_bin_perf = function(rpart_model, dframe, y__, tol=1e-5) {
+    rpart_bin_perf = function(rpart_model, dframe, ofst=NULL, y__, tol=1e-5) {
       phat_  = predict(rpart_model, dframe, type="prob")[,2]  
       phat_t = phat_ 
       phat_t[(phat_ < tol)] = tol
       phat_t[(phat_ > (1-tol))] = 1 - tol
       xbhat  = log(phat_t/(1-phat_t))
+      if (!is.null(ofst)) { xbhat = xbhat + ofst } 
       fit1 = glm( y__ ~ xbhat , start=c(0,1), family=family) 
       p_ = 1/(1+exp(-xbhat)) ; 
       returnvec = c( -2*( t(log(p_))%*%y__ + t(log(1-p_))%*%(1-y__) ) / length(y__) ,  
@@ -846,8 +967,9 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", ste
       return(returnvec) 
     }
     
-    rpart_gau_perf = function(rpart_model, dframe, y__) {
+    rpart_gau_perf = function(rpart_model, dframe, ofst=NULL, y__) {
       xbhat = predict(rpart_model, dframe, type="vector") 
+      if (!is.null(ofst)) { xbhat = xbhat + ofst }
       if (var( xbhat ) > 0) { 
         beta = cov(y__ ,xbhat )/var( xbhat ) 
         rsquare = cor(x=y__ , y=xbhat )^2 
@@ -859,30 +981,27 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", ste
       return(returnvec)
     }
     
-    rpart_perform = function(rpart_model, dframe, y__, family, tol=1e-5) {
+    rpart_perform = function(rpart_model, dframe, ofst=NULL, y__, family, tol=1e-5) {
       if (family == "cox") {
-        returnvec = rpart_cox_perf(rpart_model, dframe, y__, tol=tol_)
+        returnvec = rpart_cox_perf(rpart_model, dframe, ofst, y__, tol=tol_)
       } else if (family == "binomial") {
-        returnvec = rpart_bin_perf(rpart_model, dframe, y__, tol=tol_)
+        returnvec = rpart_bin_perf(rpart_model, dframe, ofst, y__, tol=tol_)
       }else if (family == "gaussian") {
-        returnvec = rpart_gau_perf(rpart_model, dframe, y__ ) 
+        returnvec = rpart_gau_perf(rpart_model, dframe, ofst, y__ ) 
       }
       returnvec = c(returnvec, rpnz(rpart_model))
     }
     
     if (family=="cox") {
       if (is.null(start)) { 
-        trainy__ = Surv(trainy_, trainevent)
-        testy__  = Surv(testy_ , testevent)
-        if ((ensemble[2] ==1) | (ensemble[3] ==1)) { df.trainO   = as.data.frame(cbind(trainy_, trainevent, trainxsO) ) }
+        y__ = Surv(y_, event)
+        if ((ensemble[2] ==1) | (ensemble[3] ==1)) { df.O   = as.data.frame(cbind(y_, event, xsO) ) }
       } else { 
-        trainy__ = Surv(trainstart, trainy_, trainevent) 
-        testy__  = Surv(teststart , testy_ , testevent ) 
-        if ((ensemble[2] ==1) | (ensemble[3] ==1)) { df.trainO   = as.data.frame(cbind(trainstart, trainy_, trainevent, trainxsO) ) }
+        y__ = Surv(start, y_, event) 
+        if ((ensemble[2] ==1) | (ensemble[3] ==1)) { df.O   = as.data.frame(cbind(start, y_, event, xsO) ) }
       }
     } else {
-      trainy__ = trainy_
-      testy__  = testy_ 
+      y__ = y_
     }
       
     if (family == "cox") {
@@ -893,45 +1012,43 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", ste
       rpmethod = "anova"
     }
       
-    if (ensemble[1] == 1) {
-      #        colnames(df.train)[1] = c("trainy_") 
-      rpart.train.00 <- rpart( trainy__ ~ ., data=df.trainxs, method=rpmethod, cp = 0 )
-      rpart.train.01 <- prune(rpart.train.00, cp = 0.01)
-      rpart.train.02 <- prune(rpart.train.00, cp = 0.02)
-      rp_perf = rpart_perform(rpart.train.00 , df.testxs, testy__, family )
+    if (sum(ensemble[c(1,5)]) >= 1) {
+      rpart.fit.00 <- rpart( y__ ~ ., data=df.xs, method=rpmethod, cp = 0 )
+      rpart.fit.01 <- prune(rpart.fit.00, cp = 0.01)
+      rpart.fit.02 <- prune(rpart.fit.00, cp = 0.02)
+      rp_perf = rpart_perform(rpart.fit.00 , df.xs, NULL, y__, family )
       rpart.devian.naive[1] = rp_perf[1] ; rpart.lincal.naive[1] = rp_perf[2] ; rpart.agree.naive[1] = rp_perf[3] ; rpart.nzero.naive[1] = rp_perf[4]
-      rp_perf = rpart_perform(rpart.train.01 , df.testxs, testy__, family )
+      rp_perf = rpart_perform(rpart.fit.01 , df.xs, NULL, y__, family )
       rpart.devian.naive[2] = rp_perf[2] ; rpart.lincal.naive[2] = rp_perf[2] ; rpart.agree.naive[2] = rp_perf[3] ; rpart.nzero.naive[2] = rp_perf[4]
-      rp_perf = rpart_perform(rpart.train.02 , df.testxs, testy__, family )
+      rp_perf = rpart_perform(rpart.fit.02 , df.xs, NULL, y__, family )
       rpart.devian.naive[3] = rp_perf[3] ; rpart.lincal.naive[3] = rp_perf[2] ; rpart.agree.naive[3] = rp_perf[3] ; rpart.nzero.naive[3] = rp_perf[4]
     }
       
-    if (ensemble[2] == 1) { 
-      rpart.trainF.00 <- rpart( trainy__ ~ ., data=df.trainxsO, method=rpmethod, cp = 0 )
-      rpart.trainF.01 <- prune(rpart.trainF.00, cp = 0.01)
-      rpart.trainF.02 <- prune(rpart.trainF.00, cp = 0.02)
-      rp_perf = rpart_perform(rpart.trainF.00 , df.testxsO, testy__, family )
+    if (sum(ensemble[c(2,6)]) >= 1) { 
+      rpart.fitF.00 <- rpart( y__ ~ ., data=df.xsO, method=rpmethod, cp = 0 )
+      rpart.fitF.01 <- prune(rpart.fitF.00, cp = 0.01)
+      rpart.fitF.02 <- prune(rpart.fitF.00, cp = 0.02)
+      rp_perf = rpart_perform(rpart.fitF.00 , df.xsO, NULL, y__, family )
       rpart.devian.naive[4] = rp_perf[1] ; rpart.lincal.naive[4] = rp_perf[2] ; rpart.agree.naive[4] = rp_perf[3] ; rpart.nzero.naive[4] = rp_perf[4]
-      rp_perf = rpart_perform(rpart.trainF.01 , df.testxsO, testy__, family )
+      rp_perf = rpart_perform(rpart.fitF.01 , df.xsO, NULL, y__, family )
       rpart.devian.naive[5] = rp_perf[2] ; rpart.lincal.naive[5] = rp_perf[2] ; rpart.agree.naive[5] = rp_perf[3] ; rpart.nzero.naive[5] = rp_perf[4]
-      rp_perf = rpart_perform(rpart.trainF.02 , df.testxsO, testy__, family )
+      rp_perf = rpart_perform(rpart.fitF.02 , df.xsO, NULL, y__, family )
       rpart.devian.naive[6] = rp_perf[3] ; rpart.lincal.naive[6] = rp_perf[2] ; rpart.agree.naive[6] = rp_perf[3] ; rpart.nzero.naive[6] = rp_perf[4]
     } 
       
-    if ((ensemble[3] ==1) & (!(family %in% c("binomial"))))  {
-      xsnames = names(df.trainxsO)
-      form1 = formula( paste( "trainy__ ~ ", paste(xsnames, collapse = " + " ), " + offset(ofst)" ) ) 
-      rpart.trainO.00 <- rpart( form1 , data=df.trainxsO, method=rpmethod, cp = 0 )
-      rpart.trainO.01 <- prune(rpart.trainO.00, cp = 0.01)
-      rpart.trainO.02 <- prune(rpart.trainO.00, cp = 0.02)
-      rp_perf = rpart_perform(rpart.trainO.00 , df.testxsO, testy__, family )
+    if ((sum(ensemble[c(3,4,7,8)]) >= 1) & (!(family %in% c("binomial")))) {
+      xsnames = names(df.xs)
+      form1 = formula( paste( "y__ ~ ", paste(xsnames, collapse = " + " ), " + offset(ofst)" ) ) 
+      rpart.fitO.00 <- rpart( form1 , data=df.xsO, method=rpmethod, cp = 0 )
+      rpart.fitO.01 <- prune(rpart.fitO.00, cp = 0.01)
+      rpart.fitO.02 <- prune(rpart.fitO.00, cp = 0.02)
+      rp_perf = rpart_perform(rpart.fitO.00 , df.xsO, ofst, y__, family )
       rpart.devian.naive[7] = rp_perf[1] ; rpart.lincal.naive[7] = rp_perf[2] ; rpart.agree.naive[7] = rp_perf[3] ; rpart.nzero.naive[7] = rp_perf[4]
-      rp_perf = rpart_perform(rpart.trainO.01 , df.testxsO, testy__, family )
+      rp_perf = rpart_perform(rpart.fitO.01 , df.xsO, ofst, y__, family )
       rpart.devian.naive[8] = rp_perf[2] ; rpart.lincal.naive[8] = rp_perf[2] ; rpart.agree.naive[8] = rp_perf[3] ; rpart.nzero.naive[8] = rp_perf[4]
-      rp_perf = rpart_perform(rpart.trainO.02 , df.testxsO, testy__, family )
+      rp_perf = rpart_perform(rpart.fitO.02 , df.xsO, ofst, y__, family )
       rpart.devian.naive[9] = rp_perf[3] ; rpart.lincal.naive[9] = rp_perf[2] ; rpart.agree.naive[9] = rp_perf[3] ; rpart.nzero.naive[9] = rp_perf[4]
     }
-    rpart.fit.00 = rpart.train.00 ; rpart.fitO.00 = rpart.trainO.00 ; rpart.fitF.00 = rpart.trainF.00 ;
     rpart.nzero = rpart.nzero.naive 
     if (track >= 1) { time_last = diff_time(time_start, time_last) } 
   }
@@ -959,7 +1076,7 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", ste
 #    time_last = diff_time(time_start, time_last) 
     cat(paste0("\n", " ########## full data set analysis completed #####################################" , "\n")) 
   } 
-  
+
   ##### FOLDS ##############################################################################################
   ##### FOLDS ##############################################################################################
   ## i_ = 1 
@@ -1008,7 +1125,31 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", ste
       test_data  = data.frame(testy_ , testxs )
     }
     
-    foldid_ = NULL
+    ##### get seeds for CV foldids and pass to CV functions #####
+    
+    seedr_ = seed$seedr[i_+1] 
+    if (is.na(seedr_)) { 
+      seedr_ = round(runif(1)*1e9) 
+    }
+    seedt_ = seed$seedt[i_+1] 
+    if (is.na(seedt_)) { 
+      seedt_ = round(runif(1)*1e9) 
+    }
+    seed$seedr[i_+1] = seedr_ 
+    seed$seedt[i_+1] = seedt_ 
+    
+    set.seed(seedr_) 
+    
+    if (stratified >= 1) {
+      if   (family == "binomial") {  foldidcv = factor.foldid(trainy_   , folds_n)  ;  table(trainy_   , foldidcv) ;
+      } else if (family == "cox") {  foldidcv = factor.foldid(trainevent, folds_n)  ;  table(trainevent, foldidcv) ;  
+      } else { foldidcv = sample( rep( 1:folds_n , ceiling(length(trainy_)/folds_n) )[ 1:length(trainy_) ] , length(trainy_) ) ;  
+      }
+      table(foldidcv)  ; 
+    } else {
+      foldidcv = sample( rep( 1:folds_n , ceiling(nobs/folds_n) )[ 1:nobs ] , nobs ) ; 
+    }    
+
     ##### LASSO fit ##########################################################################################
     if (dolasso==1) { 
       if (track >= 1) { cat( " ## Starting LASSO model fits ##", "\n" ) } 
@@ -1016,27 +1157,25 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", ste
       if (relax) { 
      #  xs=trainxs; start=trainstart; y_=trainy_; event=trainevent; lambda=lambda; gamma=gamma; folds_n=folds_n; limit=limit; fine=fine; track=1; family=family ;         
         cv_glmnet_fit = cv.glmnetr( trainxs, trainstart, trainy_, trainevent, family=family, 
-                                    lambda=lambda, gamma=gamma, folds_n=folds_n, limit=limit, fine=fine, 
+                                    lambda=lambda, gamma=gamma, folds_n=folds_n, foldid=foldidcv, limit=limit, fine=fine, 
                                     track=0, ties=ties, ... ) 
       } else {
         if (family=="cox") {   
-          if ( is.null(start) ) { cv_glmnet_fit = cv.glmnet( trainxs, Surv(trainy_, trainevent)            , family="cox", lambda=lambda, relax=FALSE, ... ) 
-          } else                { cv_glmnet_fit = cv.glmnet( trainxs, Surv(trainstart, trainy_, trainevent), family="cox", lambda=lambda, relax=FALSE, ... ) 
+          if ( is.null(start) ) { cv_glmnet_fit = cv.glmnet( trainxs, Surv(trainy_, trainevent)            , nfolds=folds_n, foldid=foldidcv, family="cox", lambda=lambda, relax=FALSE, ... ) 
+          } else                { cv_glmnet_fit = cv.glmnet( trainxs, Surv(trainstart, trainy_, trainevent), nfolds=folds_n, foldid=foldidcv, family="cox", lambda=lambda, relax=FALSE, ... ) 
           }
         } else {
-          cv_glmnet_fit = cv.glmnet( trainxs, trainy_, family=family, lambda=lambda, relax=FALSE, ... ) 
+          cv_glmnet_fit = cv.glmnet( trainxs, trainy_, family=family, lambda=lambda, nfolds=folds_n, foldid=foldidcv, relax=FALSE, ... ) 
         }
       }
       
       if ((family == "cox") & (is.null(trainstart))) {
-        cv_ridge_fit = cv.glmnet( trainxs, Surv(trainy_, trainevent), family=family, alpha=0, ... ) 
+        cv_ridge_fit = cv.glmnet( trainxs, Surv(trainy_, trainevent), family=family, alpha=0, nfolds=folds_n, foldid=foldidcv, ... ) 
       } else if ((family == "cox") & (!is.null(trainstart))) {
-        cv_ridge_fit = cv.glmnet( trainxs, Surv(trainstart, trainy_, trainevent), family=family, alpha=0, ... ) 
+        cv_ridge_fit = cv.glmnet( trainxs, Surv(trainstart, trainy_, trainevent), family=family, alpha=0, nfolds=folds_n, foldid=foldidcv, ... ) 
       } else {
-        cv_ridge_fit = cv.glmnet( trainxs, trainy_, family=family, alpha=0, ... ) 
+        cv_ridge_fit = cv.glmnet( trainxs, trainy_, family=family, alpha=0, nfolds=folds_n, foldid=foldidcv, ... ) 
       }
-      
-      foldid_ = cv_glmnet_fit$foldid 
       
       lasso.nzero.cv[i_,1] = cv_glmnet_fit$nzero [ cv_glmnet_fit$index[2] ]
       lasso.nzero.cv[i_,2] = cv_glmnet_fit$nzero [ cv_glmnet_fit$index[1] ]     
@@ -1090,7 +1229,7 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", ste
         testSurv.xgb  = ifelse( testevent  == 1, testy_ , -testy_ )
       }
       
-      if (ensemble[1]==1) {
+      if (sum(ensemble[c(1,5)]) >= 1) {
         if (family=="cox") {
           train.xgb.dat <- xgb.DMatrix(data = trainxs, label = trainSurv.xgb)
           test.xgb.dat  <- xgb.DMatrix(data = testxs, label = testSurv.xgb)
@@ -1100,12 +1239,24 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", ste
         }
       }
       
-      if ((ensemble[2] == 1)|(ensemble[3] == 1)) { 
-        trainofst = predict(cv_glmnet_fit, trainxs, lam="lambda.min" , gam="gamma.min" )  ###### min RELAXED lasso as an offset #####
-        testofst  = predict(cv_glmnet_fit, testxs , lam="lambda.min" , gam="gamma.min" )  ###### min RELAXED lasso as an offset #####
+      ## calibrate lasso ##
+      if (sum(ensemble[c(2:4,6:8)]) >= 1) { 
+        trainofst0 = predict(cv_glmnet_fit, trainxs, lam="lambda.min" , gam="gamma.min" )  ###### min RELAXED lasso as an offset #####
+        testofst0  = predict(cv_glmnet_fit, testxs , lam="lambda.min" , gam="gamma.min" ) 
+        ofst0 = trainofst0 
+        if (family=="cox") {
+          fit0 = coxph(Surv(trainy_, trainevent) ~ ofst0) 
+        } else if (family %in% c("binomial", "gaussian")) {
+          fit0 = glm(trainy_ ~ ofst0, family=family) 
+        }
+        ofst0 = trainofst0 ; 
+        trainofst = predict(fit0, as.data.frame(ofst0 )) 
+        ofst0 = testofst0 ; 
+        testofst  = predict(fit0, as.data.frame(ofst0 ))  
+        length(trainofst) ; length(testofst)  ; 
       }
       
-      if (ensemble[2] == 1) { 
+      if (sum(ensemble[c(2,6)]) >= 1) { 
         if (family=="cox") {
           train.xgb.datF <- xgb.DMatrix(data = cbind(trainxs, ofst=trainofst), label = trainSurv.xgb)
           test.xgb.datF  <- xgb.DMatrix(data = cbind(testxs , ofst=testofst ), label = testSurv.xgb )
@@ -1115,7 +1266,7 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", ste
         }
       }
       
-      if (ensemble[3] == 1) { 
+      if (sum(ensemble[c(3,4,7,8)]) >= 1) { 
         if (family=="cox") {
           train.xgb.datO <- xgb.DMatrix(data = trainxs, label = trainSurv.xgb, base_margin=trainofst)
           test.xgb.datO  <- xgb.DMatrix(data = testxs , label = testSurv.xgb , base_margin=testofst )
@@ -1132,43 +1283,49 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", ste
         } else                           { objective = "reg:squarederror" }
         
         ## SIMPLE model fit train ######################################################
-        if (ensemble[1] == 1) {
+        if (sum(ensemble[c(1,5)]) >= 1) {
           if (track >= 2) { print("XGB ensemble simple") }
+          set.seed(seedr_)
           xgb.simple.train = xgb.simple(train.xgb.dat, objective = objective, folds_xgb=folds_xgb, nrounds=nrounds)
           xgbperf = xgb_perform(xgb.simple.train, test.xgb.dat, y=testy_, evnt=testevent, family=family )
           xgb.devian.cv[i_,1] = xgbperf[1] ;  xgb.lincal.cv[i_,1] = xgbperf[2] ;  xgb.agree.cv [i_,1] = xgbperf[3] 
         }
-        if (ensemble[2] == 1) {
+        if (sum(ensemble[c(2,6)]) >= 1)  {
           if (track >= 2) { print("XGB ensemble simple factor") 
               if (track >= 2) { 
                 print( summary(trainofst) ) 
                 print( summary(testofst ) ) }
-              } 
+          } 
+          set.seed(seedr_)
           xgb.simple.trainF = xgb.simple(train.xgb.datF, objective = objective, folds_xgb=folds_xgb, nrounds=nrounds)
           xgbperf = xgb_perform(xgb.simple.trainF, test.xgb.datF, y=testy_, evnt=testevent, family=family) 
           xgb.devian.cv[i_,2] = xgbperf[1] ;  xgb.lincal.cv[i_,2] = xgbperf[2] ;  xgb.agree.cv [i_,2] = xgbperf[3] 
         }
-        if (ensemble[3] == 1) {
+        if (sum(ensemble[c(3,4,7,8)]) >= 1) {
           if (track >= 2) { print("XGB ensemble simple offset") }
+          set.seed(seedr_)
           xgb.simple.trainO = xgb.simple(train.xgb.datO, objective = objective, folds_xgb=folds_xgb, nrounds=nrounds)
           xgbperf = xgb_perform(xgb.simple.trainO, test.xgb.datO, y=testy_, evnt=testevent, family=family) 
           xgb.devian.cv[i_,3] = xgbperf[1] ;  xgb.lincal.cv[i_,3] = xgbperf[2] ;  xgb.agree.cv [i_,3] = xgbperf[3] 
         }
         ## TUNED model fit train #######################################################
-        if (ensemble[1] == 1) {
+        if (sum(ensemble[c(1,5)]) >= 1) {
           if (track >= 2) { print("XGB ensemble tuned") }
+          set.seed(seedr_)
           xgb.tuned.train = xgb.tuned(train.xgb.dat, objective = objective, folds_xgb=folds_xgb, nrounds=nrounds)
           xgbperf = xgb_perform(xgb.tuned.train, test.xgb.dat, y=testy_, evnt=testevent, family=family) 
           xgb.devian.cv[i_,4] = xgbperf[1] ;  xgb.lincal.cv[i_,4] = xgbperf[2] ;  xgb.agree.cv [i_,4] = xgbperf[3] 
         }
-        if (ensemble[2] == 1) {
+        if (sum(ensemble[c(2,6)]) >= 1) {
           if (track >= 2) { print("XGB ensemble tuned factor") }
+          set.seed(seedr_)
           xgb.tuned.trainF = xgb.tuned(train.xgb.datF, objective = objective, folds_xgb=folds_xgb, nrounds=nrounds)
           xgbperf = xgb_perform(xgb.tuned.trainF, test.xgb.datF, y=testy_, evnt=testevent, family=family) 
           xgb.devian.cv[i_,5] = xgbperf[1] ;  xgb.lincal.cv[i_,5] = xgbperf[2] ;  xgb.agree.cv [i_,5] = xgbperf[3] 
         }
-        if (ensemble[3] == 1) {
+        if (sum(ensemble[c(3,4,7,8)]) >= 1) {
           if (track >= 2) { print("XGB ensemble tuned offset") }
+          set.seed(seedr_)
           xgb.tuned.trainO = xgb.tuned(train.xgb.datO, objective = objective, folds_xgb=folds_xgb, nrounds=nrounds)
           xgbperf = xgb_perform(xgb.tuned.trainO, test.xgb.datO, y=testy_, evnt=testevent, family=family) 
           xgb.devian.cv[i_,6] = xgbperf[1] ;  xgb.lincal.cv[i_,6] = xgbperf[2] ;  xgb.agree.cv [i_,6] = xgbperf[3] 
@@ -1176,7 +1333,7 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", ste
         ################################################################################
       }
       if (track >= 1) { time_last = diff_time(time_start, time_last) } 
-      if (track >= 1) { cat(paste0(" (Continuing Nested Cross Validation outer fold  ", i_, "  of  " , folds_n , " )" , "\n")) }
+#      if (track >= 1) { cat(paste0(" (Continuing Nested Cross Validation outer fold  ", i_, "  of  " , folds_n , " )" , "\n")) }
     }
 
     ##### Neural Network ##########################################################################################
@@ -1186,50 +1343,53 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", ste
       
       if (track == 1) { eppr_t = eppr ; eppr = min(eppr, -1) ;  eppr2_t = eppr2 ; eppr2 = min(eppr2, -1) ; }
       
-        ## center about train mean 
-        trainxs_means = colMeans(trainxs)
-        trainxs_c     = sweep(trainxs, 2, trainxs_means, FUN = "-") 
-        testxs_c      = sweep(testxs , 2, trainxs_means, FUN = "-") 
-        ## get SD = 1 
-        trainxs_sds   = sqrt( colSums(trainxs_c^2) / (dim(trainxs)[1]-1) ) 
-        trainxs_sds_  = trainxs_sds 
-        trainxs_sds_[(trainxs_sds < 1e-8)] = 1e-8 
-        trainxs_z     = sweep(trainxs_c, 2, trainxs_sds_, FUN = "/") 
-        trainxs_z[,(trainxs_sds < 1e-8)] = 0 
-        testxs_z      = sweep(testxs_c , 2, trainxs_sds_, FUN = "/") 
-        testxs_z[,(trainxs_sds < 1e-8)] = 0 
-        trainxs_z0   = trainxs_z[, (trainxs_sds_ > 0) ]                         ## add lasso prediction as first column 
-        testxs_z0    = testxs_z[, (trainxs_sds_ > 0) ]                           ## add lasso prediction as first column 
-        
-        # table(round(diag(cov(trainxs_z)),digits=8))
-        if (sum(ensemble[c(2:6)]) > 0.5) {        
-#          predminR      = predict(cv_glmnet_fit, testxs , lam="lambda.min" , gam="gamma.min" )  
-          lassopredtrain = predict(cv_glmnet_fit, trainxs, lam="lambda.min" , gam="gamma.min" )
-          lassopredtest  = predict(cv_glmnet_fit, testxs , lam="lambda.min" , gam="gamma.min" )
-          lassobeta = predict(cv_glmnet_fit, lam="lambda.min" , gam="gamma.min" )
-          if (family=="cox") {
-            # trainy_, myevent=trainevent
-            fit0 = coxph(Surv(trainy_, trainevent) ~ lassopredtrain) 
-            fit0$loglik
-            calbeta = fit0$coefficients
-            lassopredtrain = calbeta * lassopredtrain 
-            lassopredtest  = calbeta * lassopredtest 
-          } else if (family %in% c("binomial", "gaussian")) {
-            fit0 = glm(trainy_ ~ lassopredtrain, family=family) 
-            beta = fit0$coefficients
-            lassopredtrain = calbeta[1] + calbeta[2] * lassopredtrain 
-            lassopredtest  = calbeta[1] + calbeta[2] * lassopredtest  
-          }
-          
-##          concordance(y_ ~ lassopred)
-##          summary(1/(1+exp(-lassopred)))
-##          (lassobeta[[1]] == 0)
-          trainxs_z1 = trainxs_z[,(lassobeta[[1]] != 0)[2:length(lassobeta[[1]])]]           ## pick up non zero features, remove intercept from this list 
-          trainxs_z2 = cbind(lasso=lassopredtrain,trainxs_z1)                                ## add lasso prediction as first column 
-          testxs_z1  = testxs_z[,(lassobeta[[1]] != 0)[2:length(lassobeta[[1]])]]            ## pick up non zero features, remove intercept from this list 
-          testxs_z2  = cbind(lasso=lassopredtest,testxs_z1)                                  ## add lasso prediction as first column 
-          # table(round(diag(cov(trainxs_z2)),digits=8))
+      ## center about train mean 
+      trainxs_means = colMeans(trainxs)
+      trainxs_c     = sweep(trainxs, 2, trainxs_means, FUN = "-") 
+      testxs_c      = sweep(testxs , 2, trainxs_means, FUN = "-") 
+      ## get SD = 1 
+      trainxs_sds   = sqrt( colSums(trainxs_c^2) / (dim(trainxs)[1]-1) ) 
+      trainxs_sds_  = trainxs_sds 
+      trainxs_sds_[(trainxs_sds < 1e-8)] = 1e-8 
+      trainxs_z     = sweep(trainxs_c, 2, trainxs_sds_, FUN = "/") 
+      trainxs_z[,(trainxs_sds < 1e-8)] = 0 
+      testxs_z      = sweep(testxs_c , 2, trainxs_sds_, FUN = "/") 
+      testxs_z[,(trainxs_sds < 1e-8)] = 0 
+      trainxs_z0   = trainxs_z[, (trainxs_sds_ > 0) ]                         ## add lasso prediction as first column 
+      testxs_z0    = testxs_z [, (trainxs_sds_ > 0) ]                         ## add lasso prediction as first column 
+
+      ## calibrate lasso ##
+      if (sum(ensemble[c(2:8)]) > 0.5) {        
+        lassopredtrain0 = predict(cv_glmnet_fit, trainxs, lam="lambda.min" , gam="gamma.min" )
+        lassopredtest0  = predict(cv_glmnet_fit, testxs , lam="lambda.min" , gam="gamma.min" )
+        lassobeta = predict(cv_glmnet_fit, lam="lambda.min" , gam="gamma.min" )
+        lassopred0 = lassopredtrain0 
+        if (family=="cox") {
+          fit0 = coxph(Surv(trainy_, trainevent) ~ lassopred0) 
+        } else if (family %in% c("binomial", "gaussian")) {
+          fit0 = glm(trainy_ ~ lassopred0, family=family) 
         }
+        lassopred0 = lassopredtrain0 
+        lassopredtrain = predict(fit0, as.data.frame(lassopred0)) ;  length(lassopredtrain)
+        lassopred0 = lassopredtest0 
+        lassopredtest  = predict(fit0, as.data.frame(lassopred0)) ;  length(lassopredtest)
+        trainxs_z0L = cbind(lasso=lassopredtrain,trainxs_z0)                  ## add lasso prediction as first column 
+        testxs_z0L  = cbind(lasso=lassopredtest,testxs_z0)                    ## add lasso prediction as first column 
+        dim(trainxs_z0L)
+        dim(testxs_z0L)
+
+        if (family=="cox") {
+          trainxs_z1 = as.matrix( trainxs_z[,(lassobeta[[1]] != 0)[1:length(lassobeta[[1]])]] )   ## pick up non zero features, remove intercept from this list 
+          testxs_z1  = as.matrix( testxs_z [,(lassobeta[[1]] != 0)[1:length(lassobeta[[1]])]] )   ## pick up non zero features, remove intercept from this list                         ## add lasso prediction as first column 
+        } else if (family %in% c("binomial", "gaussian")) {
+          trainxs_z1 = as.matrix( trainxs_z[,(lassobeta[[1]] != 0)[2:length(lassobeta[[1]])]] )   ## pick up non zero features, remove intercept from this list 
+          testxs_z1  = as.matrix( testxs_z [,(lassobeta[[1]] != 0)[2:length(lassobeta[[1]])]] )   ## pick up non zero features, remove intercept from this list 
+        }          
+        trainxs_z1L = cbind(lasso=lassopredtrain,trainxs_z1)                        ## add lasso prediction as first column 
+        testxs_z1L  = cbind(lasso=lassopredtest,testxs_z1) 
+          
+        # table(round(diag(cov(trainxs_z1L)),digits=8))
+      }
 
       if (getwd  == 1) { wd  = cv_ridge_fit$lambda.min } 
       if (getwd2 == 1) { wd2 = cv_ridge_fit$lambda.min }
@@ -1240,54 +1400,92 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", ste
       if (family %in% c("cox", "binomial", "gaussian")) {
         if (ensemble[1] == 1) { 
           if (eppr >= -2) { cat(paste0("\n  ** fitting uninformed ANN **\n")) }
-          ann_fit_1 = ann_tab_cv(myxs=trainxs_z0, mystart=trainstart, myy=trainy_, myevent=trainevent, fold_n=fold_n, family=family, 
-                                 epochs=epochs, eppr=eppr, lenz1=lenz1, lenz2=lenz2, mylr=mylr, actv=actv, drpot=drpot, wd=wd, l1=l1, minloss=minloss, gotoend=gotoend) 
-          perfm1 = ann_perform(ann_fit_1, testxs_z0, testy_, family, teststart, testevent)
-        } else { perfm1 = c(10,10,0,0,0) }
-        if (ensemble[4] == 1) { 
-          if (eppr >= -2) { cat(paste0("  ** fitting ANN informed on relaxed lasso terms **\n")) }
-          ## limit to lasso variables 
-          ann_fit_2 = ann_tab_cv(myxs=trainxs_z1, mystart=trainstart, myy=trainy_, myevent=trainevent, fold_n=fold_n, family=family,
-                                 epochs=epochs, eppr=eppr, lenz1=lenz1, lenz2=lenz2, mylr=mylr, actv=actv, drpot=drpot, wd=wd, l1=l1, minloss=minloss, gotoend=gotoend) 
-          perfm2 = ann_perform(ann_fit_2, testxs_z1, testy_, family, teststart, testevent)
-        } else { perfm2 = c(10,10,0,0,0) }
-        if (ensemble[2] == 1) {
-          if (eppr >= -2) { cat(paste0("  ** fitting ANN with feature X*Beta and relaxed lasso terms **\n")) } 
-          lenz1_ = lenz1 + 1 ; lenz2_ = lenz2 + 1 ; 
-          ann_fit_3 = ann_tab_cv(myxs=trainxs_z2, mystart=trainstart, myy=trainy_, myevent=trainevent, fold_n=fold_n, family=family, 
-                                 epochs=epochs, eppr=eppr, lenz1=lenz1_, lenz2=lenz2_, mylr=mylr, actv=actv, drpot=drpot, wd=wd, l1=l1, minloss=minloss, gotoend=gotoend) 
-          perfm3 = ann_perform(ann_fit_3, testxs_z2, testy_, family, teststart, testevent)
-        } else { perfm3 = c(10,10,0,0,0) }
+          ann_fit_1 = ann_tab_cv_best(myxs=trainxs_z0, mystart=trainstart, myy=trainy_, myevent=trainevent, fold_n=fold_ann, family=family, 
+                                 epochs=epochs, eppr=eppr, lenz1=lenz1, lenz2=lenz2, mylr=mylr, actv=actv, 
+                                 drpot=drpot, wd=wd, l1=l1, scale=scale, minloss=minloss, gotoend=gotoend, bestof=bestof, 
+                                 seed = c(seedr_, seedt_) ) 
+          ann_perf1 = ann_perform(ann_fit_1, testxs_z0, testy_, family, teststart, testevent)
+        } else { ann_perf1 = c(10,10,0,0,0) }
+        
+        if (ensemble[2] == 1) { 
+          if (eppr >= -2) { cat(paste0("  ** fitting ANN lasso feature **\n")) }
+          lenz1_ = lenz1 + 1 ; lenz2_ = lenz2 + 1 ;
+          ann_fit_2 = ann_tab_cv_best(myxs=trainxs_z0L, mystart=trainstart, myy=trainy_, myevent=trainevent, fold_n=fold_ann, family=family, 
+                                   epochs=epochs, eppr=eppr, lenz1=lenz1_, lenz2=lenz2_, mylr=mylr, actv=actv, 
+                                   drpot=drpot, wd=wd, l1=l1, scale=scale, minloss=minloss, gotoend=gotoend, bestof=bestof, 
+                                   seed = c(seedr_, seedt_) ) 
+          ann_perf2 = ann_perform(ann_fit_2, testxs_z0L, testy_, family, teststart, testevent)
+        } else { ann_perf2 = c(10,10,0,0,0) }
+        
         if (ensemble[3] == 1) { 
-          if (eppr >= -2) { cat(paste0("  ** fitting ANN including X*Beta from relaxed lasso in initial weight structure  **\n")) } 
+          if (eppr >= -2) { cat(paste0("  ** fitting ANN lasso weights **\n")) } 
           lenz1_ = lenz1 + 2 ; lenz2_ = lenz2 + 2 ; 
-          ann_fit_4 = ann_tab_cv(myxs=trainxs_z2, mystart=trainstart, myy=trainy_, myevent=trainevent, fold_n=fold_n, family=family, 
-                                 epochs=epochs2, eppr=eppr2, lenz1=lenz1_, lenz2=lenz2_, mylr=mylr2, actv=actv, drpot=drpot, wd=wd, l1=l1, lasso=1, adjustw=0, minloss=minloss, gotoend=gotoend) 
-          perfm4 = ann_perform(ann_fit_4, testxs_z2, testy_, family, teststart, testevent)
-        } else { perfm4 = c(10,10,0,0,0) }
+          ann_fit_3 = ann_tab_cv_best(myxs=trainxs_z0L, mystart=trainstart, myy=trainy_, myevent=trainevent, fold_n=fold_ann, family=family, 
+                                 epochs=epochs2, eppr=eppr2, lenz1=lenz1_, lenz2=lenz2_, mylr=mylr2, actv=actv, 
+                                 drpot=drpot, wd=wd, l1=l1, lasso=1, lscale=lscale, scale=scale, resetlw=0, minloss=minloss, gotoend=gotoend, bestof=bestof, 
+                                 seed = c(seedr_, seedt_) ) 
+          ann_perf3 = ann_perform(ann_fit_3, testxs_z0L, testy_, family, teststart, testevent)
+        } else { ann_perf3 = c(10,10,0,0,0) }
+        
+        if (ensemble[4] == 1) { 
+          if (eppr >= -2) { cat(paste0("  ** fitting ANN lasso weights updated each epoch **\n")) } 
+          lenz1_ = lenz1 + 2 ; lenz2_ = lenz2 + 2 ; 
+          ann_fit_4 = ann_tab_cv_best(myxs=trainxs_z0L, mystart=trainstart, myy=trainy_, myevent=trainevent, fold_n=fold_ann, family=family, 
+                                 epochs=epochs2, eppr=eppr2, lenz1=lenz1_, lenz2=lenz2_, mylr=mylr2, actv=actv, 
+                                 drpot=drpot, wd=wd2, l1=l12, lasso=1, lscale=lscale, scale=scale, resetlw=1, minloss=minloss, gotoend=gotoend, bestof=bestof, 
+                                 seed = c(seedr_, seedt_) ) 
+          ann_perf4 = ann_perform(ann_fit_4, testxs_z0L, testy_, family, teststart, testevent)
+        } else { ann_perf4 = c(10,10,0,0,0) }
+        
         if (ensemble[5] == 1) { 
-          if (eppr >= -2) { cat(paste0("  ** fitting ANN including X*Beta from relaxed lasso in weight structure each epoch **\n")) } 
+          if (eppr >= -2) { cat(paste0("  ** fitting ANN lasso terms **\n")) }
+          ann_fit_5 = ann_tab_cv_best(myxs=trainxs_z1, mystart=trainstart, myy=trainy_, myevent=trainevent, fold_n=fold_ann, family=family, 
+                                 epochs=epochs, eppr=eppr, lenz1=lenz1, lenz2=lenz2, mylr=mylr, actv=actv, 
+                                 drpot=drpot, wd=wd, l1=l1, scale=scale, minloss=minloss, gotoend=gotoend, bestof=bestof, 
+                                 seed = c(seedr_, seedt_) ) 
+          ann_perf5 = ann_perform(ann_fit_5, testxs_z1, testy_, family, teststart, testevent)
+        } else { ann_perf5 = c(10,10,0,0,0) }
+        
+        if (ensemble[6] == 1) { 
+          if (eppr >= -2) { cat(paste0("  ** fitting ANN lasso terms, lasso feature **\n")) }
+          lenz1_ = lenz1 + 1 ; lenz2_ = lenz2 + 1 ;
+          ann_fit_6 = ann_tab_cv_best(myxs=trainxs_z1L, mystart=trainstart, myy=trainy_, myevent=trainevent, fold_n=fold_ann, family=family, 
+                                 epochs=epochs, eppr=eppr, lenz1=lenz1_, lenz2=lenz2_, mylr=mylr, actv=actv, 
+                                 drpot=drpot, wd=wd, l1=l1, scale=scale, minloss=minloss, gotoend=gotoend, bestof=bestof, 
+                                 seed = c(seedr_, seedt_) ) 
+          ann_perf6 = ann_perform(ann_fit_6, testxs_z1L, testy_, family, teststart, testevent)
+        } else { ann_perf6 = c(10,10,0,0,0) }
+        
+        if (ensemble[7] == 1) { 
+          if (eppr >= -2) { cat(paste0("  ** fitting ANN lasso terms, lasso weights **\n")) } 
           lenz1_ = lenz1 + 2 ; lenz2_ = lenz2 + 2 ; 
-          ann_fit_5 = ann_tab_cv(myxs=trainxs_z2, mystart=trainstart, myy=trainy_, myevent=trainevent, fold_n=fold_n, family=family, 
-                                 epochs=epochs2, eppr=eppr2, lenz1=lenz1_, lenz2=lenz2_, mylr=mylr2, actv=actv, drpot=drpot, wd=wd2, l1=l12, lasso=1, adjustw=1, minloss=minloss, gotoend=gotoend) 
-          perfm5 = ann_perform(ann_fit_5, testxs_z2, testy_, family, teststart, testevent)
-        } else { perfm5 = c(10,10,0,0,0) }
-        if (ensemble[6] == 9) { 
-          if (eppr >= -2) { cat(paste0("  ** fitting ANN including X*Beta from relaxed lasso in weight structure each epoch **\n")) } 
-          ann_fit_6 = ann_tab_cv(myxs=trainxs_z1, mystart=trainstart, myy=trainy_, myevent=trainevent, fold_n=fold_n, family=family, 
-                                 epochs=epochs2, eppr=eppr2, lenz1=lenz1, lenz2=lenz2, mylr=mylr2, drpot=drpot, wd=wd2, l1=l12, minloss=minloss, gotoend=gotoend) 
-          perfm6 = ann_perform(ann_fit_6, testxs_z1, testy_, family, teststart, testevent)  ## offset=lassopred, 
-        } else { perfm6 = c(10,10,0,0,0) }
-        ann.devian.cv[i_,]  = c( perfm1[1] , perfm2[1] , perfm3[1] , perfm4[1] , perfm5[1] , perfm6[1] )
-        ann.cal.devian.cv[i_,]=c(perfm1[2] , perfm2[2] , perfm3[2] , perfm4[2] , perfm5[2] , perfm6[2] )    
-        ann.agree.cv [i_,]  = c( perfm1[3] , perfm2[3] , perfm3[3] , perfm4[3] , perfm5[3] , perfm6[3] )
-        ann.intcal.cv[i_,]  = c( perfm1[4] , perfm2[4] , perfm3[4] , perfm4[4] , perfm5[4] , perfm6[4] )
-        ann.lincal.cv[i_,]  = c( perfm1[5] , perfm2[5] , perfm3[5] , perfm4[5] , perfm5[5] , perfm6[5] )
+          ann_fit_7 = ann_tab_cv_best(myxs=trainxs_z1L, mystart=trainstart, myy=trainy_, myevent=trainevent, fold_n=fold_ann, family=family, 
+                                 epochs=epochs2, eppr=eppr2, lenz1=lenz1_, lenz2=lenz2_, mylr=mylr2, actv=actv, 
+                                 drpot=drpot, wd=wd, l1=l1, lasso=1, lscale=lscale, scale=scale, resetlw=0, minloss=minloss, gotoend=gotoend, bestof=bestof, 
+                                 seed = c(seedr_, seedt_) ) 
+          ann_perf7 = ann_perform(ann_fit_7, testxs_z1L, testy_, family, teststart, testevent)
+        } else { ann_perf7 = c(10,10,0,0,0) }
+        
+        if (ensemble[8] == 1) { 
+          if (eppr >= -2) { cat(paste0("  ** fitting ANN lasso terms, lasso weights updated each epoch **\n")) } 
+          lenz1_ = lenz1 + 2 ; lenz2_ = lenz2 + 2 ; 
+          ann_fit_8 = ann_tab_cv_best(myxs=trainxs_z1L, mystart=trainstart, myy=trainy_, myevent=trainevent, fold_n=fold_ann, family=family, 
+                                 epochs=epochs2, eppr=eppr2, lenz1=lenz1_, lenz2=lenz2_, mylr=mylr2, actv=actv, 
+                                 drpot=drpot, wd=wd2, l1=l12, lasso=1, lscale=lscale, scale=scale, resetlw=1, minloss=minloss, gotoend=gotoend, bestof=bestof, 
+                                 seed = c(seedr_, seedt_) ) 
+          ann_perf8 = ann_perform(ann_fit_8, testxs_z1L, testy_, family, teststart, testevent)
+        } else { ann_perf8 = c(10,10,0,0,0) }
+        
+        ann.devian.cv[i_,]  = c( ann_perf1[1], ann_perf2[1], ann_perf3[1], ann_perf4[1], ann_perf5[1], ann_perf6[1], ann_perf7[1], ann_perf8[1] )
+        ann.cal.devian.cv[i_,]=c(ann_perf1[2], ann_perf2[2], ann_perf3[2], ann_perf4[2], ann_perf5[2], ann_perf6[2], ann_perf7[2], ann_perf8[2] )    
+        ann.agree.cv [i_,]  = c( ann_perf1[3], ann_perf2[3], ann_perf3[3], ann_perf4[3], ann_perf5[3], ann_perf6[3], ann_perf7[3], ann_perf8[3] )
+        ann.intcal.cv[i_,]  = c( ann_perf1[4], ann_perf2[4], ann_perf3[4], ann_perf4[4], ann_perf5[4], ann_perf6[4], ann_perf7[4], ann_perf8[4] )
+        ann.lincal.cv[i_,]  = c( ann_perf1[5], ann_perf2[5], ann_perf3[5], ann_perf4[5], ann_perf5[5], ann_perf6[5], ann_perf7[5], ann_perf8[5] )
       } 
       if (track == 1) { eppr = eppr_t ; eppr2 = eppr2_t }
       if (track >= 1) { time_last = diff_time(time_start, time_last) } 
     } 
-    
+   
     ##### RPART fit ##########################################################################################
     if (dorpart==1) { 
       if (track >= 1) { cat(" ## Starting RPART model fits ##" , "\n") }
@@ -1302,33 +1500,29 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", ste
 #      names(rpart.nzero.naive )  = nms
 #      names(rpart.lincal.naive)  = nms
 #      names(rpart.agree.naive )  = nms
-#     
-#      trainxs = xs 
-#      testxs = xs 
-#      trainstart = start 
-#      teststart = start 
-#      trainy_ = y_ 
-#      testy_  = y_ 
-#      trainevent = event 
-#      testevent  = event 
 #<--------------------------------------------------------------------------
 
       df.trainxs = as.data.frame(trainxs) 
       df.testxs  = as.data.frame(testxs) 
       
-      if ((ensemble[2] == 1) | (ensemble[3] == 1)) { 
-         trainofst = predict(cv_glmnet_fit  , trainxs, lam="lambda.min" , gam="gamma.min" )  ###### min RELAXED lasso as an offset #####
-        #trainofst = predict(cv_glmnet_fit_f, trainxs, lam="lambda.min" , gam="gamma.min" )  ###### min RELAXED lasso as an offset #####
-        length(trainofst) ; 
-         testofst  = predict(cv_glmnet_fit  , testxs , lam="lambda.min" , gam="gamma.min" )  ###### min RELAXED lasso as an offset #####
-        #testofst  = predict(cv_glmnet_fit_f, testxs , lam="lambda.min" , gam="gamma.min" )  ###### min RELAXED lasso as an offset #####
-        length(testofst) ; 
-        trainxsO  = cbind(trainxs,ofst=trainofst) 
-        dim(xs) ; dim(trainxs) ; dim(trainxsO) ; length(trainofst) ; 
-        testxsO   = cbind(testxs ,ofst=testofst) 
+      ## calibrate lasso ##
+      if (sum(ensemble[c(2:4,5:8)]) >= 1) { 
+        trainofst0 = predict(cv_glmnet_fit, trainxs, lam="lambda.min" , gam="gamma.min" )  ###### min RELAXED lasso as an offset #####
+        testofst0  = predict(cv_glmnet_fit, testxs , lam="lambda.min" , gam="gamma.min" ) 
+        ofst0 = trainofst0 
+        if (family=="cox") {
+          fit0 = coxph(Surv(trainy_, trainevent) ~ ofst0) 
+        } else if (family %in% c("binomial", "gaussian")) {
+          fit0 = glm(trainy_ ~ ofst0, family=family) 
+        }
+        ofst0 = trainofst0 
+        trainofst = predict(fit0, as.data.frame(ofst0))  ; length(trainofst)
+        ofst0 = testofst0 
+        testofst  = predict(fit0, as.data.frame(ofst0))  ; length(testofst)
+        trainxsO  = cbind(trainxs, ofst=trainofst) 
+        testxsO   = cbind(testxs , ofst=testofst) 
         df.trainxsO = as.data.frame(trainxsO)
         df.testxsO  = as.data.frame(testxsO )
-        #      dim(df.testxsO) ; dim(df.trainxsO)
       }
       
       if (family=="cox") {
@@ -1354,42 +1548,46 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", ste
         rpmethod = "anova"
       }
       
-      if (ensemble[1] == 1) {
+      if (sum(ensemble[c(1,5)]) >= 1) {
         #        colnames(df.train)[1] = c("trainy_") 
+        set.seed(seedr_) 
         rpart.train.00 <- rpart( trainy__ ~ ., data=df.trainxs, method=rpmethod, cp = 0 )
         rpart.train.01 <- prune(rpart.train.00, cp = 0.01)
         rpart.train.02 <- prune(rpart.train.00, cp = 0.02)
-        rp_perf = rpart_perform(rpart.train.00 , df.testxs, testy__, family )
+        rp_perf = rpart_perform(rpart.train.00 , df.testxs, NULL, testy__, family )
         rpart.devian.cv[i_,1] = rp_perf[1] ; rpart.lincal.cv[i_,1] = rp_perf[2] ; rpart.agree.cv[i_,1] = rp_perf[3] ; rpart.nzero.cv[i_,1] = rp_perf[4]
-        rp_perf = rpart_perform(rpart.train.01 , df.testxs, testy__, family )
+        rp_perf = rpart_perform(rpart.train.01 , df.testxs, NULL, testy__, family )
         rpart.devian.cv[i_,2] = rp_perf[2] ; rpart.lincal.cv[i_,2] = rp_perf[2] ; rpart.agree.cv[i_,2] = rp_perf[3] ; rpart.nzero.cv[i_,2] = rp_perf[4]
-        rp_perf = rpart_perform(rpart.train.02 , df.testxs, testy__, family )
+        rp_perf = rpart_perform(rpart.train.02 , df.testxs, NULL, testy__, family )
         rpart.devian.cv[i_,3] = rp_perf[3] ; rpart.lincal.cv[i_,3] = rp_perf[2] ; rpart.agree.cv[i_,3] = rp_perf[3] ; rpart.nzero.cv[i_,3] = rp_perf[4]
       }
       
-      if (ensemble[2] == 1) { 
+      if (sum(ensemble[c(2,6)]) >= 1)  { 
+        set.seed(seedr_) 
         rpart.trainF.00 <- rpart( trainy__ ~ ., data=df.trainxsO, method=rpmethod, cp = 0 )
         rpart.trainF.01 <- prune(rpart.trainF.00, cp = 0.01)
         rpart.trainF.02 <- prune(rpart.trainF.00, cp = 0.02)
-        rp_perf = rpart_perform(rpart.trainF.00 , df.testxsO, testy__, family )
+        rp_perf = rpart_perform(rpart.trainF.00 , df.testxsO, NULL, testy__, family )
         rpart.devian.cv[i_,4] = rp_perf[1] ; rpart.lincal.cv[i_,4] = rp_perf[2] ; rpart.agree.cv[i_,4] = rp_perf[3] ; rpart.nzero.cv[i_,4] = rp_perf[4]
-        rp_perf = rpart_perform(rpart.trainF.01 , df.testxsO, testy__, family )
+        rp_perf = rpart_perform(rpart.trainF.01 , df.testxsO, NULL, testy__, family )
         rpart.devian.cv[i_,5] = rp_perf[2] ; rpart.lincal.cv[i_,5] = rp_perf[2] ; rpart.agree.cv[i_,5] = rp_perf[3] ; rpart.nzero.cv[i_,5] = rp_perf[4]
-        rp_perf = rpart_perform(rpart.trainF.02 , df.testxsO, testy__, family )
+        rp_perf = rpart_perform(rpart.trainF.02 , df.testxsO, NULL, testy__, family )
         rpart.devian.cv[i_,6] = rp_perf[3] ; rpart.lincal.cv[i_,6] = rp_perf[2] ; rpart.agree.cv[i_,6] = rp_perf[3] ; rpart.nzero.cv[i_,6] = rp_perf[4]
       } 
       
-      if ((ensemble[3] ==1) & (!(family %in% c("binomial"))))  {
-        xsnames = names(df.trainxsO)
+      if ((sum(ensemble[c(3,4,7,8)]) >= 1) & (!(family %in% c("binomial"))))  {
+#        xsnames = names(df.trainxsO)
+        xsnames = names(df.trainxs)
         form1 = formula( paste( "trainy__ ~ ", paste(xsnames, collapse = " + " ), " + offset(ofst)" ) ) 
+        set.seed(seedr_) 
         rpart.trainO.00 <- rpart( form1 , data=df.trainxsO, method=rpmethod, cp = 0 )
         rpart.trainO.01 <- prune(rpart.trainO.00, cp = 0.01)
         rpart.trainO.02 <- prune(rpart.trainO.00, cp = 0.02)
-        rp_perf = rpart_perform(rpart.trainO.00 , df.testxsO, testy__, family )
+        rp_perf = rpart_perform(rpart.trainO.00 , df.testxsO, testofst, testy__, family )
         rpart.devian.cv[i_,7] = rp_perf[1] ; rpart.lincal.cv[i_,7] = rp_perf[2] ; rpart.agree.cv[i_,7] = rp_perf[3] ; rpart.nzero.cv[i_,7] = rp_perf[4]
-        rp_perf = rpart_perform(rpart.trainO.01 , df.testxsO, testy__, family )
+        rp_perf = rpart_perform(rpart.trainO.01 , df.testxsO, testofst, testy__, family )
         rpart.devian.cv[i_,8] = rp_perf[2] ; rpart.lincal.cv[i_,8] = rp_perf[2] ; rpart.agree.cv[i_,8] = rp_perf[3] ; rpart.nzero.cv[i_,8] = rp_perf[4]
-        rp_perf = rpart_perform(rpart.trainO.02 , df.testxsO, testy__, family )
+        rp_perf = rpart_perform(rpart.trainO.02 , df.testxsO, testofst, testy__, family )
         rpart.devian.cv[i_,9] = rp_perf[3] ; rpart.lincal.cv[i_,9] = rp_perf[2] ; rpart.agree.cv[i_,9] = rp_perf[3] ; rpart.nzero.cv[i_,9] = rp_perf[4]
       }
       rpart.nzero = rpart.nzero.naive 
@@ -1400,7 +1598,7 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", ste
     if (dostep == 1) { 
       if (track >= 1) { cat(paste0(" ## Starting STEPWISE model fits ## ", "\n")) }
       ## xs_cv=trainxs ; start_cv=trainstart ; y_cv=trainy_ ; event_cv=trainevent ; steps_n=steps_n ; folds_n_cv=folds_n ; method=method ; family=family ; 
-      cv.stepreg.fit = cv.stepreg(trainxs, trainstart, trainy_, trainevent, steps_n, folds_n, method=method, family=family, foldid=foldid_, track=0) 
+      cv.stepreg.fit = cv.stepreg(trainxs, trainstart, trainy_, trainevent, steps_n, folds_n, method=method, family=family, foldid=foldidcv, track=0) 
       stepreg.fit.all.best = cv.stepreg.fit$stepreg.fit.all.best 
 #      names(cv.stepreg.fit) ; cv.stepreg.fit$best.p ; cv.stepreg.fit$df.p ; cv.stepreg.fit$pvalue
 #            names(cv.stepreg.fit) ; cv.stepreg.fit$best.p ; cv.stepreg.fit$func.fit.p      
@@ -1561,16 +1759,31 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", ste
   } else                         { nevents=NA          
                                    null.deviance = (length(y_)-1)*var(y_)/length(y_) 
   } 
-  
+
+  time_stop=Sys.time()
   nestedcv = list( sample=c(family=family, n=dim(xs)[1], nevents=nevents, xs.columns=dim(xs)[2], xs.df=rankMatrix(xs)[1], null.dev.n=null.deviance), 
                    tuning=c(steps_n=steps_n,folds_n=folds_n,method=method,dolasso=dolasso,doann_=doann_,doxgb_=doxgb_,dorpart=dorpart,dostep=dostep,doaic=doaic,
-                   seed=seed[1], tseed=seed[2], ties=ties, limit=limit),
+                   ties=ties, limit=limit),
+                   seed=seed, 
                    ensemble = ensemble, 
                    doann = doann, 
                    doxgb = doxgb, 
                    do_ncv=do_ncv, 
-                   foldid=foldid ) 
+                   foldid=foldid, 
+                   times=c(time_start=time_start, time_stop=time_stop),  
+                   hr_mn_sc = diff_time1(time_stop, time_start) ) 
 
+  if (dolasso == 1) { nestedcv$lasso.nzero.cv  = lasso.nzero.cv 
+                   nestedcv$lasso.devian.cv = lasso.devian.cv
+                   nestedcv$lasso.cal.devian.cv = lasso.cal.devian.cv
+                   nestedcv$lasso.intcal.cv = lasso.intcal.cv
+                   nestedcv$lasso.lincal.cv = lasso.lincal.cv
+                   nestedcv$lasso.agree.cv  = lasso.agree.cv
+                   nestedcv$lasso.agree.naive=lasso.agree.naive 
+                   nestedcv$cv_glmnet_fit   = cv_glmnet_fit_f 
+                   nestedcv$cv_ridge_fit    = cv_ridge_fit_f 
+                   } 
+  
   if (doann_ == 1) {
                    nestedcv$ann.devian.cv = ann.devian.cv
                    nestedcv$ann.intcal.cv = ann.intcal.cv
@@ -1587,46 +1800,37 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", ste
                    nestedcv$ann_fit_4   = ann_fit_4_f
                    nestedcv$ann_fit_5   = ann_fit_5_f
                    nestedcv$ann_fit_6   = ann_fit_6_f 
+                   nestedcv$ann_fit_7   = ann_fit_7_f 
+                   nestedcv$ann_fit_8   = ann_fit_8_f 
                    } 
   
-  if (dolasso == 1) { nestedcv$lasso.nzero.cv  = lasso.nzero.cv 
-                      nestedcv$lasso.devian.cv = lasso.devian.cv
-                      nestedcv$lasso.cal.devian.cv = lasso.cal.devian.cv
-                      nestedcv$lasso.intcal.cv = lasso.intcal.cv
-                      nestedcv$lasso.lincal.cv = lasso.lincal.cv
-                      nestedcv$lasso.agree.cv  = lasso.agree.cv
-                      nestedcv$lasso.agree.naive=lasso.agree.naive 
-                      nestedcv$cv_glmnet_fit   = cv_glmnet_fit_f 
-                      nestedcv$cv_ridge_fit    = cv_ridge_fit_f } 
-  
-  if (doxgb_ == 1)   { nestedcv$xgb.devian.cv    = xgb.devian.cv
-                      nestedcv$xgb.lincal.cv    = xgb.lincal.cv
-                      nestedcv$xgb.agree.cv     = xgb.agree.cv
-                      nestedcv$xgb.devian.naive = xgb.devian.naive
-                      nestedcv$xgb.lincal.naive = xgb.lincal.naive 
-                      nestedcv$xgb.agree.naive  = xgb.agree.naive 
-                      nestedcv$xgb.simple.fit   = xgb.simple.fit
-                      if (ensemble[2] == 1) { nestedcv$xgb.simple.fitF = xgb.simple.fitF }
-                      if (ensemble[3] == 1) { nestedcv$xgb.simple.fitO = xgb.simple.fitO }
-                      nestedcv$xgb.tuned.fit    = xgb.tuned.fit 
-                      if (ensemble[2] == 1) { nestedcv$xgb.tuned.fitF = xgb.tuned.fitF }
-                      if (ensemble[3] == 1) { nestedcv$xgb.tuned.fitO = xgb.tuned.fitO }
-                    }   
+  if (doxgb_ == 1) { 
+                   nestedcv$xgb.devian.cv    = xgb.devian.cv
+                   nestedcv$xgb.lincal.cv    = xgb.lincal.cv
+                   nestedcv$xgb.agree.cv     = xgb.agree.cv
+                   nestedcv$xgb.devian.naive = xgb.devian.naive
+                   nestedcv$xgb.lincal.naive = xgb.lincal.naive 
+                   nestedcv$xgb.agree.naive  = xgb.agree.naive 
+                   if (ensemble[1] == 1) { nestedcv$xgb.simple.fit  = xgb.simple.fit  }
+                   if (ensemble[2] == 1) { nestedcv$xgb.simple.fitF = xgb.simple.fitF }
+                   if (ensemble[3] == 1) { nestedcv$xgb.simple.fitO = xgb.simple.fitO }
+                   if (ensemble[1] == 1) { nestedcv$xgb.tuned.fit   = xgb.tuned.fit   }
+                   if (ensemble[2] == 1) { nestedcv$xgb.tuned.fitF  = xgb.tuned.fitF  }
+                   if (ensemble[3] == 1) { nestedcv$xgb.tuned.fitO  = xgb.tuned.fitO  }
+                   }   
 
-  if (dorpart == 1) { nestedcv$rpart.nzero.cv  = rpart.nzero.cv 
-                      nestedcv$rpart.devian.cv = rpart.devian.cv
-                      nestedcv$rpart.lincal.cv = rpart.lincal.cv
-                      nestedcv$rpart.agree.cv  = rpart.agree.cv 
-                      nestedcv$rpart.nzero     = rpart.nzero
-                      nestedcv$rpart.agree.naive = rpart.agree.naive
-                      nestedcv$rpart.fit.00    = rpart.fit.00
-                      if (ensemble[2] == 1) { 
-                        nestedcv$rpart.fitF.00 = rpart.fitF.00 
-                      }
-                      if ((ensemble[3] == 1) & (family %in% c("cox"))) { 
-                        nestedcv$rpart.fitO.00 = rpart.fitO.00 
-                      }
-                    } 
+  if (dorpart == 1) {
+                   nestedcv$rpart.nzero.cv  = rpart.nzero.cv 
+                   nestedcv$rpart.devian.cv = rpart.devian.cv
+                   nestedcv$rpart.lincal.cv = rpart.lincal.cv
+                   nestedcv$rpart.agree.cv  = rpart.agree.cv 
+                   nestedcv$rpart.nzero     = rpart.nzero
+                   nestedcv$rpart.agree.naive = rpart.agree.naive
+                   if (ensemble[1] == 1) { nestedcv$rpart.fit.00  = rpart.fit.00  }
+                   if (ensemble[2] == 1) { nestedcv$rpart.fitF.00 = rpart.fitF.00 }
+                   if ((ensemble[3] == 1) & (family %in% c("cox"))) { 
+                     nestedcv$rpart.fitO.00 = rpart.fitO.00 }
+                   } 
 
   if ((dostep == 1) | (doaic==1)) { nestedcv$step.devian.cv = step.devian.cv 
                                     nestedcv$step.lincal.cv = step.lincal.cv 
@@ -1643,7 +1847,7 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", ste
   names (nestedcv)
 
   return( nestedcv )
-  cat("\n Program End \n")
+  if (track >= 1) { cat("\n Program End \n") }
   if (track >= 2) { time_last = diff_time(time_start, time_last) } 
 }
 

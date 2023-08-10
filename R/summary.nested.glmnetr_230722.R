@@ -43,6 +43,8 @@ print.nested.glmnetr = function(x, ...) {
 #' Only applies to cvfit=TRUE.
 #' @param short optionally print just the CV agreement summaries (short=1)
 #' @param ... Additional arguments passed to the summary function.  
+#' @param digits digits for printing of deviances, linear calibration coefficients 
+#' and agreement (concordances and R-squares).
 #' 
 #' @return - a nested cross validation fit summary, or a cross validation model summary.  
 #' 
@@ -62,7 +64,7 @@ print.nested.glmnetr = function(x, ...) {
 #' summary(fit3)
 #' }
 #' 
-summary.nested.glmnetr = function(object, cvfit=FALSE, printg1=FALSE, short=0, ...) {
+summary.nested.glmnetr = function(object, cvfit=FALSE, printg1=FALSE, short=0, digits=3, ...) {
   
   if (cvfit==TRUE) {
     cv_glmnet_fit = object$cv_glmnet_fit  
@@ -79,16 +81,10 @@ summary.nested.glmnetr = function(object, cvfit=FALSE, printg1=FALSE, short=0, .
     doann_  = (doann[1] > 0)*1   
     ensemble = object$ensemble
     do_ncv  = object$do_ncv
-#    temp_ = c(1,3,5,2,4)
-#    ensemble = rep(0,6)
-#    ensemble = temp_
-    ensemble2 = ensemble[c(1,4,2,3,5,6)]  ## from complexity order to ensemble input order    
-    ensemble 
-    ensemble2 
-    
+
     family = object$sample[1]
     sample = object$sample 
-    sample[6] = round(as.numeric(sample[6]), digits=3)
+    sample[6] = round(as.numeric(sample[6]), digits=digits)
     if (family=="cox") { names(sample)[6]="null.dev/events" 
     } else { names(sample)[6] = "null.dev/obs"  }
 
@@ -115,14 +111,15 @@ summary.nested.glmnetr = function(object, cvfit=FALSE, printg1=FALSE, short=0, .
       xgbAveAgree  = colMeans(xgb.agree.cv)    
     } 
     if (doann_==1) { 
-      nms = c("Uninformed", "lasso terms", "lasso feat.", "init w's", "update w's", "offset") 
+#      nms = c("Uninformed", "lasso terms", "lasso feat.", "init w's", "update w's", "offset") 
+      nms = c("Uninformed", "lasso feat", "lasso w's", "lasso update", "lasso terms", "l/lasso feat", "l/lasso w's", "l/lasso update") 
       ann.devian.cv = object$ann.devian.cv
       ann.lincal.cv = object$ann.lincal.cv
       ann.agree.cv  = object$ann.agree.cv 
-      ann.agree.naive = object$ann.agree.naive[(ensemble2==1)]
-      annAveDevian = colMeans(ann.devian.cv)[(ensemble2==1)]  
-      annAveLincal = colMeans(ann.lincal.cv)[(ensemble2==1)]
-      annAveAgree  = colMeans(ann.agree.cv )[(ensemble2==1)]
+      ann.agree.naive = object$ann.agree.naive[(ensemble==1)]
+      annAveDevian = colMeans(ann.devian.cv)[(ensemble==1)]  
+      annAveLincal = colMeans(ann.lincal.cv)[(ensemble==1)]
+      annAveAgree  = colMeans(ann.agree.cv )[(ensemble==1)]
     } 
     if (dorpart==1) { 
       rpart.nzero.cv  = object$rpart.nzero.cv
@@ -135,11 +132,11 @@ summary.nested.glmnetr = function(object, cvfit=FALSE, printg1=FALSE, short=0, .
       rpartAveDevian = colMeans(rpart.devian.cv[,c(3,2,1,6,5,4,9,8,7)])   
       rpartAveLincal = colMeans(rpart.lincal.cv[,c(3,2,1,6,5,4,9,8,7)])   
       rpartAveAgree  = colMeans(rpart.agree.cv[,c(3,2,1,6,5,4,9,8,7)])   
-      rpartAveNZero  = rpartAveNZero [ c(1:6) ]
-      rpartAveDevian = rpartAveDevian[ c(1:6) ] 
-      rpartAveLincal = rpartAveLincal[ c(1:6) ]
-      rpartAveAgree = rpartAveAgree  [ c(1:6) ]
-      rpartAveNZero = rpartAveNZero  [ c(1:6) ]
+      rpartAveNZero  = rpartAveNZero [ c(1:9) ]
+      rpartAveDevian = rpartAveDevian[ c(1:9) ] 
+      rpartAveLincal = rpartAveLincal[ c(1:9) ]
+      rpartAveAgree = rpartAveAgree  [ c(1:9) ]
+      rpartAveNZero = rpartAveNZero  [ c(1:9) ]
     } 
     if ((doaic == 1) | (dostep==1)) {
       step.devian.cv  = object$step.devian.cv
@@ -154,11 +151,14 @@ summary.nested.glmnetr = function(object, cvfit=FALSE, printg1=FALSE, short=0, .
       StepAve_p     = colMeans( step_p_cv    )
     }
     if (doann == 1) { 
-      if        (ensemble2[4]==1) { ann_cv = object$ann_fit_4 ; whichann = nms[4] ;
-      } else if (ensemble2[5]==1) { ann_cv = object$ann_fit_5 ; whichann = nms[5] ;
-      } else if (ensemble2[3]==1) { ann_cv = object$ann_fit_3 ; whichann = nms[3] ;
-      } else if (ensemble2[2]==1) { ann_cv = object$ann_fit_2 ; whichann = nms[2] ;
-      } else if (ensemble2[1]==1) { ann_cv = object$ann_fit_1 ; whichann = nms[1] ;
+      if        (ensemble[4]==1) { ann_cv = object$ann_fit_4 ; whichann = nms[4] ;
+      } else if (ensemble[8]==1) { ann_cv = object$ann_fit_8 ; whichann = nms[8] ;
+      } else if (ensemble[3]==1) { ann_cv = object$ann_fit_3 ; whichann = nms[3] ;
+      } else if (ensemble[7]==1) { ann_cv = object$ann_fit_7 ; whichann = nms[7] ;
+      } else if (ensemble[2]==1) { ann_cv = object$ann_fit_2 ; whichann = nms[2] ;
+      } else if (ensemble[6]==1) { ann_cv = object$ann_fit_6 ; whichann = nms[6] ;
+      } else if (ensemble[1]==1) { ann_cv = object$ann_fit_1 ; whichann = nms[1] ;
+      } else if (ensemble[5]==1) { ann_cv = object$ann_fit_5 ; whichann = nms[5] ;
       }
     }
     if (dostep==1) { cv.stepreg.fit    = object$cv.stepreg.fit }  
@@ -173,27 +173,27 @@ summary.nested.glmnetr = function(object, cvfit=FALSE, printg1=FALSE, short=0, .
     if ((doaic==0) & (dostep==0)) { 
       cat(paste0("\n"  , " Tuning parameters for models : ", "\n") )
       if (doann_==1) {
-        print(object$tuning[c(2,10,11)]) 
+        print(object$tuning[c(2)]) 
       } else {
-        print(object$tuning[c(2,10)]) 
+        print(object$tuning[c(2)]) 
       }
     } else { 
       cat(paste0("\n"  , " Tuning parameters for models : ", "\n") )
       if (doann_==1) {
-        print(object$tuning[c(1,2,10,11)]) 
+        print(object$tuning[c(1,2)]) 
       } else {
-        print(object$tuning[c(1,2,10)]) 
+        print(object$tuning[c(1,2)]) 
       }
     }
     
     if (doann_ == 1) {
       cat(paste0("\n"  , " Tuning parameters for  ", whichann, "  ANN model : ", "\n") )
-      print(ann_cv$modelsum[c(1:9)]) 
+      print(ann_cv$modelsum[c(1:9,11:12)]) 
     }
     
 #    if (doaic==1) {
 #      cat(paste0("\n", " Average deviance for null model", "\n") )    ## pull other data applicable to all models 
-#      print( round(StepAveDevian[1], digits = 4 ) ) 
+#      print( round(StepAveDevian[1], digits = digits ) ) 
 #    }
     
     if (family == "cox") { perunit = "deviance per event " } else { perunit = "deviance per record " }
@@ -207,22 +207,22 @@ summary.nested.glmnetr = function(object, cvfit=FALSE, printg1=FALSE, short=0, .
             cat(paste0("\n", " Nested cross validation agreement (concordance) for cross validation informed LASSO : ",  "\n") )
           } else { 
             cat(paste0("\n", " Nested cross validation agreement (r-square) for cross validation informed LASSO : ",  "\n") )
-         } 
-          print( round( lassoAveAgree , digits = 4) ) 
+          } 
+          print( round( lassoAveAgree , digits = digits) ) 
         } else {
           cat(paste0("\n\n" , " Nested Cross Validation averages for LASSO (1se and min), Relaxed LASSO, and gamma=0 LASSO : ", "\n") )
           cat(paste0("\n" , "      ", perunit, ": ", "\n") )
-          print( round( lassoAveDevian , digits = 4) )
+          print( round( lassoAveDevian , digits = digits) )
       
 #          cat(paste0("\n\n" , " Nested Cross Validation averages for Linear Calibrated LASSO : ", "\n") )
           cat(paste0("\n" , "      ", perunit, "(linerly calibrated) : ", "\n") )
-          print( round( lassoCalAveDevian , digits = 4) )
+          print( round( lassoCalAveDevian , digits = digits) )
         
           cat(paste0("\n" , "      number of nonzero model terms : ", "\n") )
-          print( round( lassoAveNZero , digits = 2) )    
+          print( round( lassoAveNZero , digits = max((digits-2),1) ) )
       
           cat(paste0("\n", "      linear calibration coefficient : ", "\n") )
-          print( round( lassoAveLincal , digits = 4) ) 
+          print( round( lassoAveLincal , digits = digits) ) 
       
           # In summary.nested.glmnetr state only "concordance" or "R-square" in output
       
@@ -232,14 +232,26 @@ summary.nested.glmnetr = function(object, cvfit=FALSE, printg1=FALSE, short=0, .
             cat(paste0("\n", "      agreement (r-square) :            ", "\n") )
           } 
       
-          print( round( lassoAveAgree , digits = 4) ) 
+          print( round( lassoAveAgree , digits = digits) ) 
         }
       }
       if ((short != 1) | (do_ncv == 0)) {
         cat(paste0("\n", " Naive agreement for cross validation informed LASSO : ",  "\n") )
         names(lasso.agree.naive) = c("lasso.1se", "lasso.min", "lasso.1seR", "lasso.minR", "lasso.1seR0", "lasso.minR0", "ridge" )
         names(lasso.agree.naive) = c("1se", "min", "1seR", "minR", "1seR.G0", "minR.G0", "ridge" )
-        print( round( lasso.agree.naive , digits=4) )
+        print( round( lasso.agree.naive , digits=digits) )
+        
+        cat(paste0("\n", " Number of non-zero terms in cross validation informed LASSO : \n") )
+        lassoNZero = c(rep(0,7))
+        lassoNZero[1] = object$cv_glmnet_fit$nzero [ object$cv_glmnet_fit$index[2] ]
+        lassoNZero[2] = object$cv_glmnet_fit$nzero [ object$cv_glmnet_fit$index[1] ]
+        lassoNZero[3] = object$cv_glmnet_fit$relaxed$nzero.1se
+        lassoNZero[4] = object$cv_glmnet_fit$relaxed$nzero.min
+        lassoNZero[5] = object$cv_glmnet_fit$nzero [ object$cv_glmnet_fit$relaxed$index.g0[2] ] 
+        lassoNZero[6] = object$cv_glmnet_fit$nzero [ object$cv_glmnet_fit$relaxed$index.g0[1] ] 
+        lassoNZero[7] = object$cv_ridge_fit$nzero[object$cv_ridge_fit$index][1]
+        names(lassoNZero) = c("1se", "min", "1seR", "minR", "1seR.G0", "minR.G0", "ridge" )
+        print( round( lassoNZero , digits=digits) )
       }
     }        
     
@@ -253,15 +265,15 @@ summary.nested.glmnetr = function(object, cvfit=FALSE, printg1=FALSE, short=0, .
         } else { 
           cat(paste0("\n", " Nested cross validation agreement (r-square) for cross validation informed XGBoost : ",  "\n") )
         } 
-        print( round( xgbAveAgree , digits=4) )
+        print( round( xgbAveAgree , digits = digits) )
         
       } else {
         cat(paste0("\n\n" , " Nested Cross Validation averages for XGBoost model : ", "\n") )
         cat(paste0("\n" , "      ", perunit, ": ", "\n") )
-        print( round( xgbAveDevian , digits = 4) )
+        print( round( xgbAveDevian , digits = digits) )
       
         cat(paste0("\n", "      linear calibration coefficient : ", "\n") )
-        print( round( xgbAveLincal , digits = 4) ) 
+        print( round( xgbAveLincal , digits = digits) ) 
       
         if (family %in% c("cox","binomial")) { 
           cat(paste0("\n", "      average agreement (concordance) :         ", "\n") )
@@ -269,14 +281,14 @@ summary.nested.glmnetr = function(object, cvfit=FALSE, printg1=FALSE, short=0, .
           cat(paste0("\n", "      agreement (r-square) :            ", "\n") )
         } 
       
-        print( round( xgbAveAgree , digits = 4) ) 
+        print( round( xgbAveAgree , digits = digits) ) 
       
 #        cat(paste0("\n", " Cross validation informed XGBoost model : ",  "\n") )
       }
       }
       if ((short != 1) |  (do_ncv == 0)) {
         cat(paste0("\n", " Naive agreement for cross validation informed XGBoost model : ",  "\n") )
-        print( round( xgb.agree.naive , digits=4) )
+        print( round( xgb.agree.naive , digits=digits) )
       }
     }                                                                             ## how to get rid of [1,]  ??
     
@@ -290,15 +302,15 @@ summary.nested.glmnetr = function(object, cvfit=FALSE, printg1=FALSE, short=0, .
           } else { 
             cat(paste0("\n", " Nested cross validation agreement (r-square) for cross validation informed Neural Network : ",  "\n") )
           } 
-          print( round( annAveAgree , digits = 4) ) 
+          print( round( annAveAgree , digits = digits) ) 
         } else {
-          cat(paste0("\n\n" , " Nested Cross Validation averages for Neural Network : ", "\n") )
+          cat(paste0("\n\n" , " Nested Cross Validation averages for neural network : ", "\n") )
         
           cat(paste0("\n" , "      ", perunit, ": ", "\n") )
-          print( round( annAveDevian , digits = 4) )
+          print( round( annAveDevian , digits = digits) )
         
           cat(paste0("\n", "      linear calibration coefficient : ", "\n") )
-          print( round( annAveLincal , digits = 4) ) 
+          print( round( annAveLincal , digits = digits) ) 
         
           if (family %in% c("cox","binomial")) { 
             cat(paste0("\n", "      average agreement (concordance) :         ", "\n") )
@@ -306,14 +318,15 @@ summary.nested.glmnetr = function(object, cvfit=FALSE, printg1=FALSE, short=0, .
             cat(paste0("\n", "      agreement (r-square) :            ", "\n") )
           } 
         
-          print( round( annAveAgree , digits = 4) ) 
+          print( round( annAveAgree , digits = digits) ) 
         
-          cat(paste0("\n", " Cross validation informed Neural Network : ",  "\n") )
         }
       }
       if ((short != 1) | (do_ncv == 0)) {
+        cat(paste0("\n", " Cross validation informed neural network : ",  "\n") )
         cat(paste0("\n", "      naive agreement : ",  "\n") )
-        print( round( ann.agree.naive, digits=4) )
+        print( round( ann.agree.naive, digits=digits) )
+        cat(paste0("\n") )
       }
     }                                                                           
     
@@ -326,35 +339,34 @@ summary.nested.glmnetr = function(object, cvfit=FALSE, printg1=FALSE, short=0, .
         } else { 
           cat(paste0("\n", " Nested cross validation agreement (r-square) for cross validation informed RPART : ",  "\n") )
         } 
-        print( round( rpartAveAgree , digits = 4) ) 
+        print( round( rpartAveAgree , digits = digits) ) 
       }
       if ((short == 0) & (do_ncv == 1)) {
-        cat(paste0("\n\n" , " Nested Cross Validation averages for RPART model : ", "\n") )
+        cat(paste0("\n\n" , " Nested Cross Validation averages for RPART : ", "\n") )
       
         cat(paste0("\n" , "      ", perunit, ": ", "\n") )
-        print( round( rpartAveDevian , digits = 4) )
+        print( round( rpartAveDevian , digits = digits) )
       
         cat(paste0("\n", "      average number of terms used in cv informed models : ", "\n") )
         print(round( rpartAveNZero, digits=1) ) 
       
         cat(paste0("\n", "      linear calibration coefficient : ", "\n") )
-        print( round( rpartAveLincal , digits = 4) ) 
+        print( round( rpartAveLincal , digits = digits) ) 
       
         if (family %in% c("cox","binomial")) { 
           cat(paste0("\n", "      average agreement (concordance) :         ", "\n") )
         } else { 
           cat(paste0("\n", "      agreement (r-square) :            ", "\n") )
         } 
+        print( round( rpartAveAgree , digits = digits) ) 
       }      
       if ((short == 0) | (do_ncv==0)) {
-        print( round( rpartAveAgree , digits = 4) ) 
-      
-        cat(paste0("\n", " Cross validation informed RPART model : ",  "\n") )
+        cat(paste0("\n", " Cross validation informed RPART : ",  "\n") )
         cat(paste0("\n", "      number of terms used in model : ", "\n") )
-        print(round( rpart.nzero, digits=1)[c(3,2,1,6,5,4)] ) 
+        print(round( rpart.nzero, digits=1)[c(3,2,1,6,5,4,9,8,7)] ) 
 
         cat(paste0("\n", "      naive agreement : ",  "\n") )
-        print( round( rpart.agree.naive , digits=4)[c(3,2,1,6,5,4)] )
+        print( round( rpart.agree.naive , digits=digits)[c(3,2,1,6,5,4,9,8,7)] )
       }
     }      
     
@@ -366,7 +378,7 @@ summary.nested.glmnetr = function(object, cvfit=FALSE, printg1=FALSE, short=0, .
       } else { 
         cat(paste0("\n", " Nested cross validation agreement (r-square) for cross validation informed STEPWISE : ",  "\n") )
       } 
-      print( round(StepAveAgree[c(1,2)], digits = 4) ) 
+      print( round(StepAveAgree[c(1,2)], digits = digits) ) 
     }
     
     if ( (doaic==1) & (short==1) & (do_ncv == 1) ) {
@@ -375,79 +387,93 @@ summary.nested.glmnetr = function(object, cvfit=FALSE, printg1=FALSE, short=0, .
       } else { 
         cat(paste0("\n", " Cross validation agreement (r-square) for the STEPWISE based AIC : ",  "\n") )
       } 
-       print( round(StepAveAgree[c(3)], digits = 4) ) 
+       print( round(StepAveAgree[c(3)], digits = digits) ) 
     }
     
     if ((dostep==1) & (short!=1) & (do_ncv == 1)) {
-#      cv.stepreg.fit = object$cv.stepreg.fit
-#      cv.stepreg.fit.df = cv.stepreg.fit$best.df    #func.fit.df
+#      cv.stepreg.fit.df = cv.stepreg.fit$best.df    #func.fit.df ; cv.stepreg.fit$best.p 
       cat(paste0("\n\n", " Nested Cross Validation STEPWISE regression model (df): ", "\n") )   
       cat(paste0("      Average linear calibration coefficient: ", round(StepAveLincal[1] ,  digits = 3), "\n") )    
-      cat(paste0("      Average deviance : ", round(StepAveDevian[1]   ,  digits = 4), "\n") )    
+      cat(paste0("      Average deviance : ", round(StepAveDevian[1]   ,  digits = digits), "\n") )    
       cat(paste0("      Average model df : ", round( StepAve_df[1], digits=2 ), "\n") )
       if (family %in% c("cox","binomial")) {
-        cat(paste0("      Concordance      : ", round(StepAveAgree[1],  digits = 4), "\n") )        
+        cat(paste0("      Concordance      : ", round(StepAveAgree[1],  digits = digits), "\n") )        
         cat(paste0(" Naive concordance based upon the same (all) data as model derivation (df): ",
-                   round(cv.stepreg.fit$cvfit.df[6], digits=4) , "\n") )
+                   round(cv.stepreg.fit$cvfit.df[6], digits=digits) , "\n") )
       } else {
-        cat(paste0("      R-square         : ", round(StepAveAgree[1],  digits = 4), "\n") )        
+        cat(paste0("      R-square         : ", round(StepAveAgree[1],  digits = digits), "\n") )        
         cat(paste0(" Naive R-square based upon the same (all) data as model derivation (df): ",
-                   round(cv.stepreg.fit$cvfit.df[6], digits=4) , "\n") )
+                   round(cv.stepreg.fit$cvfit.df[6], digits=digits) , "\n") )
       } 
+      cat(paste0("    Model df ", length(cv.stepreg.fit$func.fit.df$coefficients), "\n")) 
       
       cat(paste0("\n", " Nested Cross Validation STEPWISE regression model (p): ", "\n") )   
       cat(paste0("      Average linear calibration coefficient p : ", round(StepAveLincal[1] ,  digits = 3), "\n") )    
-      cat(paste0("      Average deviance : ", round(StepAveDevian[2] ,  digits = 4), "\n") )    
+      cat(paste0("      Average deviance : ", round(StepAveDevian[2] ,  digits = digits), "\n") )    
       cat(paste0("      Average model p  : ", round( StepAve_p [1], digits=3 ), "\n") )
       cat(paste0("      Average model df : ", round( StepAve_df[2], digits=2 ), "\n") )
       if (family %in% c("cox","binomial")) {
-        cat(paste0("      Concordance      : ", round(StepAveAgree[2],  digits = 4), "\n") )        
+        cat(paste0("      Concordance      : ", round(StepAveAgree[2],  digits = digits), "\n") )        
         cat(paste0(" Naive concordance based upon the same (all) data as model derivation (p): ",
-                   round(cv.stepreg.fit$cvfit.p[6], digits=4) , "\n") )
-#        cat(paste0(" Naive concordance based upon the same (all) data as model derivation (df): ",
-#                   round(cv.stepreg.fit$cvfit.df[6], digits=4) , "\n") )
+                   round(cv.stepreg.fit$cvfit.p[6], digits=digits) , "\n") )
       } else {
-        cat(paste0("      R-square         : ", round(StepAveAgree[2],  digits = 4), "\n") )  
+        cat(paste0("      R-square         : ", round(StepAveAgree[2],  digits = digits), "\n") )  
         cat(paste0(" Naive R-square based upon the same (all) data as model derivation (p): ",
-                   round(cv.stepreg.fit$cvfit.p[6], digits=4) , "\n") )
-#        cat(paste0(" Naive R-square based upon the same (all) data as model derivation (df): ",
-#                   round(cv.stepreg.fit$cvfit.df[6], digits=4) , "\n") )
+                   round(cv.stepreg.fit$cvfit.p[6], digits=digits) , "\n") )
       }
+      cat(paste0("    Model df ", length(cv.stepreg.fit$func.fit.p$coefficients), "\n")) 
     }  
-    
+  
 #    if ((dostep == 1) & (short == 1) & (do_ncv == 0)) {
 #    if ((dostep == 1) & (short==1) & (do_ncv==0)) {
-      if ((dostep==1) & ((short!=1) | (do_ncv == 0)))  {
-      if (family %in% c("cox","binomial")) {
-        cat(paste0("\n Naive concordance based upon the same (all) data as model derivation (df): ",
-                   round(cv.stepreg.fit$cvfit.df[6], digits=4) , "\n") )
-        cat(paste0("\n Naive concordance based upon the same (all) data as model derivation (p): ",
-                   round(cv.stepreg.fit$cvfit.p[6], digits=4) , "\n") )
-      } else {
-        cat(paste0("\n Naive R-square based upon the same (all) data as model derivation (df): ",
-                   round(cv.stepreg.fit$cvfit.df[6], digits=4) , "\n") )
-        cat(paste0("\n Naive R-square based upon the same (all) data as model derivation (p): ",
-                   round(cv.stepreg.fit$cvfit.p[6], digits=4) , "\n") )
+#    if ((dostep==1) & ((short!=1) | (do_ncv == 0)))  {
+    
+    if ((dostep==1) | (doaic==1)) {
+      if (do_ncv == 0) { 
+        cat(paste0("\n Cross validation informed STEPWISE regression models : \n"))
       }
     }
     
-    if ((doaic==1) & (short!=1) & (do_ncv==1)) {
-      cat(paste0("\n Cross Validation results for STEPWISE regression model: (AIC)", "\n") ) 
-      cat(paste0("      Average linear calibration coefficient : ", round(StepAveLincal[3] ,  digits = 3), "\n") )    
-      cat(paste0("      Average deviance : ", round(StepAveDevian[3],  digits = 4), "\n") )    
-      cat(paste0("      Average model df : ", round( StepAve_df[3], digits=2 ), "\n") )
-      cat(paste0("      Concordance      : ", round( StepAveAgree[3], digits = 4), "\n") )   
+    if (dostep==1) { 
+      if (do_ncv == 0) { 
+        if (family %in% c("cox","binomial")) {
+          cat(paste0("\n Naive concordance based upon the same (all) data as model derivation (df): ",
+                     round(cv.stepreg.fit$cvfit.df[6], digits=digits) , "\n") )
+          cat(paste0("    Model df ", length(cv.stepreg.fit$func.fit.df$coefficients), "\n")) 
+          cat(paste0("\n Naive concordance based upon the same (all) data as model derivation (p): ",
+                     round(cv.stepreg.fit$cvfit.p[6], digits=digits) , "\n") )
+          cat(paste0("    Model df ", length(cv.stepreg.fit$func.fit.p$coefficients), "\n")) 
+        } else {
+          cat(paste0("\n Naive R-square based upon the same (all) data as model derivation (df): ",
+                     round(cv.stepreg.fit$cvfit.df[6], digits=digits) , "\n") )
+          cat(paste0("    Model df ", length(cv.stepreg.fit$func.fit.df$coefficients), "\n")) 
+          cat(paste0("\n Naive R-square based upon the same (all) data as model derivation (p): ",
+                     round(cv.stepreg.fit$cvfit.p[6], digits=digits) , "\n") )
+          cat(paste0("    Model df ", length(cv.stepreg.fit$func.fit.p$coefficients), "\n")) 
+        }
+      }
     }
     
-    if ((doaic==1) & ((short!=1) | (do_ncv == 0)))  {
-      if (do_ncv == 0) { cat("\n") }
-      if (family %in% c("cox","binomial")) {
-        cat(paste0(" Naive concordance based upon the same (all) data as model derivation (AIC) : ", 
-                     round(object$func.fit.aic$aic.fit.n[6], digits=4) , "\n") )
-      } else {
-        cat(paste0(" Naive R-square based upon the same (all) data as model derivation (AIC) : ",         
-                   round( object$func.fit.aic$aic.fit.n[6], digits=4 ), "\n") ) 
-        #        round( 1-var(all.fit.aic$residuals)/var(all.fit.aic$y), digits=4), "\n") ) 
+    if (doaic==1) {
+      if ((short!=1) & (do_ncv==1)) {
+        cat(paste0("\n Cross Validation results for STEPWISE regression model: (AIC)", "\n") ) 
+        cat(paste0("      Average linear calibration coefficient : ", round(StepAveLincal[3] ,  digits = 3), "\n") )    
+        cat(paste0("      Average deviance : ", round(StepAveDevian[3],  digits = digits), "\n") )    
+        cat(paste0("      Average model df : ", round( StepAve_df[3], digits=2 ), "\n") )
+        cat(paste0("      Concordance      : ", round( StepAveAgree[3], digits = digits), "\n") )   
+      }
+    
+      if ((short!=1) | (do_ncv == 0))  {
+        if (do_ncv == 0) { cat("\n") }
+        if (family %in% c("cox","binomial")) {
+          cat(paste0(" Naive concordance based upon the same (all) data as model derivation (AIC) : ", 
+                       round(object$func.fit.aic$aic.fit.n[6], digits=digits) , "\n") )
+        } else {
+          cat(paste0(" Naive R-square based upon the same (all) data as model derivation (AIC) : ",         
+                     round( object$func.fit.aic$aic.fit.n[6], digits=digits ), "\n") ) 
+          #        round( 1-var(all.fit.aic$residuals)/var(all.fit.aic$y), digits=digits), "\n") ) 
+        }
+        cat(paste0("    Model df ", length(object$func.fit.aic$coefficients), "\n")) 
       }
     }
     
@@ -515,15 +541,16 @@ predict.nested.glmnetr = function( object, xs_new=NULL, lam=NULL, gam=NULL, comm
 #'
 #' @param a One term
 #' @param b A second term 
+#' @param digits digits for printing of z-scores, p-values, etc. with default of 4
 #'
 #' @return  A t-test
 #' 
 #' @importFrom stats t.test 
 #'
-glmnetr.compcv0 = function(a,b) { 
+glmnetr.compcv0 = function(a,b,digits=4) { 
   tdiff = t.test(a-b)
-  cat ( paste0(  " estimate (95% CI): ", round(tdiff$estimate, digits=4), " (", round(tdiff$conf.int[1],digits=4), ", ", 
-                 round(tdiff$conf.int[2],digits=4), ") , p=", round(tdiff$p.value,digits=4) ) )
+  cat ( paste0(  " estimate (95% CI): ", round(tdiff$estimate, digits=digits), " (", round(tdiff$conf.int[1],digits=digits), ", ", 
+                 round(tdiff$conf.int[2],digits=digits), ") , p=", round(tdiff$p.value,digits=digits) ) )
 }
 
 ################################################################################
@@ -536,6 +563,7 @@ glmnetr.compcv0 = function(a,b) {
 #' nested cross validaiton fits.  
 #'
 #' @param object A nested.glmnetr output object.
+#' @param digits digits for printing of z-scores, p-values, etc. with default of 4 
 #'
 #' @return A printout to the R console. 
 #' 
@@ -555,7 +583,7 @@ glmnetr.compcv0 = function(a,b) {
 #' glmnetr.compcv(fit3)
 #' }
 #' 
-glmnetr.compcv = function(object) {
+glmnetr.compcv = function(object, digits=4) {
   tuning  = object$tuning
   dolasso = tuning[4]
   doann   = tuning[5]
