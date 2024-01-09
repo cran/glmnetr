@@ -154,11 +154,11 @@ summary.cv.glmnetr = function(object, printg1="FALSE", orderall=FALSE, ...) {
 #' 
 predict.cv.glmnetr = function( object, xs_new=NULL, lam=NULL, gam=NULL, comment=TRUE, ...) {
   if (inherits(object,"nested.glmnetr")) { object = object$cv.glmnet.fit }
-  #  object=cv.cox.fit ; xs_new=NULL; lam=NULL; gam=NULL; comment=TRUE ;
-  #  object=cv.cox.fit ; xs_new=NULL; lam=NULL; gam=0; comment=TRUE ;
-  #  object = cv.glmnetr.fit.hp
-  #  lam=NULL ; gam=NULL 
-  #  lam="lambda.1se" ; gam="gamma.1se" 
+#  object=cv.cox.fit ; xs_new=NULL; lam=NULL; gam=NULL; comment=TRUE ;
+#  object=cv.cox.fit ; xs_new=NULL; lam=NULL; gam=0; comment=TRUE ;
+#  object = cv.glmnetr.fit.hp
+#  lam=NULL ; gam=NULL 
+#  lam="lambda.1se" ; gam="gamma.1se" 
   
 #  family = object$family 
   family = object$sample$family 

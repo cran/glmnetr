@@ -383,7 +383,7 @@ prednn_tl = function (lassomod, nnmodel, datain, lasso=1) {
 #' 
 #' @return an artificial neural network model fit 
 #' 
-#### note, self is a "direct to" and not a funciton.  It can be found in ~tabnet/R/tab-network.R but not in ~tabnet/NAMESPACE 
+#### note, self is a "direct to" and not a function.  It can be found in ~tabnet/R/tab-network.R but not in ~tabnet/NAMESPACE 
 #' @importFrom torch nn_relu nn_gelu nn_sigmoid nn_identity nn_softmax nn_module 
 #' @importFrom torch nn_linear nnf_linear nn_parameter nn_sequential nn_dropout torch_tensor torch_float optim_adam 
 #' @importFrom torch nnf_binary_cross_entropy nn_bce_loss nn_mse_loss nnf_mse_loss nn_cross_entropy_loss 
@@ -703,7 +703,7 @@ for (fold in c(1:fold_n)) {
       y_pred_r = as.numeric(y_pred_t)
       y_predtest_r  = as.numeric(y_predtest_t)
       losstrain0 = as.numeric(nnf_mse_loss(y_predtest_t,y_test_t)) ; ## mean((y_predtest_r - y_test)^2) ## same as ... 
-      agree0     = cor(y_test, y_predtest_r)^2   
+      agree0     = cor(y_test, y_predtest_r)  # ^2   
     } else if (family == "cox") { 
       if (!is.null(myoffset)) {
         y_pred_t = model(x_train_t)$squeeze(2)$add(o_test_t)      
@@ -813,7 +813,7 @@ for (fold in c(1:fold_n)) {
     model$parameters$`0.weight`[1:5,1:5]
     
 #   check model on TRAIN data 
-    ##-- figure out loss$item as this doenst always agree with loss_fn ---------
+    ##-- figure out loss$item as this doesnt always agree with loss_fn ---------
     if (family == "cox") {
       losstrain[fold, i_] = loss$item() ## / sum(e_train)                          ## already divided by sum(e_train)
     } else {
@@ -843,7 +843,7 @@ for (fold in c(1:fold_n)) {
         y_predtest_t = model(x_test_t)$squeeze(2)
         y_predtest_r = as.numeric( y_predtest_t )
         cvloss [fold, i_] = as.numeric(nnf_mse_loss(y_predtest_t,y_test_t)) ; ## mean((y_predtest_r - y_test)^2) ## same as ... 
-        cvagree[fold,i_] = cor(y_test, y_predtest_r)^2   
+        cvagree[fold,i_] = cor(y_test, y_predtest_r)  # ^2   
         
     } else if (family == "cox") { 
       if (!is.null(myoffset)){
@@ -866,7 +866,7 @@ for (fold in c(1:fold_n)) {
       if (family == "binomial") {
         cat(" Epoch:", i_,"Train Loss: ", loss$item(), "Test Loss: ", cvloss[fold, i_], "Test Concordance:", cvagree[fold,i_],"\n")
       } else if (family == "gaussian") {
-        cat(" Epoch:", i_,"Train Loss: ", loss$item(), "Test Loss: ", cvloss[fold, i_], "Test R-square:", cvagree[fold,i_],"\n")
+        cat(" Epoch:", i_,"Train Loss: ", loss$item(), "Test Loss: ", cvloss[fold, i_], "Test R-square:", cvagree[fold,i_]^2,"\n")
       } else if (family == "multiclass") {
         cat(" Epoch:", i_,"Train Loss: ", loss$item(), "Test Loss: ", cvloss[fold, i_], "Test Accuracy:", cvaccuracy[fold,i_],"\n")        
       } else if (family == "cox") {
@@ -887,7 +887,8 @@ cvlossmn     = colMeans(cvloss)
 cvaccuracymn = colMeans(cvaccuracy)
 cvagreemn    = colMeans(cvagree   )
 which_loss   = which.min(cvlossmn)
-which_agree  = which.max(cvagreemn)
+which_agree  = which.max(cvagreemn^2)
+if (length(which_agree)==0) { which_agree = which_loss }
 which_accu   = which.max(cvaccuracymn)
 cv_loss      = cvlossmn[which_loss] 
 cv_agree     = cvagreemn[which_loss] 
@@ -899,7 +900,7 @@ if (eppr >= 0) {
          " CV concordance = ", cv_agree, "\n" )
   } else if (family %in% c("gaussian")) {
     cat( " epoch minimizing CV loss = ", which_loss , " CV loss = ", cv_loss,  
-         " CV R-square = ", cv_agree, "\n" )
+         " CV R-square = ", cv_agree^2, "\n" )
   } else if (nclass > 2) {
     cat( " epoch minimizing CV loss = ", which_loss , " CV loss = ", cv_loss,  
          " CV accuracy = ", cv_accuracy, "\n" )
@@ -1019,7 +1020,7 @@ myoptim = optim_adam(model$parameters, lr = mylr, weight_decay = wd)
     }
     y_pred_r = as.numeric(y_pred_t)
     losstrain0 = as.numeric(nnf_mse_loss(y_pred_t,y_train_t)) ; ## mean((y_predtest_r - y_test)^2) ## same as ... 
-    agree0     = cor(y_train, y_pred_r)^2   
+    agree0     = cor(y_train, y_pred_r)  # ^2   
   } else if (family == "cox") { 
     if (!is.null(myoffset)) {
       y_pred_t = model(x_train_t)$squeeze(2)$add(o_train_t)      
@@ -1037,7 +1038,7 @@ if (eppr >= -2) {
   if (family == "binomial") {
     cat(" Epoch:   0 Full data Loss: ", losstrain0, "Train Concordance:", agree0,"\n")
   } else if (family == "gaussian") {
-    cat(" Epoch:   0 Full data Loss: ", losstrain0, "Train R-square:", agree0,"\n")
+    cat(" Epoch:   0 Full data Loss: ", losstrain0, "Train R-square:", agree0 ^2,"\n")
   } else if (family == "multiclass") {
     cat(" Epoch:   0 Full data Loss: ", losstrain0, "Train Accuracy:", accuracy0,"\n")   
   } else if (family == "cox") {
@@ -1144,7 +1145,7 @@ for (i_ in 1:imax) {
   } else if (family == "gaussian") {
 #    if (i_ == 1) { print("    HERE 3") }
     lossf [i_] = as.numeric(nnf_mse_loss(y_pred,y_train_t)) ;
-    agreef[i_] = cor(y_train, y_pred_r)^2     
+    agreef[i_] = cor(y_train, y_pred_r) # ^2     
   } else if (family == "cox") { 
     if (sum(is.na(y_pred_r))>0) { y_pred_r = rep(1,length(y_pred_r)) }
     fit0 = coxph( Surv(y_train, e_train) ~ y_pred_r, init=c(1), control=coxph.control(iter.max=0)) 
@@ -1158,11 +1159,11 @@ for (i_ in 1:imax) {
   if (eppr  >   0) { if (i_ %% eppr == 0) { docat = 1 } }
   if (docat == 1) {
     if (family == "cox") {
-      cat(" Epoch:", i_,"Train Loss: ", lossf[i_], "Train Concordance:", agreef[i_], "\n")
+      cat(" Epoch:", i_,"Train Loss: ", lossf[i_], "Train Concordance:"  , agreef[i_], "\n")
     } else if (family == "binomial") {
       cat(" Epoch:", i_,"Train Loss: ", loss$item(), "Train Concordance:", agreef[i_], "\n")
     }else if (family == "gaussian") {
-      cat(" Epoch:", i_,"Train Loss: ", loss$item(), "Train R-square:", agreef[i_], "\n")
+      cat(" Epoch:", i_,"Train Loss: ", loss$item(), "Train R-square:",  agreef[i_]^2, "\n")
     } else if (family == "multiclass") {
       cat(" Epoch:", i_,"Train Loss: ", loss$item(), "Train Accuracy:", accuracyf[i_], "\n")        
     }

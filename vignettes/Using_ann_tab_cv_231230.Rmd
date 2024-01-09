@@ -1,7 +1,7 @@
 ---
 title: "Using ann_tab_cv() and transfer learning" 
 author: "Walter K. Kremers, Mayo Clinic, Rochester MN"
-date: "28 July 2023"
+date: "30 December 2023"
 output: pdf_document 
 vignette: >
   %\VignetteIndexEntry{Using ann_tab_cv}
@@ -13,27 +13,25 @@ knitr::opts_chunk$set(echo = TRUE)
 library(glmnet)
 library(survival)
 library(Matrix)
-library(rpart)
 library(torch)
-source("~/Documents/LASSO/glmnetr/R/_load_glmnetr_dev_230724.R" , echo=TRUE)
+source("~/Documents/LASSO/glmnetr/R/_load_glmnetr_dev_231230.R" , echo=TRUE)
 ```
 # The functions
-The ann_cv_lin() function fits an artificial neural network model, or neural network (NN) for short, to tabular data.  The network has a simple "sequential" structure with linear components and by default ReLU activations.  It has two hidden layers where the number of terms in each of these two layers can be specified by the user.  Data for input are in a format as with the nested.glmnetr() function.  Models can be fit as generalizations to Cox, logistic or linear regressions.  
+The ann_cv_lin() function fits a neural network (NN) model to tabular data.  The network has a simple "sequential" structure with linear components and by default ReLU activations.  It has two hidden layers where the number of terms in the two layers can be specified by the user.  Data for input are in a format as with the nested.glmnetr() function.  Models can be fit as generalizations to the Cox, logistic or linear regression models.  
 
-We wrote the ann_cv_lin() function in part to better understand how a NN model which begins its "numerical optimization" near a model informed by a linear model might perform compared to a standardly fit NN model.  The program is not optimized to find the "best algorithm" for model fitting so other NN programs may perform better.  Still, it does show how this "transfer learning" from a linear model to the NN can dramatically improve model fit.  Here we  use the relaxed lasso regression model (tuned on lambda and gamma) as the linear model for the transfer learning.  In that both the relaxed lasso and NN models are fit in nested.glmneter() we use this function to fit these transfer learning NN models.  Because nested cross validations can have long run times, as an option, one may fit these models without actually performing the outer nested loop.  
+We originally wrote the ann_cv_lin() function to better understand how a NN model which begins its "numerical optimization" near a model informed by a linear model might perform better than a standardly fit NN model.  The program is not optimized to find the "best algorithm" for model fitting so other NN programs may perform better.  Still, it does show how this "transfer learning" from a linear model to the NN can dramatically improve model fit.  Here we  use the relaxed lasso regression model (tuned on lambda and gamma) as the linear model for the transfer learning.  In that both the relaxed lasso and NN models are fit in nested.glmneter() we use this function to fit these transfer learning NN models.  As nested cross validations can have long run times, as an option, one may fit these models without actually performing the nested part.  
 
-The nested.glmnetr() function also fits lasso, XGBoost and p-value tuned stepwise regression models while using one level of cross validation to inform hyper parameters and another level of cross validation to evaluate model performance, that is it does nested cross validation.  Measures of model performance include deviance and agreement (concordance or R-square).  We also calculate linear calibration coefficients obtained by regressing the original outcome variable on the predicteds in the hold out data of the nested cross validation.  In this formulation the predicteds are taken before any "final" activation so they are analogous to the X * Beta term from a Cox, logistic or linear model.  A linear calibration regression coefficient greater than 1 suggests a bias in the model in under estimating the relative differences in risk between sample units and a coefficient less than 1 suggests a bias in over estimating these relative differences.
+The nested.glmnetr() function also fits lasso, XGBoost and p-value tuned stepwise regression models while using one level of cross validation to inform hyper parameters and another level of cross validation to evaluate model performance, that is it does nested cross validation.  Measures of model performance include, as often done, deviance and agreement (concordance or R-square).  We also provide linear calibration coefficients, the values obtained by regressing the original outcome variable on the predicteds from the different models, including the NNs.  In this formulation the predicteds are taken before any "final" activation so they are analogous to the X * Beta term from a Cox, logistic or linear model.  A regression coefficient from this refit greater than 1 suggests a bias in the model under fitting and a coefficient less than 1 suggests a bias in over fitting.
 
 # Data requirements 
 The data elements for input to the ann_tab_cv() function are basically the same as for the other _glmnetr_ functions like nested.glmenter() and cv.glmneter().  Input data should comprise of 1) a (numerical) matrix of predictors and 2) an outcome variable or variables in (numerical) vector form.  NULL and Na's are not allowed in input matrices or vectors.  For the estimation of the "fully" relaxed parts (where gamma=0) of the relaxed lasso models the package is set up to fit the "gaussian" and "binomial" models using the _stats_ glm() function and Cox survival models using the the coxph() function of the _survival_ pacakge.  When fitting the Cox model or an extension like with NNs the "outcome" variable is interpreted as the "time" variable in the Cox model, and one must also specify 3) an indicator variable for event, again in vector form.  Start times are not at this time accounted for in ann_tab_cv().  Row i of the predictor matrix and element i of the outcome vector(s) are to include the data for the same sampling unit.
 
-# R torch
-For fitting the NNs we use the R torch package.  We refer to the package reference manual and the book https://skeydan.github.io/Deep-Learning-and-Scientific-Computing-with-R-torch/ for general information on this package.  To run the NN models one needs to install the R torch package.  When first loading torch from the R library, the package may prompt the user to allow torch to download some tensor libraries which is necessary to run torch.  The NN torch library generally requires input data to be in torch tensor format, and provides output in torch tensor format as well.  Here we convert data from the usual R format to the torch format so the user does not have to.  In some functions, too, we convert outputs from torch format back to standard R format for the user.
+For fitting the NNs we use the R torch package.  We refer to the package reference manual and the book https://skeydan.github.io/Deep-Learning-and-Scientific-Computing-with-R-torch/ for general information on this package.  To run the NN models one needs to install the R torch package.  When first using the package one may also be prompted to allow torch to download some tensor libraries.  The NN torch library generally requires input data to be in torch tensor format, and provides output in torch tensor format as well.  Here we convert data from the usual R format to the torch format so the user does not have to.  In some functions, too, we convert outputs from torch format back to standard R format for the user.
 
 # An example dataset 
 To demonstrate usage of ann_tab_cv() we first generate a data set for analysis.  The code 
 ```{r Simuate survival data}
-# Simulate data for use in an example Neural Network fit of survival data
+# Simulate data for use in an example relaxed lasso fit of survival data
 # first, optionally, assign seeds for random number generation to get replicable results  
 set.seed(116291949) 
 torch_manual_seed(77421177)
@@ -44,9 +42,9 @@ generates simulated data with interactions (specified by the intr=c(1,0,1,0) ter
 # Extract simulated survival data 
 xs = simdata$xs        # matrix of predictors 
 yt = simdata$yt        # vector of survival times 
-event = simdata$event  # indicator of event vs. censoring from survival data
-y_ = simdata$y_        # vector of quantitative values as an outcome variable 
-yb = simdata$yb        # vector of 0 and 1 values for an outcome variable 
+event = simdata$event  # indicator of event vs. censoring
+y_ = simdata$y_        # vector of quantitative values 
+yb = simdata$yb        # vector of  0 and 1 values 
 ```
 Inspecting the predictor matrix we see 
 ```{r Inspect xs, the design matrix}
@@ -63,41 +61,35 @@ To fit a NN model we can use a simple function call as in
 ## fit a model with some monitoring to the R console 
 set.seed( 67213041 )
 torch_manual_seed( 7221250 )
-ann_tab_cox_ex1 = ann_tab_cv(myxs=xs, myy=yt, myevent=event, family="cox", fold_n=10, 
-                             eppr=-2)  
+ann_tab_cox_ex1 = ann_tab_cv(myxs=xs, myy=yt, myevent=event, family="cox", fold_n=10, eppr=-2)  
 ```
 ```{r values1, include=FALSE}
-imax_ = round(ann_tab_cox_ex1$modelsum[13],digits=0)
-nloss_ = round(ann_tab_cox_ex1$modelsum[18],digits=2)
-nC_ = round(ann_tab_cox_ex1$modelsum[19],digits=2)
+imax_ = round(ann_tab_cox_ex1$modelsum[10],digits=0)
+nloss_ = round(ann_tab_cox_ex1$modelsum[15],digits=2)
+nC_ = round(ann_tab_cox_ex1$modelsum[16],digits=3)
 #imax_
 #nloss_
 #nC_
-cvloss_ = round(ann_tab_cox_ex1$modelsum[15],digits=2)
-cvC_ = round(ann_tab_cox_ex1$modelsum[16],digits=2)
+cvloss_ = round(ann_tab_cox_ex1$modelsum[12],digits=2)
+cvC_ = round(ann_tab_cox_ex1$modelsum[13],digits=3)
 #cvloss_
 #cvC_
-zeroloss_ = round(ann_tab_cox_ex1$modelsum[13],digits=3)
-zeroC_  = round(ann_tab_cox_ex1$modelsum[21],digits=2)
-#zeroC_
-folds_n_ =  round(ann_tab_cox_ex1$modelsum[1],digits=0)
-#ann_tab_cox_ex1$modelsum
 ```
-We see there is little the user needs to specify, which is basically the data one includes when fitting a regular Cox model.  The one piece of input which is unusual is the eppr=-2.  The eppr term has no influence on the model but instructs the program to send some fit information to the R console for monitoring the model fitting process.  Here we see the model loss and concordance calculated using the training data.  From the output generated during model fit we see that for the "starting point" of the model fit the loss function is about 6.2 and concordance 0.5.  The concordance of about 0.5 is what we expect by chance alone, consistent with the fact that when we begin the model fit we are taking a model chosen at random.  After the gradient descent goes through `r imax_` iterations, as suggested by cross validation, the loss based upon the training data goes down to about `r nloss_` and the concordance increases to about `r nC_`, a marked improvement.  This minimal amount of information sent to the R console is achieved by setting eppr=-2.  To avoid any information being sent to the console one may set eppr = -3, or any number less than -2.  Numbers larger than -2 will provide more updates during the model fitting process.
+We see there is little the user needs to specify, which is basically the data one includes when fitting a regular Cox model.  The one piece of input which is unusual is the eppr=-2.  The eppr term has no influence on the model but instructs the program to send some fit information to the R console for monitoring the model fitting process.  Here we see the model loss and concordance calculated using the training data.  From the output generated during model fit we see that for the "starting point" of the model fit the loss function is about 6.2 and concordance 0.5.  The concordance of about 0.5 is what we expect by chance alone, consistent with the fact that when we begin the model fit we are taking a model chosen at random.  After the gradient descent goes through `r imax_` iterations, as suggested by cross validation, the loss based upon the training data goes down to about `r nloss_` and the concordance increases to about `r nC_`, a marked increase.  This minimal amount of information sent to the R console is achieved by setting eppr=-2.  To avoid any information being sent to the console one may set eppr = -3, or any number less than -2.  Numbers larger than -2 will provide more updates during the model fitting process.
 
 To see more information on the model fit we submit     
 ```{r  ann_tab_cv() modelsum }
 ## simple model summary
 ann_tab_cox_ex1$modelsum
 ```
-Here we see that the cross validation is based upon a `r folds_n_` fold split of the data, and the gradient descent algorithm goes through 200 iterations or epochs for each fold of the data.  For this simple model fit we are tuning on number of iterations in the gradient descent fitting.  This is not necessarily the most robust way to fit a model but this simple method is common suggesting its usefulness and it will serve to evaluate how NN model fits might be impacted by using a transfer learning form a linear model to the NN (and discuss below).  Next we see the first hidden layer is a vector of length 16, and the second hidden layer a vector of length 8.  The actv of 1 specifies a ReLU activation function was used, drpot of 0 that no drop out was used, mylr of 0.005 indicates the learning rate used in the optimization.  wd and l1 indicate the L2 and L1 penalties used when model fitting, corresponding to ridge and lasso regression.  Both are 0 here indicating these penalties were not employed.  The "which loss" and "which agree" values indicate the number of epochs when loss is minimized and agreement (concordance or R-square) is maximized in the cross validation and inform the number of epochs to be used in the final model fit using the whole data set.  The CV loss and CV concordance based upon these numbers of fits were about `r cvloss_` and `r cvC_`, while the "naive" loss and concordances calculated using training data were much greater at about `r nloss_` and `r nC_`.  This is as we expect for concordance as the values based upon the training data are associated with a lot of over fitting due to the number of free parameters in the NN model.  The naive deviance of `r nloss_` being larger than the cv deviance of `r cvloss_` may derive from the larger sample size when using the whole data set for calculations.  CV accuracy, the fraction of "correctly classified" is not calculated here and 0 is displayed.  The concordance for the random starting model was about 0.5, as sent to the R console in the example above.  
+Here we see that the cross validation is based upon a 5 fold split of the data, and the gradient descent algorithm goes through 200 iterations or epochs for each fold of the data.  For this simple model fit we are tuning on number of iterations in the gradient descent fitting.  This is not necessarily the most robust way to fit a model but 1) this is meant as simpler example of how to fit NN models and 2) the original purpose of the ann_tab_cv() function was to see how we can improve NN fits by using a transfer learning form a linear model to the NN (and discuss below).  Next we see the first hidden layer is a vector of length 16, and the second hidden layer a vector of length 8.  The actv of 1 specifies a ReLU activation function was used, drpot of 0 that no drop out was used, mylr of 0.005 indicates the learning rate used in the optimization.  wd and l1 indicate the L2 and L1 penalties used when model fitting, corresponding to ridge and lasso regression.  Both are 0 here indicating these penalties were not employed.  The "which loss" and "which agree" values indicate the number of epochs when loss is minimized and agreement (concordance or R-square) is maximized in the cross validation and inform the number of epochs to be used in the final model fit using the whole data set.  The CV loss and CV concordance based upon these numbers of fits were about `r cvloss_` and `r cvC_`, while the "naive" loss and concordances calculated using training data were much greater at about `r nloss_` and `r nC_`.  This is as we expect for concordance as the values based upon the training data are associated with a lot of over fitting due to the number of free parameters in the NN model.  The naive deviance of `r nloss_` being larger than the cv deviance of `r cvloss_` may derive from the larger sample size when using the whole data set for calculations.  CV accuracy, the fraction of "correctly classified" is not calculated here and 0 is displayed.  The concordance for the random starting model was about 0.5, as sent to the R console in the example above.  
 
 We can get more information on the NN model, for example with the command
 ```{r  ann_tab_cv() parmaters }
 ## This shows the tensor (matrix) structure used in the model 
 str(ann_tab_cox_ex1$model$parameters)
 ```
-The first item here, 0.wieght, describes the dimensions of the tensor (matrix) used in transforming the original data to the first hidden layer, here 100 and 16.  While we would usually expect this tensor to be 100 rows tall and 16 columns wide, tensors are often transposed to take greater advantage of machine architecture to speed calculations.  Next we see 0.bias, a tensor with 1 dimension and thus essentially a vector, which contains the intercept terms when transforming from the input data to the first hidden layer.  The 3.weight and 3.bias terms determine the transformation from the first hidden to the second hidden layer.  Here they transform a vector with 16 terms to a vector or 8 terms.  Finally the 6.weight and 6.bias terms determine the transformation from the second hidden layer to the model output of 1 dimension.  To get more model information we can use the command
+The first item here, 0.wieght, describes the dimensions of the tensor (matrix) used in transforming the original data to the fist hidden layer, here 100 and 16.  While we would usually expect this tensor to be 100 rows tall and 16 columns wide, tensors are often transposed to take greater advantage of machine architecture to speed calculations.  Next we see 0.bias, a tensor with 1 dimension and thus essentially a vector, which contains the intercept terms when transforming from the input data to the first hidden layer.  The 3.weight and 3.bias terms determine the transformation from the first hidden to the second hidden layer.  Here they transform a vector with 16 terms to a vector or 8 terms.  Finally the 6.weight and 6.bias terms determine the transformation from the second hidden layer to the model output of 1 dimension.  To get more model information we can use the command
 ```{r  ann_tab_cv model structure }
 ## This shows the general structure of the neural network model
 ann_tab_cox_ex1$model$modules[[1]]
@@ -133,7 +125,7 @@ Here the coefficient of about `r b1_` being greater than 1 suggests the NN model
 cox_fit2 = coxph(Surv(y_, event) ~ pspline(preds))
 termplot(cox_fit2,term=1,se=T,rug=T)
 ```
-The spline fit depicted in this graph does not appear to be consistent with a straight line suggesting the NN is not, in its current form, well calibrated.   
+The spline fit depicted in this graph does not appear to be consistent with a strignt line suggesting the NN is not, in its current form, well calibrated.   
 
 So, why the ann in ann_tab_cv?  Many of the torch functions begin with nn_.  To not confuse our function with a native torch function we begin the name with a different, yet we hope recognizable, letter sequence.  The ann can be thought of as denoting "artificial NN".
 
@@ -141,25 +133,23 @@ So, why the ann in ann_tab_cv?  Many of the torch functions begin with nn_.  To 
 It is very common to start model fits informed by previously fit NNs.  Recognizing that NNs are a generalization of linear models one can start an NN model fit informed by a linear model.  Basically one can chose some of the weights (like betas in a linear regression) and biases (like intercepts) to replicate the informing linear model, and let the other weights and biases be chosen at random as is common, in many contexts usual, when fitting a NN.
 
 # Fitting a neural network model to "tabular" data informed by a linear model using nested.glmnetr() 
-To demonstrate such a NN model fit informed by a linear model we use the nested.glmnetr() function.  This is out of convenience in that the nested.glmenter() function already fits (linear) lasso and NN models and so contains the pieces to combine the two for transfer learning.
+The demonstrate such a NN model fit informed by a linear model we use the nested.glmnetr() function.  This is out of convenience in that the nested.glmenter() function already fits lasso linear and NN models and so contains the pieces to combine the two for transfer learning.
 
 ## An informed NN based upon the Cox regression partial likelihood 
 A NN for "tabular" data informed by a linear model can be fit using nested.glmnetr() 
 ```{r  Fit an informed NN  model }
-## Fit a NN informed with starting point for iterative fit by a lasso fit 
+## Fit an AN informed with staring point for iterative fit by a lasso fit 
 time_start = diff_time()
 nested_cox_fit_ex2 = nested.glmnetr(xs=xs, y_=yt, event=event, family="cox", 
-                    dolasso=1, doann=1, ensemble=c(0,0,0,1), folds_n=c(5,0), 
+                    dolasso=1, doann=1, ensemble=c(0,0,0,1), folds_n=10, do_ncv=0,  
                     seed=c(101844880,882560297),track=0)
 time_last = diff_time(time_start)
 nested_cox_fit_ex2$tuning 
 ```
-Here we see that to fit a NN informed by a lasso model the user need do very little beyond specifying the data for the fit.  In addition to providing the usual data for a Cox model, one specifies doann=1 to "do an ann" model, and ensemble=c(0,0,0,1) where the ensemble[4] = 1 indicates the NN model is to be fit informed by the lasso model.  The folds_n=c(`r folds_n_`,0) specifies there are to be `r folds_n_` folds for CV, and the 0 indicates to not do a nested CV, that is to just do the one layer of CV.  If unspecified, e.g. as in folds_n=`r folds_n_`, a nested CV will be performed allowing one to assess and compare model performances.  How to specify these terms is described in the reference manual.  Here we used diff_time() to show how long the program took (Apple M1) to fit the NN model. 
+Here we see that to fit a NN informed by a lasso model the user need do very little beyond specifying the data for the fit.  In addition to providing the usual data for a Cox model, one specifies doann=1 to "do an ann" model, and ensemble=c(0,0,1) where the ensemble[3] = 1 indicates the NN model is to be fit informed by the lasso model.  The folds_n=10 specifies there are to be 10 folds for CV, and the do_ncv = 0 indicates to not do a nested CV, that is to just do the one layer of CV.  If unspecified, do_ncv defaults to 1 and a nested CV will be performed allowing one to assess and compare model performances.  How to specify these terms is described in the reference manual.  Here we used diff_time() to track how long the program took (Intel(R) i7) to fit the NN model, which is not too long. 
 
 One can get model information about the model fit similar to when using the ann_tab_cv() function, for example 
 ```{r  some summary of the NN }
-summary(nested_cox_fit_ex2)
-nested_cox_fit_ex2
 ## The lasso informed model fit is saved to "object"$ann_fit_4 
 ## The object that provides the lasso information to ann_fit_4 is "object"$cv_glment_fit 
 nested_cox_fit_ex2$ann_fit_4$modelsum
@@ -167,13 +157,10 @@ nested_cox_fit_ex2$ann_fit_4$modelsum
 str(nested_cox_fit_ex2$ann_fit_4$model$parameters)
 ```
 ```{r values3, include=FALSE}
-
-lenz1_ = round( nested_cox_fit_ex2$ann_fit_4$modelsum[3] , digits=0) 
-lenz2_ = round( nested_cox_fit_ex2$ann_fit_4$modelsum[4] , digits=0) 
-lenz1_
-lenz2_
+lenx_ = round( nested_cox_fit_ex2$ann_fit_4$modelsum[4] , digits=0) 
+lenx_
 ```
-From this we also see the number of elements in the two hidden layers are `r lenz1_` and `r lenz2_`.  We can inspect the model structure as in 
+From this we also see the number of predictors to be `r lenx_`.  As we have implemented this lasso informed fit we only include those terms that had non zero coefficients in the tuned relaxed lasso model.  We can inspect the model structure as in 
 ```{r  model NN informed summary 2 }
 # view more information on the NN model structure
 nested_cox_fit_ex2$ann_fit_4$model$modules[[1]] 
@@ -185,7 +172,7 @@ preds = predict_ann_tab(nested_cox_fit_ex2, xs, modl=4)
 preds[1:10]
 ```
 
-Here the first input is the nested.glmnetr() output object, the second the input the data for which we want the predicteds and finally modl=4 means we want the predicted from the model indicated by ensemble[4] = 1 in the call to nested.glmentr().  
+Here the first input is the nested.glmnetr() output object, the second input the data for which we want the predicteds and finally modl=3 means we want the predicted from the model indicated by ensemble[3] = 1 in the call to nested.glmentr().  
 ```{r  ann_tab_cv() linear calibration 2 }
 # ann_tab_cv() lienar calibration
 cox_fit3 = coxph(Surv(yt, event) ~ preds)
@@ -203,11 +190,11 @@ The spline fit is nearer a straight line than was the case for the uninformed NN
 This model is essentialy a generalization of linear regression and can be fit, for example, by 
 ```{r  nested.glminetr() ann_fit_1 predicteds 1 }
 nested_nrm_fit_ex2 = nested.glmnetr(xs=xs, y_=y_, family="gaussian", dolasso=1,
-        seed=c(17820414,95337508), doann=1, ensemble=c(1,0,0,1), folds_n=c(10,0), track=-1)
+        seed=c(17820414,95337508), doann=1, ensemble=c(1,0,0,1), folds_n=10, do_ncv=0, track=-1)
 ```
 We can inspect numerically the fit by 
 ```{r  nested.glminetr() ann_fit_1 predicteds 2 }
-preds = predict_ann_tab(nested_nrm_fit_ex2, xs, 4) 
+preds = predict_ann_tab(nested_nrm_fit_ex2, xs) 
 glm_fit1 <- glm(y_ ~ preds, family="gaussian")
 summary(glm_fit1)
 ```
@@ -225,13 +212,13 @@ An example NN fit based upon the logistic model frame work is
 set.seed(  4695289  )
 torch_manual_seed(  24260321  )
 nested_bin_fit_ex4 = suppressWarnings( nested.glmnetr(xs=xs, y_=yb, family="binomial", 
-                     dolasso=1, doann=1, ensemble=c(1,0,0,1), folds_n=c(5,0), 
+                     dolasso=1, doann=1, ensemble=c(1,0,1,0), folds_n=5, do_ncv=0,  
                      track=0) )
 ## print a short summary 
 nested_bin_fit_ex4
 ```
 ```{r values4, include=FALSE}
-lenx_ = round( nested_bin_fit_ex4$ann_fit_4$modelsum[4] , digits=0) 
+lenx_ = round( nested_bin_fit_ex4$ann_fit_3$modelsum[4] , digits=0) 
 lenx_
 ```
 
@@ -245,10 +232,10 @@ simdata=glmnetr.simdata(nrows=1011, ncols=100, beta=NULL, intr=c(1,0,0,1))
 ensemble=c(1,0,0,1) ;
 doann=list(epochs=200, epochs2=400, mylr=0.002, mylr2=0.001, eppr=-3, eppr2=-3, 
           lenz1=16, lenz2=8, actv=1, drpot=0, wd=0, wd2=0, L1=0, L12=0, 
-          fold_n=5, minloss=0, gotoend=0) 
+          fold_n=0, minloss=0, gotoend=0) 
 nested_nrm_fit_ex5 = nested.glmnetr(xs=simdata$xs,y_=simdata$y_,
                     family="gaussian",dolasso=1,doann=doann,
-                    ensemble=ensemble,folds_n=c(5,1),steps_n=40,track=0)
+                    ensemble=ensemble,folds_n=3,steps_n=40,track=0)
 ## print a short summary 
 nested_nrm_fit_ex5
 ```
@@ -262,7 +249,7 @@ rsqr2_
 rsqr3_ = round(mean(nested_nrm_fit_ex5$ann.agree.cv[,1]), digits=2)
 rsqr3_
 ```
-where the NN model with an R-square of `r rsqr1_` seems to perform similar to the relaxed lasso models with an R-squares of about `r rsqr2_`.  Further, the NN fit without this transfer of information from the lasso model with it's R-square of `r rsqr3_`, did not perform nearly as well as the lasso informed NN or the lasso model itself.  This shows the direct benefit of this transfer learning of the information from the linear model when fitting NN models.  It is not the NN itself that it is performing competitivley with the lasso model but the NN model fit in conjunction with the lasso model information.  We can further inspect performances with the summary function as in 
+where the NN model with an R-square of `r rsqr1_` seems to perform similar to the lasso models with an R-squares of about `r rsqr2_`.  Further, the NN fit without this transfer of information from the lasso model with it's R-square of `r rsqr3_`, did not perform nearly as well as the lasso informed NN or the lasso model itself.  This shows the direct benefit of this transfer learning of the information from the linear model when fitting NN models.  It is not the NN itself that it is performing competitivley with the lasso model but the NN model fit in conjunction with the lasso model information.  We can further inspect performances with the summary function as in 
 ```{r  print relaxed lasso model informed by cross validation }
 # print nested CV  concordances 
 summary( nested_nrm_fit_ex5 )
@@ -274,7 +261,7 @@ For this example we deliberately simulated data where there are interaction or p
 We do not show more simulation results recognizing that one can typically show one model to be better than the others by simulating the right data set.  Instead others can run the nested.glmnetr() function on their own data sets, potentially historical data sets if at hand, and see which models tend to perform better in their setting.
 
 # Internal implementaiton of the "transfer learning" 
-The NN model informed by the relaxed lasso model when ensemble[4]=1 adds a column of predicteds to the input matrix in the nested.glmnetr() call, and then extends the hidden layers to carry the positive and negative part of the lasso predicteds through to the final model output.  It also treats the weights and biases for this new column so that they remain the same while the ohter weights and biases are updated according to the gradient descent algorithm.  A second option set by ensemble[2] = 1 appends the lasso predicteds to the xs predictor matrix and treats this similar to the other features or input variables.  The NN model informed by the relaxed lasso model when ensemble[3]=1 fits like with ensemble[4] = 1 but alows the weights and biases to update during the iterative fit.  The models fit for ensemble[i+4]=1 are like those fit for ensemble[i]=1 except only those variables with non-zero coefficients in the lasso model are included in the input data set. 
+The NN model informed by the relaxed lasso model when ensemble[3]=1 adds a column of predicteds to the input matrix in the nested.glmnetr() call, and then extends the hidden layers to carry the positive and negative part of the lasso predicteds through to the final model output.  It also sets weights and biases for this new column so that there is at the beginning of the model fitting process no communication between the lasso predicteds and the other predictor variables.  A second option set by ensemble[2] = 1 appends the lasso predicteds to the xs predictor matrix and treats this similar to the other input variables.  The NN model informed by the relaxed lasso model when ensemble[4]=1 fits like with ensemble[3] = 1 but reassigns weights and biases at each optimization epoch.  The models fit for ensemble[i+4]=1 are like those fit for ensemble[i]+1 except only those variables with non-zero coefficients in the lasso model are included in the input dataset. 
 
 Before fitting the NN models the predictor variables are standardized to have mean 0 and standard deviation of 1.  This is accounted for when deriving predicteds.  This is important when using L1 (lasso) or L2 (ridge or weight decay) penalties to assure the models are not scale dependent.  This is also done in the _glmnet_ package functions.  
 
@@ -282,7 +269,7 @@ Before fitting the NN models the predictor variables are standardized to have me
 Just as one can assign a subset of the bias and weight (initial) values for the NN to replicate a linear model, and thereby improve model fit, one can also define another subset of the bias and weight values to replicate linear splines.  One attractive feature of the NN numerical optimization is that the bias terms dictating where the spline "knots" are updated during model fit to improve fit, that is they need not be fixed in advance of the fitting.      
 
 # Transfer learning and the gradient boosting machine
-Just as we have informed the NN model with the results from a relaxed lasso model fit we an do the same with gradient boosting machines (GBM) by either adding the lasso predicted as an additional feature (predictor) or including it as an offset.  A GBM is fit by setting doxgb=1 in the nested.glmnetr() call, and the tranfer lerning model governed by using the ensemble parameter like wiht the NN. Results are similar but different from those for the NN models.  For our data sets the GBMs took much longer to run because of our search algorithm to find a better hyperparameter set.  
+Just as we have informed the NN model with the results form a relaxed lasso model fit we an do the same with gradient boosting machines by either adding the lasso predicted as an additional predictor or including it as an offset.  This is done by setting doxgb=1 in the nested.glmnetr() call. Results are similar but different from those for the NN models.  For our data sets the GBMs took much longer to run since we used a search algorithm to find a "best" hyperparameter set.  
 
 
 

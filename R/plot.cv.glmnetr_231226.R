@@ -46,8 +46,7 @@
 plot.glmnetr = function(x, gam=NULL, lambda.lo=NULL, title=NULL,comment=TRUE, ...) {
   object = x 
   if (inherits(object,"nested.glmnetr")) {
-    tuning  = object$tuning
-    dolasso = tuning[4]
+    dolasso = object$fits[1]
     if (dolasso==1) { 
       object = object$cv_glmnet_fit 
     } else { 
@@ -348,8 +347,7 @@ plot.cv.glmnetr = function(x, gam=NULL, lambda.lo=NULL, plup=0, title=NULL, coef
 #' 
 plot.nested.glmnetr = function(x, gam=NULL, lambda.lo=NULL, title=NULL, plup=0, coefs=FALSE, comment=TRUE, ... ) {
   object = x 
-  tuning  = object$tuning
-  dolasso = tuning[4]
+  dolasso = object$fits[1]
   if (dolasso==1) {
     cv_glmnetr_fit = object$cv_glmnet_fit
     plot(cv_glmnetr_fit, gam=gam, lambda.lo=lambda.lo, plup=plup, title=title, coefs=coefs,comment=comment, ... ) 
