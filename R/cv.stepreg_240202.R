@@ -16,7 +16,13 @@
 #' @param method   method for choosing model in stepwise procedure, "loglik" or "concordance".
 #' Other procedures use the "loglik".     
 #' @param family   model family, "cox", "binomial" or "gaussian" 
+#' @param seed a seed for set.seed() to assure one can get the same results twice.  If NULL 
+#' the program will generate a random seed.  Whether specified or NULL, the seed is stored in the output
+#' object for future reference.  
 #' @param foldid a vector of integers to associate each record to a fold.  The integers should be between 1 and folds_n.
+#' @param stratified folds are to be constructed stratified on an indicator outcome 
+#' 1 (default) for yes, 0 for no.  Pertains to event variable for "cox" and y_ for 
+#' "binomial" family. 
 #' @param track indicate whether or not to update progress in the console.  Default of
 #' 0 suppresses these updates.  The option of 1 provides these updates.  
 #' In fitting clinical data with non full rank design matrix we have found some 
@@ -45,18 +51,26 @@
 #' cv.stepreg.fit = cv.stepreg(xs, NULL, y_, event, steps_n=10, folds_n=3, track=0)
 #' summary(cv.stepreg.fit)
 #' 
-cv.stepreg = function(xs_cv, start_cv=NULL, y_cv, event_cv, steps_n=0, folds_n=10, method="loglik", family="cox", foldid=NULL,track=0) {
+cv.stepreg = function(xs_cv, start_cv=NULL, y_cv, event_cv,  family="cox", 
+                      steps_n=0, folds_n=10, method="loglik",
+                      seed=NULL, foldid=NULL, stratified=1, track=0) {
 
   xs_cv_ncol = dim(xs_cv)[2]    
   nobs_cv = dim(xs_cv)[1]   
+  
+  folds_n=max(folds_n, 3)
+  
   if (!is.null(foldid)) {
     folds_index_cv = foldid 
   } else {
-    folds_index_cv = sample( rep( 1:folds_n , ceiling(nobs_cv/folds_n) )[ 1:nobs_cv ] , nobs_cv ) 
+#    folds_index_cv = sample( rep( 1:folds_n , ceiling(nobs_cv/folds_n) )[ 1:nobs_cv ] , nobs_cv ) 
+    if  (is.null(seed))   { seed = round(runif(1)*1e9) 
+    } else if (seed == 0) { seed = round(runif(1)*1e9) 
+    }
+    set.seed(seed) 
+    folds_index_cv = get.foldid(y_cv, event_cv, family, folds_n, stratified) 
   }
 
-  folds_n=max(folds_n, 3)
-  
   if (steps_n==0) { steps_n=xs_cv_ncol } 
   steps_n = min(steps_n, xs_cv_ncol)
   
@@ -426,7 +440,8 @@ cv.stepreg = function(xs_cv, start_cv=NULL, y_cv, event_cv, steps_n=0, folds_n=1
                      steploglikcv.df = steploglikcv.df, stepagreecv.df =stepagreecv.df, 
                      steploglikcv.p  = steploglikcv.p , stepagreecv.p  =stepagreecv.p , step_dfcv.p=step_dfcv.p, 
                      cvfit.df=cvfit.df, cvfit.p=cvfit.p,  
-                     stepreg.fit.all.best=stepreg.fit.all.best , pvalue=pvalue)            ## stepreg.fit.all=stepreg.fit.all,
+                     stepreg.fit.all.best=stepreg.fit.all.best , pvalue=pvalue,
+                     seed=seed, foldid=folds_index_cv)            ## stepreg.fit.all=stepreg.fit.all,
   class(returnlist) <- c("cv.stepreg")
   return( returnlist ) 
 }

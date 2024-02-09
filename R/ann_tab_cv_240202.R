@@ -3,54 +3,6 @@
 ##########################################################################################################
 ##########################################################################################################
 
-#' Generate foldid's by factor levels
-#'
-#' @param event the outcome variable in a vector identifying the different potential 
-#' levels of the outcome
-#' @param fold_n the numbe of folds to be constructed
-#'
-#' @return foldid's in a vector the same length as event
-#'  
-#' @export
-#'
-factor.foldid = function(event, fold_n=10) { 
-  nobs    = length(event)
-  nlevels = length(table(event))
-  if (nlevels == 1) {
-    if (is.factor(levels)) { levels = as.numeric(levels) } 
-#    foldid = sample( rep( 1:fold_n , ceiling(nobs/fold_n) )[ 1:nobs ] , nobs ) 
-  } else if (nlevels == 2) {
-    if (length(names(table(event))) == 2) { 
-      event = as.factor(event) 
-    }
-  }
-  if (is.factor(event)) {
-    event_idm = matrix(rep(0,nobs*nlevels),nrow=nlevels,ncol=nobs)
-    for (i_ in c(1:nlevels) ) { 
-      event_idm[i_,] = 1*(event==levels(event)[i_]) 
-    }
-    event_idm
-    nobslvl = rowSums(event_idm)
-    nobslvl 
-    for (i_ in c(1:nlevels) ) { 
-      if (nobslvl[i_] < fold_n) {
-        cat(paste("nlevels = ", nlevels, "i_ = ", i_, " nobslvl[i_] = " , nobslvl[i_] ))
-        nobslvl[i_] = 1 
-      }
-      rep(1:fold_n, ceiling(nobslvl[i_]/fold_n)) 
-      foldidi = sample( rep( 1:fold_n , ceiling(nobslvl[i_]/fold_n) )[ 1:nobslvl[i_] ] , nobslvl[i_] ) 
-      length(foldidi)
-      sum((event_idm[i_,]==1))
-      event_idm[i_,][(event_idm[i_,]>=1)] = foldidi 
-      event_idm
-    }
-    foldid = colSums(event_idm)
-  } else {
-    foldid = sample( rep( 1:fold_n , ceiling(nobs/fold_n) )[ 1:nobs ] , nobs ) 
-  }
-  return(foldid)
-}
-
 ################################################################################
 ################################################################################
 
@@ -397,6 +349,7 @@ prednn_tl = function (lassomod, nnmodel, datain, lasso=1) {
 ann_tab_cv = function(myxs, mystart=NULL, myy, myevent=NULL, myoffset=NULL, family="binomial", fold_n=5, 
                       epochs=200, eppr=40, lenz1=16, lenz2=8, actv=1, drpot=0, mylr=0.005, wd=0, l1=0, 
                       lasso=0, lscale=5, scale=1, resetlw=1, minloss=1, gotoend=0, seed=NULL, foldid=NULL) { 
+stratified = 1 
 
 if (!(family %in% c("cox", "binomial", "gaussian"))) { 
   cat( "\n  ***** ann_cd_lin() is only set up for famlies cox, binomial or gaussian *****\n")
@@ -480,31 +433,35 @@ if (is.null(foldid)) {
     seedr = seed[1]
     seedt = seed[2]
   }
+  ##----------------------------------------------------
   if (is.null(seedr)) { seedr = round(runif(1)*1e9) 
   } else if (is.na(seedr))  { seedr = round(runif(1)*1e9) } 
+  ##----------------------------------------------------
   if (is.null(seedt)) { seedt = round(runif(1)*1e9) 
   } else if (is.na(seedt))  { seedt = round(runif(1)*1e9) } 
-  seed = c(seedr=seedr, seedt=seedt) 
+  ##----------------------------------------------------
+  set.seed(seedr)                                                              ##<<=========
+  foldid = get.foldid(myy, myevent, family, fold_n, stratified) 
+#  print(table(foldid))
+  ##----------------------------------------------------
 } else {
   if (is.null(seed)) {
     seedr = NA 
     seedt = round(runif(1)*1e9)
+  } else {
+    seedr = seed[1]
+    seedt = seed[2]
   }
-  seedr = seed[1]
-  seedt = seed[2]
-  if (is.null(seedt)) { seedt = round(runif(1)*1e9) 
-  } else if (is.na(seedt))  { seedt = round(runif(1)*1e9) } 
-  seed = c(seedr=seedr, seedt=seedt) 
+  if (is.null(seedt)) { 
+    seedr = 0 
+    seedt = round(runif(1)*1e9) 
+  } else if (is.na(seedt))  { 
+    seedr = 0 
+    seedt = round(runif(1)*1e9) 
+  } 
 }
-
+seed = c(seedr=seedr, seedt=seedt) 
 torch_manual_seed( seedt ) 
-
-if (is.null(foldid)) {
-  ##--  set up the folds for the cross validation --------------------------------
-  if   (family == "binomial") {  foldid = factor.foldid(myy    , fold_n)  ;  table(myy    , foldid) ;
-  } else if (family == "cox") {  foldid = factor.foldid(myevent, fold_n)  ;  table(myevent, foldid) ;  
-  } else {foldid = sample( rep( 1:fold_n , ceiling(nobs/fold_n) )[ 1:nobs ] , nobs ) ;  table(foldid)  ; }
-}
 
 if        (actv == 1) { act_fn = nn_relu()      ; actvc = "relu" 
 } else if (actv == 2) { act_fn = nn_gelu()      ; actvc = "gelu" 
@@ -1196,7 +1153,7 @@ parmfinal= list(weight0_r = weight0_r, weight3_r = weight3_r, weight6_r = weight
                 bias0_r=bias0_r, bias3_r=bias3_r, bias6_r=bias6_r)
 
 rlist = list(model=model, modelsum=modelsum, modelsumc=modelsumc, parminit=parminit, 
-             parmfinal=parmfinal, losslog=losslog, seed=seed )
+             parmfinal=parmfinal, losslog=losslog, seed=seed, foldid=foldid )
 
 class(rlist) <- c("ann_tab_cv")
 
@@ -1298,17 +1255,8 @@ ann_tab_cv_best = function(myxs, mystart=NULL, myy, myevent=NULL, myoffset=NULL,
   
   if (is.null(foldid)) { 
     set.seed(seedr) 
-    nobs = length(myy)
-    if (stratified >= 1) {
-      if   (family == "binomial") {  foldid = factor.foldid(myy    , fold_n)  ;  table(myy    , foldid) ;
-      } else if (family == "cox") {  foldid = factor.foldid(myevent, fold_n)  ;  table(myevent, foldid) ;  
-      } else {foldid = sample( rep( 1:fold_n , ceiling(nobs/fold_n) )[ 1:nobs ] , nobs ) ;  
-      }
-      table(foldid)  ; 
-    } else {
-      foldid = sample( rep( 1:fold_n , ceiling(nobs/fold_n) )[ 1:nobs ] , nobs ) ; 
-    }
-  }
+    foldid = get.foldid(myy, myevent, family, fold_n, stratified) 
+  } 
   
   if (eppr >= 0) { cat("\n Starting fit 1, for best of ", bestof ," model fits\n") }
   modeltemp = ann_tab_cv(myxs, mystart, myy, myevent, myoffset, family, fold_n, 

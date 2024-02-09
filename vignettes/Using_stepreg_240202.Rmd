@@ -1,7 +1,7 @@
 ---
 title: "Using stepreg"
 author: "Walter K. Kremers, Mayo Clinic, Rochester MN"
-date: "30 December 2023" 
+date: "2 February 2024" 
 output: pdf_document 
 vignette: >
   %\VignetteIndexEntry{Using stepreg}
@@ -13,7 +13,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(glmnet)
 library(survival)
 library(Matrix)
-source("~/Documents/LASSO/glmnetr/R/_load_glmnetr_dev_231230.R" , echo=TRUE)
+source("~Kremers/Documents/Rpackages/glmnetr_supl/_load_glmnetr_vig_240202.R" , echo=TRUE)
 ```
 # The Package
 |     The stepreg() and cv.stepreg() funcitons in the _glmnetr_ package were written for convenience and stability as opposed to speed or broad applicability.  When fitting lasso models we wanted to compare these to standard stepwise regression models.  Keeping a more modern approach we tune by either number of terms included in the model (James, Witten, Hastie and Tibshirani, An Introduction to Statistical Learning with applications in R, 2nd ed., Springer, New York, 2021) or by the p critical value for  model inclusion, as this too is a common tuning parameter when fitting stepwise models.  
@@ -98,4 +98,7 @@ t( betas[1:10,] )
 # get predicteds ...
 preds = predict(nested.gau.fit$cv.stepreg.fit,xs)
 t( preds[1:8,] )
+```
+```{r save1, include=FALSE}
+save( cv.stepwise.fit , nested.gau.fit , file="~Kremers/Documents/Rpackages/glmnetr_supl/using_stepreg_outputs_240126.RLIST" ) 
 ```

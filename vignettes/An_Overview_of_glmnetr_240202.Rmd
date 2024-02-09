@@ -1,7 +1,7 @@
 ---
 title: "An Overview of glmnetr"
 author: "Walter K. Kremers, Mayo Clinic, Rochester MN"
-date: "30 December 2023"
+date: "2 February 2024"
 output: pdf_document 
 vignette: >
   %\VignetteIndexEntry{An Overview of glmnetr}
@@ -10,17 +10,7 @@ vignette: >
 ---
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-library(glmnet)
-library(survival)
-library(Matrix)
-library(xgboost)
-library(smoof)
-library(mlrMBO)
-library(ParamHelpers)
-library(randomForestSRC)
-library(rpart)
-library(torch)
-source("~/Documents/LASSO/glmnetr/R/_load_glmnetr_dev_231230.R" , echo=TRUE)
+source("~Kremers/Documents/Rpackages/glmnetr_supl/_load_glmnetr_vig_240202.R" , echo=TRUE)
 ```
 # The Package 
 |   The nested.glmnetr() function of the 'glmnetr' package allows the user to fit multiple machine learning models on a common dataset with a single function call allowing an efficient comparison of different modeling approaches.  Additionally this function uses cross validation to estimate model performances for these different modeling approaches.  As most of these machine learning models choose hyperparameters informed by a cross validation or some sort of out of bag (OOB) performance measure, the nested.glmnetr() function provides model performance estimates based upon either a nested cross validation or analogous approach.  Measures of model performance include concordances for survival time and binomial outcomes and R-squares for quantitative numeric outcomes, as well as deviances and linear calibration coefficients.  Too often one sees performance reports including things like sensitivity, specificity or F1 scores in absence of any consideration of calibration.  Whereas linear calibration does not exhaust the needs of calibration considerations, it does provide a first high level insight.  As the purpose of the function is to not only describe performance but to derive the models, each of the fitted models as well as performance measures are stored in a single output object.
@@ -29,7 +19,7 @@ source("~/Documents/LASSO/glmnetr/R/_load_glmnetr_dev_231230.R" , echo=TRUE)
 
 |   As with the 'glmnet' package, tabular and graphical summaries can be generated using the summary and plot functions.  Use of the 'glmnetr' has many similarities to the 'glmnet' package and the user may benefit by a review of the documentation for the 'glmnet' package <https://cran.r-project.org/package=glmnet>, with the "An Introduction to 'glmnet'" and "The Relaxed Lasso" being especially helpful in this regard.
 
-|   For some datasets, for example when the design matrix is not of full rank, 'glmnet' may have very long run times when fitting the relaxed lasso model, from our experience when fitting Cox models on data with many predictors and many patients, making it difficult to get solutions from either glmnet() or cv.glmnet().  This may be remedied with the 'path=TRUE' option when calling cv.glmnet().  This option is not described in the 'glmnet' Reference Manual but is described in the 'glmnet' "The Relaxed Lasso" vignette.  In the 'glmnetr' package we provide a similar workaround when fitting the non penalized relaxed model where gamma=0.
+|   For some datasets, for example when the design matrix is not of full rank, 'glmnet' may have very long run times when fitting the relaxed lasso model, from our experience when fitting Cox models on data with many predictors and many patients, making it difficult to get solutions from either glmnet() or cv.glmnet().  This may be remedied with the 'path=TRUE' option when calling cv.glmnet().  In the 'glmnetr' package we always take an approach like that of path=TRUE.
 
 |   When fitting not a relaxed lasso model but an elastic-net model, then the R-packages 'nestedcv' <https://cran.r-project.org/package=nestedcv>, 'glmnetSE' <https://cran.r-project.org/package=glmnetSE> or others may provide greater functionality when performing a nested CV. 
 |     
@@ -58,7 +48,7 @@ event = simdata$event  # indicator of event vs. censoring
 Inspecting the predictor matrix we see 
 ```{r Inspect xs, the design matrix}
 # Check the sample size and number of predictors
-print(dim(xs)) 
+cat(dim(xs)) 
 # Check the rank of the design matrix, i.e. the degrees of freedom in the predictors 
 rankMatrix(xs)[[1]]
 # Inspect the first few rows and some select columns 
@@ -147,10 +137,9 @@ nested.gau.fit = suppressWarnings(nested.glmnetr(xs,NULL,yg,NULL,family="gaussia
       seed=219301029, track=0)) 
 summary(nested.gau.fit)
 ```
+|   Here we see a set of machine learning models evaluated together.  Information displayed is similar to what we saw before with the main difference being that for many ML models there are no "number of non-zero terms" like for the lasso.  All evaluations are based upon the same folds for the outer loop of the cross validation.  Those models informed by cross validation in identification of hyperparameters, i.e. lasso, neural network and stepwise, use the same folds in the inner cross validation making the comparisons of model performance between models more stable.  For the models based upon other random splittings, i.e. random forest, the same seed is set using set.seed() before each model call facilitating replicability of results.
 
-|   Here we see a set of machine learning models evaluated together.  Information displayed is similar to what we saw before with the main difference being that for many ML models there are no "number of non-zero terms" like for the lasso.  All evaluations are based upon the same folds for the outer loop of the cross validation.  Those models informed by cross validation in identification of hyperparameters, i.e. lasso, neural network and stepwise, use the same folds in the inner cross validation making the comparisons of model performance between models more stable.  For the models based upon other random splitings, i.e. XGB, random forest and RPART, the same seed is set using set.seed() before each model call facilitating replicability of results.
-
-|   The indiviudal model fits are all captured in the nested.glmnetr() output object with names like cv_glmnet_fit, xgb.simple.fit, xgb.tuned.fit, rf.fit, cv.stepreg.fit and ann_fit_X with X corresponding to the ensemble designation.  cv_glmnet_fit has a similar yet different format to that of cv.glmnet() by including further fit information.  The XGB outputs are direct outputs from 'xgboost' xgb.train(). The rf.fit object contains the output from rfsrc() in the object rf.fit$rf_tuned along with other information used for tuning.  The ann_fit_X objects are derived using the R 'torch' package and take on their own format for logistical reasons.  See the 'Using ann_tab_cv' vignette.  Cross validation information form the individual outer folds are are contained in datasets like xx.devian.cv, xx.lincal.cv, xx.agree.cv for further processing by the summary() function or by the user.  For example  
+|   The indiviudal model fits are all captured in the nested.glmnetr() output object with names like cv_glmnet_fit, xgb.simple.fit, xgb.tuned.fit, rf.fit, cv.stepreg.fit and ann_fit_X with X corresponding to the ensemble designation.  cv_glmnet_fit has a similar yet different format to that of cv.glmnet() by including further fit information.  The XGB outputs are essentially direct outputs from 'xgboost' xgb.train(), but with added information regarding the seed or fold used in the fit. The rf.fit object contains the output from rfsrc() in the object rf.fit$rf_tuned along with other information used for tuning.  The ann_fit_X objects are derived using the R 'torch' package and take on their own format for logistical reasons.  See the 'Using ann_tab_cv' vignette.  Cross validation information form the individual outer folds are are contained in datasets like xx.devian.cv, xx.lincal.cv, xx.agree.cv for further processing by the summary() function or by the user.  For example  
 ```{r  Get R_square perforamnce summary from nested.glmnetr call }
 # Manually calculate CV R_square for lasso models 
 corr.cv = nested.gau.fit$lasso.agree.cv
@@ -160,8 +149,12 @@ R_square
 ```
 These numbers are consistent witht the output from the summary() call.
 
-|   In this and the previous examples using nested.glmnetr() we specified values for seed.  This assures that the user can test the program with their own installation and get the same results.  Typically in practice one can leave the seed unspecified and the program will generate its own seeds and store these in the output object (object$seed) for future reference.  One should be cautious of using set.seed() in one's own code as this too will effect the pseudo randomness used in the ML calculations and could unwantingly yield identical results when pseudo independent runs are intended.  
+|   In this and the previous examples using nested.glmnetr() we specified values for seed.  This assures that the user can test the program with their own installation and get the same results.  Typically in practice one can leave the seed unspecified and the program will generate its own seeds and store these in the output object (object$seed) for future reference.  One should be cautious of using set.seed() in one's own code as this too will effect the pseudo randomness used in the ML calculations and could unwantingly yield identical results when pseudo independent runs are intended.
 
+|   An abreviated summary can be gotten using the print() function as in
+```{r print nested.glmnetr() object }
+nested.gau.fit
+```
 # Further model assessment
 |   Further model assessment can performed based upon the predicteds from the predict functions.  For example, ene can model the outcomes based upon a spline for the X*Beta hats from the predicteds.  This may help to understand potential nonlinearities in the model, but may also give inflated hazard ratios.    
 ```{r Calibration plot}
@@ -174,4 +167,21 @@ fit1 = coxph(Surv(y_, event) ~ pspline(xb.hat))
 summary(fit1)
 termplot(fit1,term=1,se=TRUE)
 ```
-From this spline fit we see the predicteds are approximately linear with the log hazard ratio. 
+From this spline fit we see the predicteds are approximately linear with the log hazard ratio.
+
+# Model replicability and model comparisons
+|   To facilitate reproducible results the nested.glmnetr() function stores the seeds used to generate the pseudo random samples used for assigning observations to folds in the outer loop, as well as the fold ids themselves, for all models.  Additionally, the program stores the seeds when generating the folds in the inner loop for lasso, XGB, neural network and stepwise regressions as well as the seeds used when generating the bootstrap samples for the random forest models.  This allows one to reproduce the results from any call to nested.glmnetr().  Because the seeds are saved for folds both in the inner and outer loop, results can be reproduced even when rerunning an analysis for a single model.  If we did not save and manage the seeds the user might have to run all models included in an earlier run to verify or inspect a single model fit. 
+
+|   For the outer loop we use the same folds for all models where hyperparameters are informed by cross validation.  Within each iteration of the inner loop we also use the same folds when fitting the different models.  Folds for the different iterations are quasi independent.  Using the same folds across models controls for some of the variability in the model performance estimates due to the randomness in the choice of folds, which should reduce variability in the differences in performance estimates between different models.  nested.glmnetr() stores the model performance measures from each iteration of the outer loop allowing calculation of means and standard deviations (SD) for each model performance measure, as well as differences paired on each fold left out for model derivation in the outer loop.  Because of dependencies between the different model fits from a CV loop, some express concern about the accuracy of the SDs.  Still, others use these SDs routinely.  We expect any dependencies at least between the paired differences should be minimal and reasonable in approximation.  This intuition is supported by informal simulations.  The reader is invited to perform similar studies using the type of data they encounter.
+
+|   A simple comparison of model perfoamances based upon agreement can be done as in the example
+```{r compare agreement}
+# compared correlations between different models 
+glmnetr.compcv(nested.gau.fit)
+```   
+Note, from Jensens' inequality we expect the sample R-squares to be more biased sample sample R 's (correlation), and thus calculate the CV estimate for R-square as the (average R from the CV folds) squared instead of average (R-squared from the CVs folds).  We also compare agreements for the guassian model by comparing correlations by default, instead of R-squares.
+
+|   The CV calculated agreements (concordance or correlation) are recorded in the nested.glmntr() output object with names like $lasso.agree.cv, xgb.agree.cv, etc.  Comparisons not provided by glmnetr.compcv() can be calculated from these stored CV data.  
+```{r save1, include=FALSE}
+save( nested.cox.fit , nested.gau.fit , file="~Kremers/Documents/Rpackages/glmnetr_supl/using_glmnetr_outputs_240202.RLIST" ) 
+```

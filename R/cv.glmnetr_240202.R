@@ -23,9 +23,11 @@
 #' @param fine use a finer step in determining lambda.  Of little value unless one 
 #' repeats the cross validation many times to more finely tune the hyperparameters.  
 #' See the 'glmnet' package documentation.  
-#' @param seed a seed for set.seed() to assure one can get the same results twice.  If NULL 
-#' the program will generate a random seed.  Whether specified or NULL, the seed is stored in the output
-#' object for future reference.  
+#' @param seed a seed for set.seed() so one can reproduce the model fit.  If 
+#' NULL the program will generate a random seed.  Whether specified or NULL, the 
+#' seed is stored in the output object for future reference.  Note,
+#' for the default this randomly generated seed depends on the seed in memory at that 
+#' time so will depend on any calls of set.seed prior to the call of this function.  
 #' @param foldid a vector of integers to associate each record to a fold.  The integers should be between 1 and folds_n.
 #' @param track indicate whether or not to update progress in the console.  Default of
 #' 0 suppresses these updates.  The option of 1 provides these updates.  In fitting 
@@ -112,17 +114,11 @@ cv.glmnetr = function( xs, start=NULL, y_, event=NULL, family="gaussian", lambda
   one     = c( rep(1, nobs) )
   
   if (is.null(foldid)) { 
-    if (is.null(seed)) { seed = round(runif(1)*1e9) }
-    set.seed(seed) 
-    if (stratified >= 1) {
-      if (family == "cox") { foldid = glmnetr.foldid(folds_n, event) 
-      } else if (family == "binomial") { foldid = glmnetr.foldid(folds_n, y_) 
-      } else {
-        foldid = sample( rep( 1:folds_n , ceiling(nobs/folds_n) )[ 1:nobs ] , nobs ) 
-      }
-    } else {
-      foldid = sample( rep( 1:folds_n , ceiling(nobs/folds_n) )[ 1:nobs ] , nobs ) 
+    if  (is.null(seed))   { seed = round(runif(1)*1e9) 
+    } else if (seed == 0) { seed = round(runif(1)*1e9) 
     }
+    set.seed(seed) 
+    foldid = get.foldid(y_, event, family, folds_n, stratified) 
   }
   
   ##============================================================================  initial panalized fit 
@@ -538,8 +534,8 @@ cv.glmnetr = function( xs, start=NULL, y_, event=NULL, family="gaussian", lambda
   returnlist = list( lambda=lambda, cvm=cvm.dev[gamma_n,], cvsd=cvsd.dev[gamma_n,], cvup=cvup.dev[gamma_n,], cvlo=cvlo.dev[gamma_n,], nzero=nzero, 
                      call=call, name=name, glmnet.fit=glmnet.fit, 
                      lambda.min=lambda.min.g1, lambda.1se=lambda.1se.g1, index=index.g1, relaxed=relaxed_base,
-                     cv.glmnet.fit.g1=cv.glmnet.fit.g1, xscolumns= dim(xs)[2], xsdf=rankMatrix(xs)[1], seed=seed, folds_n=folds_n, foldid=foldid, 
-                     sample = sample )
+                     cv.glmnet.fit.g1=cv.glmnet.fit.g1, xscolumns= dim(xs)[2], xsdf=rankMatrix(xs)[1], 
+                     folds_n=folds_n, seed=seed, foldid=foldid, sample = sample )
   class(returnlist) = c("cv.glmnetr") 
   return(returnlist) 
 }
@@ -1224,40 +1220,88 @@ diff_time = function(time_start=NULL, time_last=NULL) {
 
 ###############################################################################################################
 ###############################################################################################################
-#' Set up random folds stratified by a 0, 1 indicator 
+
+#' Generate foldid's by factor levels
 #'
-#' @param folds_n number of folds to set up 
-#' @param event 0, 1 indicator variable for stratification 
+#' @param event the outcome variable in a vector identifying the different potential 
+#' levels of the outcome
+#' @param fold_n the numbe of folds to be constructed
 #'
-#' @return a vector of fold ids with folds_n levels and length that of event 
-#' 
+#' @return foldid's in a vector the same length as event
+#'  
 #' @export
-#' 
-#' @examples 
-#' # set seed for random numbers, optionally, to get reproducible results
-#' set.seed(82545038)
-#' sim.data=glmnetr.simdata(nrows=1011, ncols=25, beta=NULL)
-#' event=sim.data$event
-#' foldid = glmnetr.foldid(folds_n=10, event)
-#' table(event, foldid)
-#' table(table(foldid))
-glmnetr.foldid = function(folds_n=10, event) { 
-  nobs = length(event)
-  event_0_id  = c(1:nobs)[event==0]
-  event_1_id  = c(1:nobs)[event==1]
-  nobs_0 = length(event_0_id)
-  nobs_1 = length(event_1_id)
-  
-  foldid_0 = sample( rep( 1:folds_n , ceiling(nobs_0/folds_n) )[ 1:nobs_0 ] , nobs_0 ) ;
-  foldid_1 = sample( rep( 1:folds_n , ceiling(nobs_1/folds_n) )[ 1:nobs_1 ] , nobs_1 ) ;
-
-  foldid_0id = cbind(event_0_id, foldid_0)
-  foldid_1id = cbind(event_1_id, foldid_1)
-  foldid_id = rbind(foldid_0id, foldid_1id)
-  colnames(foldid_id) = c("id","fold")
-
-  ordr = order(foldid_id[,1])
-  foldid_id2 = foldid_id[ordr,]
-  foldid = foldid_id2[,2]
+#'
+factor.foldid = function(event, fold_n=10) { 
+  nobs    = length(event)
+  nlevels = length(table(event))
+  if (nlevels == 1) {
+    if (is.factor(levels)) { levels = as.numeric(levels) } 
+    #    foldid = sample( rep( 1:fold_n , ceiling(nobs/fold_n) )[ 1:nobs ] , nobs ) 
+  } else if (nlevels == 2) {
+    if (length(names(table(event))) == 2) { 
+      event = as.factor(event) 
+    }
+  }
+  if (is.factor(event)) {
+    event_idm = matrix(rep(0,nobs*nlevels),nrow=nlevels,ncol=nobs)
+    for (i_ in c(1:nlevels) ) { 
+      event_idm[i_,] = 1*(event==levels(event)[i_]) 
+    }
+    event_idm
+    nobslvl = rowSums(event_idm)
+    nobslvl 
+    for (i_ in c(1:nlevels) ) { 
+      if (nobslvl[i_] < fold_n) {
+        cat(paste("nlevels = ", nlevels, "i_ = ", i_, " nobslvl[i_] = " , nobslvl[i_] ))
+        nobslvl[i_] = 1 
+      }
+      rep(1:fold_n, ceiling(nobslvl[i_]/fold_n)) 
+      foldidi = sample( rep( 1:fold_n , ceiling(nobslvl[i_]/fold_n) )[ 1:nobslvl[i_] ] , nobslvl[i_] ) 
+      length(foldidi)
+      sum((event_idm[i_,]==1))
+      event_idm[i_,][(event_idm[i_,]>=1)] = foldidi 
+      event_idm
+    }
+    foldid = colSums(event_idm)
+  } else {
+    foldid = sample( rep( 1:fold_n , ceiling(nobs/fold_n) )[ 1:nobs ] , nobs ) 
+  }
   return(foldid)
 }
+
+################################################################################
+
+#' Get foldid's with branchning for cox, binomial and gaussian models 
+#'
+#' @param y_ see help for cv.glmnetr() or nested.glmnetr() 
+#' @param event y_ see help for cv.glmnetr() or nested.glmnetr() 
+#' @param family y_ see help for cv.glmnetr() or nested.glmnetr() 
+#' @param folds_n y_ see help for cv.glmnetr() or nested.glmnetr() 
+#' @param stratified y_ see help for cv.glmnetr() or nested.glmnetr() 
+#' 
+#' @return A numeric vector with foldid's for use in a cross validation 
+#' 
+#' @author Walter Kremers (kremers.walter@mayo.edu)
+#'  
+#' @seealso
+#'   \code{\link{cv.glmnetr}} , \code{\link{nested.glmnetr}}  , \code{\link{factor.foldid}} 
+#'  
+#' @export
+#' 
+get.foldid = function( y_, event, family, folds_n , stratified = 1 ) {
+  nobs = length( y_ )
+  if (stratified >= 1) {
+    if   (family == "binomial") { 
+      foldid = factor.foldid(y_   , folds_n)    
+    } else if (family == "cox") { 
+      foldid = factor.foldid(event, folds_n)
+    } else {
+      foldid = sample( rep( 1:folds_n , ceiling(nobs/folds_n) )[ 1:nobs ] , nobs )   
+    }
+  } else {
+    foldid = sample( rep( 1:folds_n , ceiling(nobs/folds_n) )[ 1:nobs ] , nobs )  
+  }
+  return( foldid )
+}
+
+################################################################################

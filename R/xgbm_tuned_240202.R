@@ -1,4 +1,4 @@
-##### xgbm_tuned_230322.R #######################################################################################
+##### xgbm_tuned_240126.R ######################################################################################
 ################################################################################################################
 ## SIMPLE XGBoost fit ==========================================================
 
@@ -16,13 +16,18 @@
 #' @param objective one of "survival:cox" (default), "binary:logistic" or "reg:squarederror"
 #' @param eval_metric one of "cox-nloglik" (default), "auc", "rmse" or NULL.  Default
 #' of NULL will select an appropriate value based upon the objective value.    
-#' @param folds_xgb number of folds used in xgb.cv() call 
+#' @param nfold number of folds used in xgb.cv() call 
+#' @param seed a seed for set.seed() to assure one can get the same results twice.  If NULL 
+#' the program will generate a random seed.  Whether specified or NULL, the seed is stored in the output
+#' object for future reference.  
+#' @param folds an optional list where each element is a vector of indeces for a 
+#' test fold.  Default is NULL.  If specified then nfold is ignored a la xgb.cv().
 #' @param minimize whether the eval_metric is to be minimized or maximized
 #' @param nrounds max number of iterations 
 #' 
 #' @author Walter K Kremers with contributions from Nicholas B Larson
 #'
-#' @importFrom xgboost xgb.cv xgb.train xgb.DMatrix
+#' @importFrom xgboost xgb.cv xgb.train xgb.DMatrix getinfo 
 #' 
 #' @return an XGBoost model fit 
 #' 
@@ -35,7 +40,7 @@
 #' Surv.xgb = ifelse( sim.data$event==1, sim.data$yt, -sim.data$yt )
 #' data.full <- xgboost::xgb.DMatrix(data = sim.data$xs, label = Surv.xgb)
 #' # for this example we use a small number for folds_n and nrounds to shorten run time 
-#' xgbfit = xgb.simple( data.full, objective = "survival:cox", folds_xgb=5, nrounds=20)
+#' xgbfit = xgb.simple( data.full, objective = "survival:cox", nfold=5, nrounds=20)
 #' preds = predict(xgbfit, sim.data$xs)
 #' summary( preds ) 
 #' preds[1:8]
@@ -45,9 +50,36 @@ xgb.simple = function(train.xgb.dat,
                       booster     = "gbtree",
                       objective   = "survival:cox",
                       eval_metric = NULL,
-                      folds_xgb = 5,
+                      nfold = 5,
+                      seed = NULL, 
+                      folds=NULL, 
                       minimize = NULL,
                       nrounds=1000 ) {
+  
+  nfold = max(nfold, 3)
+  
+  if (objective == "survival:cox") { family = "cox" }
+  else if (objective == "binary:logistic") { family = "binomial" }
+  else { family = "gaussian" }
+  
+  stratified = 1 
+  if (is.null(folds)) { 
+    if  (is.null(seed))   { seed = round(runif(1)*1e9) 
+    } else if (seed == 0) { seed = round(runif(1)*1e9) 
+    }
+    set.seed(seed) 
+    label = getinfo(train.xgb.dat,'label')
+    if (objective == "survival:cox") {
+      y_ = abs( label )
+      event = ( label > 0) * 1 
+    } else {
+      y_ = label  
+      event = NULL
+    }
+    folds_v = get.foldid(y_, event, family, nfold, stratified) 
+    folds = list()
+    for (i1 in c(1:nfold)) { folds[[i1]] = c(1:length(y_))[folds_v == i1] } 
+  }
   
   if        (objective == "survival:cox"    ) { minimize = TRUE ; if (is.null(eval_metric)) { eval_metric = "cox-nloglik" }
   } else if (objective == "binary:logistic" ) { if (is.null(minimize)) { minimize = FALSE } ; if (is.null(eval_metric)) { eval_metric = "auc" }
@@ -61,8 +93,6 @@ xgb.simple = function(train.xgb.dat,
                      nthread = 16, eta = .2, max_depth = 10, gamma=0.1, min_child_weight=5, 
                      colsample_bytree=0.75, alpha=0.1, subsample=0.6 )
   
-  folds_xgb = max(folds_xgb, 5)
-  
   early_stopping_rounds = max(10,nrounds/5)
   early_stopping_rounds = min(100,early_stopping_rounds)
 
@@ -70,11 +100,13 @@ xgb.simple = function(train.xgb.dat,
                       data = train.xgb.dat,
                       nrounds = nrounds,
                       showsd = TRUE,
-                      nfold = folds_xgb,
+                      folds = folds, 
                       early_stopping_rounds = early_stopping_rounds,
                       verbose = 0)
   
   xgb.simple = xgb.train(params = param.final, data = train.xgb.dat, nrounds = xgb.cv.fit$best_iteration)
+  xgb.simple$seed = seed
+  xgb.simple$folds = folds
   return(xgb.simple)
 }
 
@@ -107,7 +139,12 @@ xgb.simple = function(train.xgb.dat,
 #' @param booster for now just "gbtree" (default) 
 #' @param objective one of "survival:cox" (default), "binary:logistic" or "reg:squarederror"
 #' @param eval_metric one of "cox-nloglik" (default), "auc" or "rmse",
-#' @param folds_xgb number of folds used in xgb.cv() call 
+#' @param nfold number of folds used in xgb.cv() call 
+#' @param seed a seed for set.seed() to assure one can get the same results twice.  If NULL 
+#' the program will generate a random seed.  Whether specified or NULL, the seed is stored in the output
+#' object for future reference.  
+#' @param folds an optional list where each element is a vector of indeces for a 
+#' test fold.  Default is NULL.  If specified then nfold is ignored a la xgb.cv().
 #' @param minimize whether the eval_metiric is to be minimized or maximized
 #' @param nrounds max number of iterations 
 #' 
@@ -116,7 +153,7 @@ xgb.simple = function(train.xgb.dat,
 #' @importFrom smoof makeSingleObjectiveFunction 
 #' @importFrom ParamHelpers makeParamSet makeNumericParam makeIntegerParam 
 #' @importFrom mlrMBO makeMBOControl setMBOControlTermination mbo 
-#' @importFrom xgboost xgb.cv xgb.train xgb.DMatrix  
+#' @importFrom xgboost xgb.cv xgb.train xgb.DMatrix getinfo 
 ## @importFrom DiceKriging
 ## @importFrom rgenoud
 #'
@@ -131,7 +168,7 @@ xgb.simple = function(train.xgb.dat,
 #' data.full <- xgboost::xgb.DMatrix(data = sim.data$xs, label = Surv.xgb)
 #' # for this example we use a small number for folds_n and nrounds to shorten 
 #' # run time.  This may still take a minute or so.  
-#' # xgbfit=xgb.tuned(data.full,objective="survival:cox",folds_xgb=5,nrounds=20)
+#' # xgbfit=xgb.tuned(data.full,objective="survival:cox",nfold=5,nrounds=20)
 #' # preds = predict(xgbfit, sim.data$xs)
 #' # summary( preds ) 
 #' }
@@ -140,14 +177,36 @@ xgb.tuned = function(train.xgb.dat,
                      booster     = "gbtree", 
                      objective   = "survival:cox",
                      eval_metric = NULL,
-                     folds_xgb=5, 
+                     nfold = 5, 
+                     seed = NULL, 
+                     folds = NULL, 
                      minimize = NULL, 
                      nrounds=1000) {
   
-#   if (is.null(seed)) { seed = round(runif(1)*1000000000) }
-#   set.seed(seed) 
+  nfold = max(nfold, 3)
   
-  folds_xgb = max(folds_xgb, 3)
+  if (objective == "survival:cox") { family = "cox" }
+  else if (objective == "binary:logistic") { family = "binomial" }
+  else { family = "gaussian" }
+  
+  stratified = 1 
+  if (is.null(folds)) { 
+    if  (is.null(seed))   { seed = round(runif(1)*1e9) 
+    } else if (seed == 0) { seed = round(runif(1)*1e9) 
+    }
+    set.seed(seed) 
+    label = getinfo(train.xgb.dat,'label')
+    if (objective == "survival:cox") {
+      y_ = abs( label )
+      event = ( label > 0) * 1 
+    } else {
+      y_ = label  
+      event = NULL
+    }
+    folds_v = get.foldid(y_, event, family, nfold, stratified) 
+    folds = list()
+    for (i1 in c(1:nfold)) { folds[[i1]] = c(1:length(y_))[folds_v == i1] } 
+  }
   
   if        (objective == "survival:cox"    ) { minimize = TRUE ; if (is.null(eval_metric)) { eval_metric = "cox-nloglik" }
   } else if (objective == "binary:logistic" ) { 
@@ -183,11 +242,10 @@ xgb.tuned = function(train.xgb.dat,
       nrounds = nrounds,
       prediction = FALSE,
       showsd = TRUE,
-      nfold = folds_xgb ,
+      folds = folds , 
       early_stopping_rounds = early_stopping_rounds,
       verbose = verbose 
     )
-#    print( class(cv$evaluation_log) ) 
     
     mydf = cv$evaluation_log
     if        (eval_metric == "cox-nloglik"    ) { whch = as.numeric( which(names(mydf)=="test_cox_nloglik_mean") )  
@@ -269,19 +327,21 @@ xgb.tuned = function(train.xgb.dat,
     alpha            = 2^(mbo.run$x$alpha)
   )
 
+#                      nfold = nfold,  
+  
   xgb.cv.fit = xgb.cv(param.final,
                       data = train.xgb.dat,
                       nrounds = nrounds,
                       showsd = TRUE,
-                      nfold = folds_xgb,
+                      folds = folds, 
                       early_stopping_rounds = early_stopping_rounds,
                       verbose = 0)
   
   xgb.tuned = xgb.train(params = param.final, data = train.xgb.dat, nrounds = xgb.cv.fit$best_iteration)
+  xgb.tuned$seed = seed
+  xgb.tuned$folds = folds
   return(xgb.tuned)
 }
-  
-## END TUNED XGBoost fit =======================================================
 
 ################################################################################
 ################################################################################
