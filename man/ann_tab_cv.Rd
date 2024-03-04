@@ -114,3 +114,6 @@ corresponding vignette for examples.
 \seealso{
 \code{\link{ann_tab_cv_best}} , \code{\link{summary.nested.glmnetr}} , \code{\link{glmnetr.compcv}} , \code{\link{glmnetr.simdata}}
 }
+\author{
+Walter Kremers (kremers.walter@mayo.edu)
+}

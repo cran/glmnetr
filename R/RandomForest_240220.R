@@ -27,19 +27,19 @@
 #' seed is stored in the output object for future reference.  Note,
 #' for the default this randomly generated seed depends on the seed in memory at that 
 #' time so will depend on any calls of set.seed prior to the call of this function.  
-#' @param keep 1 to keep the model fits used to select the value for mtry, or 0
-#' (default) to not keep these initial model fits.
 #' @param track 1 to output a brief summary of the final selected model, 2 to 
 #' output a brief summary on each model fit in search of a better model or 0 
 #' (default) to not output this information.
 #'
 #' @return a Random Forest model fit 
 #' 
+#' @author Walter Kremers (kremers.walter@mayo.edu)
+#' 
 #' @importFrom randomForestSRC rfsrc 
 #'
 #' @export
 #' 
-rf_tune = function(xs, start=NULL, y_, event=NULL, family=NULL, mtryc=NULL, ntreec=NULL, seed=NULL, keep=0, track=0) {
+rf_tune = function(xs, start=NULL, y_, event=NULL, family=NULL, mtryc=NULL, ntreec=NULL, seed=NULL, track=0) {
   
   if (is.null(seed)) { seed = round(runif(1)*1e9) } 
   set.seed( seed ) 
@@ -91,8 +91,6 @@ rf_tune = function(xs, start=NULL, y_, event=NULL, family=NULL, mtryc=NULL, ntre
   
   ##------------------------------------------------------------------------------
   
-  rfs = list()
-  
   ##mtryc = mtryc[1:3]
   ## k_ = 1 
   
@@ -109,8 +107,6 @@ rf_tune = function(xs, start=NULL, y_, event=NULL, family=NULL, mtryc=NULL, ntre
         rf = rfsrc( y_ ~ . , data=df, mtry=mtryc[k_], nsplit=8, 
                     ntree=ntreec[1], membership = TRUE, importance=TRUE) 
       }
-      
-      rfs[[paste0("m.", k_)]] <- rf
       
       if (k_ ==1) {
         k_best = 1 
@@ -151,14 +147,9 @@ rf_tune = function(xs, start=NULL, y_, event=NULL, family=NULL, mtryc=NULL, ntre
       time_split = diff_time(time_start, time_split)
     }
     
-    if (keep == 1) {
-    rffit = list(rf_tuned=rf_tuned, rfs=rfs, err.ratev=err.ratev, err.rate=rf_tuned$err.rate[length(rf_tuned$err.rate)], 
+    rffit = list(rf_tuned=rf_tuned, err.ratev=err.ratev, rf_tuned$err.rate[length(rf_tuned$err.rate)], 
                  mtryc=mtryc, ntreec=ntreec, seed=seed )
-    } else {
-      rffit = list(rf_tuned=rf_tuned, err.ratev=err.ratev, rf_tuned$err.rate[length(rf_tuned$err.rate)], 
-                   mtryc=mtryc, ntreec=ntreec, seed=seed )
-    }
-    
+
   } else { rffit = list(rffit="NONE") }
   
   class(rffit) <- c("rf_tune")

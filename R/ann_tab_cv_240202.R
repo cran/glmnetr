@@ -344,6 +344,8 @@ prednn_tl = function (lassomod, nnmodel, datain, lasso=1) {
 #' @seealso
 #'   \code{\link{ann_tab_cv_best}} , \code{\link{summary.nested.glmnetr}} , \code{\link{glmnetr.compcv}} , \code{\link{glmnetr.simdata}}
 #' 
+#' @author Walter Kremers (kremers.walter@mayo.edu)
+#' 
 #' @export
 #'
 ann_tab_cv = function(myxs, mystart=NULL, myy, myevent=NULL, myoffset=NULL, family="binomial", fold_n=5, 
@@ -1218,6 +1220,8 @@ return( rlist )
 #' 
 #' @seealso
 #'   \code{\link{ann_tab_cv}} , \code{\link{nested.glmnetr}} , \code{\link{summary.nested.glmnetr}} , \code{\link{glmnetr.compcv}} , \code{\link{glmnetr.simdata}}
+#' 
+#' @author Walter Kremers (kremers.walter@mayo.edu)
 #' 
 #' @export
 #'

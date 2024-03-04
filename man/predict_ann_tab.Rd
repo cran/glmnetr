@@ -38,3 +38,6 @@ are in nested.glmnetr().  To fit a cross validation (CV) informed ANN model fit
 one can run nested.glmnetr() with folds_n = 0 to derive the full data models without 
 doing a cross validation.
 }
+\author{
+Walter Kremers (kremers.walter@mayo.edu)
+}

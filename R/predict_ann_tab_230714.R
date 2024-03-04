@@ -27,6 +27,8 @@
 #' 
 #' @return a vector of predicteds
 #' 
+#' @author Walter Kremers (kremers.walter@mayo.edu)
+#' 
 #' @export
 #'
 predict_ann_tab = function(object, xs, modl=NULL) {

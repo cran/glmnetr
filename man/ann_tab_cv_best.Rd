@@ -110,3 +110,6 @@ validaiton.
 \seealso{
 \code{\link{ann_tab_cv}} , \code{\link{nested.glmnetr}} , \code{\link{summary.nested.glmnetr}} , \code{\link{glmnetr.compcv}} , \code{\link{glmnetr.simdata}}
 }
+\author{
+Walter Kremers (kremers.walter@mayo.edu)
+}
