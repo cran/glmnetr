@@ -1,5 +1,6 @@
-############################################################################################################
-############################################################################################################
+################################################################################
+##### plot.cv.glmnetr_yymmdd.R #################################################
+################################################################################
 #' Plot the relaxed lasso coefficients.  
 #' 
 #' @description 
@@ -310,17 +311,27 @@ plot.cv.glmnetr = function(x, gam=NULL, lambda.lo=NULL, plup=0, title=NULL, coef
 ####################################################################################################
 ####################################################################################################
 
-#' Plot the nested cross validaiton performance numbers, cross validated relaxed 
-#' lasso deviances or coefficients from a nested.glmnetr call.  See 
-#' plot_perf_glmnetr(), plot.cv.glmnetr() and plot.glmnetr().    
+#' Plot results from a nested.glmnetr() output
+#' 
+#' @description Plot the nested cross validation performance numbers, cross 
+#' validated relaxed lasso deviances or coefficients from a nested.glmnetr() call.  
+
 #'
 #' @param x A nested.glmnetr output object
-#' @param type determines what type of plot is to be produced, "lasso" (default) 
-#' to plot lasso fits.  Else nested cross validation performance measures are 
-#' plotted.  Values are "agree" to plot agreement, "lincal" to plot the linear
+#' @param type type of plot to be produced form the (nested) cross validation 
+#' performance measures, and teh lasso model tuning or lasso model 
+#' coefficients. For the lasso model the options include "lasso" to plot deviances
+#' informing hyperparmeter choice or "coef" to plot lasso parameter estimates.  
+#' Else nested cross validation performance measures are 
+#' plotted.  
+#' To show cross validation performance measures the options include 
+#' "devrat" to plot deviance ratios, i.e. the 
+#' fractional reduction in deviance relative to the null model deviance, 
+#' "agree" to plot agreement, "lincal" to plot the linear
 #' calibration slope coefficients, "intcal" to plot the linear calibration intercept 
 #' coefficients or "devian" to plot the deviances from the nested cross 
-#' validation. For each performance measure estimates from the individual (outer) 
+#' validation. 
+#' For each performance measure estimates from the individual (outer) 
 #' cross validation fold are depicted by thin lines of different colors and styles, 
 #' while the composite value from all fol=ds is depicted by a thicker black line, 
 #' and the performance measures naively calculated on the all data using the model 
@@ -331,8 +342,7 @@ plot.cv.glmnetr = function(x, gam=NULL, lambda.lo=NULL, plup=0, title=NULL, coef
 #' @param title A title
 #' @param plup Plot upper 95 percent two-sided confidence intervals for the deviance 
 #' plots.  Applies only for type = "lasso". 
-#' @param coefs Default is FALSE to plot deviances.  Option of TRUE to plot 
-#' coefficients.  Applies only for type = "lasso".  
+#' @param coefs Depricated.  See option 'type'.  To plot coefficients specify 'type = coef'. 
 #' @param comment Default of TRUE to write to console information on lam and gam selected for output.
 #' FALSE will suppress this write to console.  Applies only for type = "lasso". 
 #' @param pow Power to which agreement is to be raised when the "gaussian" model 
@@ -348,13 +358,14 @@ plot.cv.glmnetr = function(x, gam=NULL, lambda.lo=NULL, plup=0, title=NULL, coef
 #' @param fold By default 1 to display model performance estimates form individual 
 #' folds when type of "agree", "intcal", "lincal" or "devrat". If 0 then the 
 #' individual fold calculations are not displayed. 
+#' @param xgbsimple 1 (default) to include results for the untuned XGB model, 0 to not include.  
 #' @param ... Additional arguments passed to the plot function.  
 #'
 #' @return This program returns a plot to the graphics window, and may provide 
 #' some numerical information to the R Console.  
 #' 
 #' @seealso
-#'   \code{\link{plot_perf_glmnetr}} , \code{\link{plot.cv.glmnetr}} , \code{\link{plot.glmnetr}} ,  \code{\link{nested.glmnetr}} 
+#'   \code{\link{plot_perf_glmnetr}} , \code{\link{plot.cv.glmnetr}} , \code{\link{nested.glmnetr}}
 #'
 #' @author Walter Kremers (kremers.walter@mayo.edu)
 #' 
@@ -369,28 +380,41 @@ plot.cv.glmnetr = function(x, gam=NULL, lambda.lo=NULL, plup=0, title=NULL, coef
 #' # for this example we use a small number for folds_n to shorten run time 
 #' fit3 = nested.glmnetr(xs, NULL, y_, event, family="cox", folds_n=3) 
 #' plot(fit3)
-#' plot(fit3, coefs=TRUE)
+#' plot(fit3, type="coef")
 #' }
 #' 
-plot.nested.glmnetr = function(x, type="lasso", gam=NULL, lambda.lo=NULL, title=NULL, plup=0, coefs=FALSE, comment=TRUE,
-                                pow=2, ylim=1, plot=1, fold=1, ... ) {
+plot.nested.glmnetr = function(x, type="devrat", gam=NULL, lambda.lo=NULL, title=NULL, plup=0, coefs=FALSE, comment=TRUE,
+                                pow=2, ylim=1, plot=1, fold=1, xgbsimple=0, ... ) {
+  
+  if (is.null(type)) { type = "devrat" } 
+  
+  if (substr(type,1,4) == "coef") { 
+    type = "coef"
+    coefs = 1 
+  }
+  
+  if ((coefs == 1) & (type == "devrat")) {
+    type = "coef" 
+    warning('  The coefs option is depricated.  Use instead type="coef"')
+  }
+
   object = x 
-  if ( type=='lasso' ) {
+  if ( type %in% c('lasso', 'coef') ) {
     dolasso = object$fits[1]
     if (dolasso==1) {
       cv_glmnetr_fit = object$cv_glmnet_fit
-      plot(cv_glmnetr_fit, gam=gam, lambda.lo=lambda.lo, plup=plup, title=title, coefs=coefs,comment=comment, ... ) 
+      plot(cv_glmnetr_fit, gam=gam, lambda.lo=lambda.lo, plup=plup, title=title, coefs=coefs, comment=comment, ... ) 
       #    else { plot.glmnetr(cv_glmnetr_fit, gam=gam, lambda.lo=lambda.lo, title=title) }
     } else { 
       cat(paste0(" No relaxed lasso for plotting" , "\n")) 
     }
-  } else if (type %in% c("agree","lincal", "intcal", "devrat", "devian")) {
+  } else if (type %in% c( "devian", "agree", "lincal", "intcal", "devrat")) {
     #    type="agree", pow=2, ylim=1, plot=1
     if (plot == 0) {
       rlist = plot_perf_glmnetr( object, type=type, pow=pow, ylim=ylim, plot=0) 
       return(rlist)
     } else {
-      plot_perf_glmnetr( object, type=type, pow=pow, ylim=ylim, plot=plot, fold=fold) 
+      plot_perf_glmnetr( object, type=type, pow=pow, ylim=ylim, plot=plot, fold=fold, xgbsimple=xgbsimple) 
     }
   } else {
     cat(paste("  Invalid value for type, ", type, "\n") )

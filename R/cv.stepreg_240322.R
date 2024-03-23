@@ -1,6 +1,6 @@
-################################################################################################################################################################
-################################################################################################################################################################
-
+################################################################################
+##### cv.stepreg_yymmdd.R ######################################################
+################################################################################
 #' Cross validation informed stepwise regression model fit.   
 #'
 #' @param xs_cv   predictor input - an n by p matrix, where n (rows) is sample size, and p (columns) 
@@ -32,6 +32,9 @@
 #'
 #' @return cross validation infomred stepwise regression model fit tuned by number of model terms or p-value for inclusion.
 #' 
+#' @seealso 
+#'    \code{\link{predict.cv.stepreg}} , \code{\link{summary.cv.stepreg}}, \code{\link{stepreg}} , \code{\link{aicreg}} , \code{\link{nested.glmnetr}}
+#' 
 #' @export
 #' 
 #' @importFrom stats formula lm pchisq runif var glm glm.control   
@@ -55,6 +58,11 @@ cv.stepreg = function(xs_cv, start_cv=NULL, y_cv, event_cv,  family="cox",
                       steps_n=0, folds_n=10, method="loglik",
                       seed=NULL, foldid=NULL, stratified=1, track=0) {
 
+  if ( is.logical(y_cv) & (family == "binomial")) { 
+    cat("\n  The y_cv variable is of class logical and is converted to numeric\n")
+    y_cv = y_cv * 1 
+  }
+  
   xs_cv_ncol = dim(xs_cv)[2]    
   nobs_cv = dim(xs_cv)[1]   
   
@@ -456,6 +464,9 @@ cv.stepreg = function(xs_cv, start_cv=NULL, y_cv, event_cv,  family="cox",
 #'
 #' @return Summary of a stepreg() (stepwise regression) output object.   
 #' 
+#' @seealso 
+#'    \code{\link{predict.cv.stepreg}}  , \code{\link{cv.stepreg}} , \code{\link{nested.glmnetr}} 
+#' 
 #' @export
 #' 
 #' @examples 
@@ -510,8 +521,11 @@ summary.cv.stepreg = function(object, ...) {
 #' @param object cv.stepreg() output object 
 #' @param xs dataset for predictions.  Must have the same columns as the input predictor matrix in the call to cv.stepreg(). 
 #' @param ... pass through parameters 
-#'
+#' 
 #' @return a matrix of beta's or predicteds
+#' 
+#' @seealso 
+#'    \code{\link{summary.cv.stepreg}}, \code{\link{cv.stepreg}} , \code{\link{nested.glmnetr}}   
 #' 
 #' @export
 #' 

@@ -1,5 +1,6 @@
-##############################################################################################################################
-##############################################################################################################################
+################################################################################
+##### stepreg_yymmdd.R #########################################################
+################################################################################
 #' Fit the steps of a stepwise regression.  
 #'
 #' @param xs_st predictor input - an n by p matrix, where n (rows) is sample size, and p (columns) 
@@ -17,6 +18,9 @@
 #' @param track 1 to output stepwise fit program, 0 (default) to suppress 
 #'
 #' @return does a stepwise regression of depth maximum depth steps_n
+#' 
+#' @seealso 
+#'    \code{\link{summary.stepreg}} , \code{\link{aicreg}} , \code{\link{cv.stepreg}} , \code{\link{nested.glmnetr}}   
 #' 
 #' @export
 #' 
@@ -296,7 +300,10 @@ preds_1 = function (modsumbest, k_, risklist, risklistl) {
 #' @param modsum model summmary
 #' @param risklist riskset list 
 #'
-#' @return best predictors at each step of a stepwise regerssion
+#' @return best predictors at each step of a stepwise regression
+#' 
+#' @seealso 
+#'    \code{\link{stepreg}} , \code{\link{cv.stepreg}} , \code{\link{nested.glmnetr}}   
 #' 
 #' @export
 #'
@@ -322,6 +329,9 @@ best.preds = function(modsum, risklist) {
 #' @param ... Additional arguments passed to the summary function.  
 #'
 #' @return Summarize a stepreg() object
+#' 
+#' @seealso 
+#'    \code{\link{stepreg}} , \code{\link{cv.stepreg}} , \code{\link{nested.glmnetr}}
 #' 
 #' @export
 summary.stepreg = function(object, ...) {

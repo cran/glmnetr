@@ -1,5 +1,6 @@
-###############################################################################################################
-###############################################################################################################
+################################################################################
+##### summary.cv.glmnetr_yymmdd.R ##############################################
+################################################################################
 #' Output summary of a cv.glmnetr() output object.  
 #' 
 #' @description 
@@ -17,7 +18,7 @@
 #' @return Coefficient estimates (beta) 
 #' 
 #' @seealso
-#'   \code{\link{cv.glmnetr}} , \code{\link{nested.glmnetr}} 
+#'   \code{\link{predict.cv.glmnetr}} , \code{\link{cv.glmnetr}} , \code{\link{nested.glmnetr}} 
 #' 
 #' @export
 #'
@@ -76,16 +77,16 @@ summary.cv.glmnetr = function(object, printg1="FALSE", orderall=FALSE, ...) {
   #  colSums( object$glmnet.fit$relaxed$beta != 0 ) - colSums( object$glmnet.fit$beta != 0 )
   
   # object$glmnet.fit$relaxed$beta[,9]
-  cat(paste0( "\n  The relaxed minimum is obtained for lambda = ", round(lambda.min.r,digits=8) , " , index = " , lambda_index.r , " and gamma = " , gamma.min.r , "\n"  )) 
+  cat(paste0( "  The relaxed minimum is obtained for lambda = ", round(lambda.min.r,digits=8) , " and gamma = " , gamma.min.r , "\n"  )) 
   cat(paste0( "  with df (number of non-zero terms) = ", df.min.r , ", average deviance = " , round(deviance.r, digits=6) , " and beta = " , "\n" ))  
   print( beta.min.r ) 
   
-  cat(paste0( "\n  The fully relaxed (gamma=0) minimum is obtained for lambda = ", round(lambda.min.g0,digits=8) , " and index = " , index.min.g0 , "\n"  )) 
+  cat(paste0( "\n  The fully relaxed (gamma=0) minimum is obtained at lambda = ", round(lambda.min.g0,digits=8) , "\n"  )) 
   cat(paste0( "  with df (number of non-zero terms) = ", df.min.g0 , ", average deviance = " , round(deviance.g0, digits=6) ,  " and beta = " , "\n" ))  
   print( beta.min.g0 )  
   
-  cat(paste0( "\n  The UNrelaxed (gamma=1) minimum is obtained for lambda = ", round(lambda.min.g1,digits=8) , " and index = " , lambda_index.g1 , "\n"  )) 
-  cat(paste0( "  with df (number of non-zero terms) = ", df.min.g1 , ", average deviance = " , round(deviance.g1, digits=6) , "\n\n" ))  
+  cat(paste0( "\n  The UNrelaxed (gamma=1) minimum is obtained at lambda = ", round(lambda.min.g1,digits=8) , "\n"  )) 
+  cat(paste0( "  with df (number of non-zero terms) = ", df.min.g1 , ", average deviance = " , round(deviance.g1, digits=6) , "\n" ))  
   #  cat(paste0( "  with df (number of non-zero terms) = ", df.min.g1 , " and beta = " , "\n" ))  
   if (printg1==TRUE) { print( beta.min.g1 ) }
 
@@ -137,7 +138,7 @@ summary.cv.glmnetr = function(object, printg1="FALSE", orderall=FALSE, ...) {
 #' second element, beta, including only non 0 terms. 
 #' 
 #' @seealso
-#'   \code{\link{predict.glmnetr}} , \code{\link{cv.glmnetr}} , \code{\link{nested.glmnetr}} 
+#'   \code{\link{summary.cv.glmnetr}} , \code{\link{cv.glmnetr}} , \code{\link{nested.glmnetr}} 
 #' 
 #' @export
 #'
@@ -234,7 +235,7 @@ getlamgam = function(object, lam, gam, comment) {
     lam = object$relaxed$lambda.min 
     lambda_index = object$relaxed$index[1,1] 
     gam  = object$relaxed$gamma.min
-    if (comment==TRUE) cat(paste0("\n (lambda, gamma) pair minimizing CV average deviance is used \n\n"))
+    if (comment==TRUE) cat(paste0(" (lambda, gamma) pair minimizing CV average deviance is used \n"))
   } else if (inherits(lam,"character") & inherits(gam,"character")) {
     if ((lam=='lambda.1se') & (gam=="gamma.1se")) {
       lam = object$relaxed$lambda.1se 
@@ -249,16 +250,16 @@ getlamgam = function(object, lam, gam, comment) {
     if (gam==1) { 
       lam = object$lambda.min 
       lambda_index = object$index[1] 
-      if (comment==TRUE) cat(paste0("\n lambda minimizing CV average deviance among gamma=1 is used \n\n"))
+      if (comment==TRUE) cat(paste0(" lambda minimizing CV average deviance among gamma=1 is used \n"))
     } else if (gam==0) { 
       lambda_index = object$relaxed$index.g0[1]  
       lam          = lambdas[lambda_index] 
-      if (comment==TRUE) cat(paste0("\n lambda minimizing CV average deviance among gamma=0 is used \n\n"))
+      if (comment==TRUE) cat(paste0(" lambda minimizing CV average deviance among gamma=0 is used \n"))
     }
   } else if (inherits(lam,"numeric") & inherits(gam,"numeric")) {
     lambda_index = max(c(1:length(lambdas))[ (lam<=lambdas) ])
   }  else {cat(paste0( "class(lam)=", class(lam), " class(gam)=",class(gam), "\n"))}
-#  returnlist = list(lam=lam, gam=gam, lambda_index=lambda_index, lambdas=list(lambdas))                     ## CHANGE 28MAR23 
+#  returnlist = list(lam=lam, gam=gam, lambda_index=lambda_index, lambdas=list(lambdas))            
   returnlist = list(lam=lam, gam=gam, lambda_index=lambda_index, lambdas=(lambdas))                          ## CHANGE 28MAR23
   return(returnlist)
 }

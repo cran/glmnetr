@@ -1,3 +1,6 @@
+################################################################################
+##### predict_ann_tab_yymmdd.R #################################################
+################################################################################
 #' Get predicteds for an Artificial Neural Network model fit in nested.glmnetr()
 #' 
 #' All but one of the Artificial Neural Network (ANNs) fit by nested.glmnetr() are based 
@@ -26,6 +29,9 @@
 #' 9 for ensemble[8] = 1, nonzero relaxed lasso terms plus lasso predicteds with initial weights corresponding to offset and not allowed to update. 
 #' 
 #' @return a vector of predicteds
+#' 
+#' @seealso
+#'    \code{\link{predict_nested_xgb}} , \code{\link{predict_nested_rf}} , \code{\link{ann_tab_cv}} , \code{\link{nested.glmnetr}}  
 #' 
 #' @author Walter Kremers (kremers.walter@mayo.edu)
 #' 
@@ -161,33 +167,6 @@ predict_ann_tab = function(object, xs, modl=NULL) {
 }
 
 ################################################################################
-
-# preds1 = predict_ann_tab(nested_glmnetr_fit_kr, kr.xs, 3)
-# object=nested_glmnetr_fit_kr ; xs=kr.xs ; modl = 3 ;
-# names(object)
-# names(object$ann_fit_1)
-# object$ann_fit_1$model
-
-# object = nestedcv
-# object
-
-#object = nested_bin_fit_ex_p2
-#object = nested_cox_fit_exp0
-
-#preds_ann3 = predict_ann_tab( object , xs) 
-#summary(preds_ann3)
- 
-#preds_ann1 = predict_ann_tab( object , xs, modl=1) 
-#summary(preds_ann1)
-
-#lassopred = predict_ann_tab( object , xs, modl=0) 
-#summary(lassopred)
-
-# preds_ann1 = log(preds_ann1/(1-preds_ann1)) ;  preds_ann3 = log(preds_ann3/(1-preds_ann3)) ;
-
-#plot(lassopred ,preds_ann3)
-#plot(lassopred ,preds_ann1)
-#plot(preds_ann3,preds_ann1) 
 
 
 

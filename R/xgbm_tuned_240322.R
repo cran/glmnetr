@@ -1,7 +1,7 @@
-##### xgbm_tuned_240218.R ######################################################################################
-################################################################################################################
+################################################################################
+##### xgbm_tuned_yymmdd.R ######################################################
+################################################################################
 ## SIMPLE XGBoost fit ==========================================================
-
 #' Get a simple XGBoost model fit (no tuning) 
 #' 
 #' @description This fits a gradient boosting machine model using the XGBoost
@@ -28,11 +28,14 @@
 #' the seed and folds option values override the $seed and $folds values in doxgb.   
 #' @param track 0 (default) to not track progress, 2 to track progress.   
 #' 
+#' @return a XGBoost model fit 
+#' 
+#' @seealso
+#'   \code{\link{predict_nested_xgb}} , \code{\link{xgb.tuned}} , \code{\link{nested.glmnetr}} 
+#' 
 #' @author Walter K Kremers with contributions from Nicholas B Larson
 #'
 #' @importFrom xgboost xgb.cv xgb.train xgb.DMatrix getinfo 
-#' 
-#' @return an XGBoost model fit 
 #' 
 #' @export
 #'
@@ -123,6 +126,8 @@ xgb.simple = function(train.xgb.dat,
   
   if (track >= 3) { print("XGB Simple - get xgb.cv.fit") }
 
+  set.seed(seed)                                                                ## 240315 
+  
   xgb.cv.fit = xgb.cv(param.final,
                       data = train.xgb.dat,
                       nrounds = doxgb$nrounds,
@@ -133,9 +138,15 @@ xgb.simple = function(train.xgb.dat,
   
   if (track >= 3) { print("XGB Simple - set up return object") }
   
-  xgb.simple = xgb.train(params = param.final, data = train.xgb.dat, nrounds = xgb.cv.fit$best_iteration)
-  xgb.simple$doxgb = doxgb   
-  return(xgb.simple)
+  set.seed(seed)                                                                ## 240315 
+  
+  xgb.simple.fit = xgb.train(params = param.final, data = train.xgb.dat, nrounds = xgb.cv.fit$best_iteration)
+  doxgb$nrounds.final = xgb.cv.fit$best_iteration
+  xgb.simple.fit$doxgb = doxgb   
+  xgb.simple.fit$param.final = param.final
+##  xgb.simple.fit$data=train.xgb.dat                                             ##<<<<<<<<<<<<<--------------------
+##  xgb.simple.fit$seed=seed                                                      ##<<<<<<<<<<<<<--------------------
+  return(xgb.simple.fit)
   if (track >= 3) { print("XGB Simple - return") }
 }
 
@@ -168,23 +179,32 @@ xgb.simple = function(train.xgb.dat,
 #' @param booster for now just "gbtree" (default) 
 #' @param objective one of "survival:cox" (default), "binary:logistic" or "reg:squarederror"
 #' @param eval_metric one of "cox-nloglik" (default), "auc" or "rmse",
-#' @param minimize whether the eval_metiric is to be minimized or maximized
+#' @param minimize whether the eval_metric is to be minimized or maximized
 #' @param seed a seed for set.seed() to assure one can get the same results twice.  If NULL 
 #' the program will generate a random seed.  Whether specified or NULL, the seed is stored in the output
 #' object for future reference.  
 #' @param folds an optional list where each element is a vector of indeces for a 
 #' test fold.  Default is NULL.  If specified then nfold is ignored a la xgb.cv().
-#' @param doxgb a list with parameters for fitting txgb.cv() including $nfold, $nrounds,
+#' @param doxgb  A list specifying how the program is to do the xgb tune and 
+#' fit.  The list can have elements $nfold, $nrounds,
 #' and $early_stopping_rounds, each numerical values of length 1, $folds, a list as 
-#' sued by xgb.cv() do identify folds for cross validation, and $eta, $gamma, $max_depth, 
+#' used by xgb.cv() do identify folds for cross validation, and $eta, $gamma, $max_depth, 
 #' $min_child_seight, $colsample_bytree, $lambda, $alpha and $subsample, each a numeric 
-#' of length 2 giving the lower and upper values for the respective tuning parameter
-#' as input into the mlrMBO package functions.  If not provided defaults will be used.  Defaults
+#' of length 2 giving the lower and upper values for the respective tuning 
+#' parameter.  The meaning of these terms is as in 'xgboost' xgb.train().  If 
+#' not provided defaults will be used.  Defaults
 #' can be seen from the output object$doxgb element, again a list. In case not NULL, 
-#' the seed and folds option values override the $seed and $folds values.  
+#' the seed and folds option values override the $seed and $folds values. 
 #' @param track 0 (default) to not track progress, 2 to track progress.   
 #' 
+#' @return a tuned XGBoost model fit 
+#' 
+#' @seealso
+#'   \code{\link{predict_nested_xgb}} , \code{\link{xgb.simple}} , \code{\link{rederive_xgb}} , \code{\link{nested.glmnetr}} 
+#' 
 #' @author Walter K Kremers with contributions from Nicholas B Larson
+#'
+#' @export
 #'
 #' @importFrom smoof makeSingleObjectiveFunction 
 #' @importFrom ParamHelpers makeParamSet makeNumericParam makeIntegerParam 
@@ -192,9 +212,6 @@ xgb.simple = function(train.xgb.dat,
 #' @importFrom xgboost xgb.cv xgb.train xgb.DMatrix getinfo 
 ## @importFrom DiceKriging
 ## @importFrom rgenoud
-#'
-#' @return an XGBoost model fit 
-#' @export
 #'
 #' @examples 
 #' \donttest{
@@ -387,7 +404,6 @@ xgb.tuned = function(train.xgb.dat,
   
   if (track >= 3) { print("XGB Tuned - set par.set ") }
   
-  
   par.set = makeParamSet(
     makeNumericParam("eta",              lower = doxgb$eta[1],               upper = doxgb$eta[2] ),
     makeNumericParam("gamma",            lower = doxgb$gamma[1] ,            upper = doxgb$gamma[2] , trafo = function(x) 2^x),
@@ -468,10 +484,18 @@ xgb.tuned = function(train.xgb.dat,
   
   set.seed(seed)                                                                ## 240218 
   
-  xgb.tuned = xgb.train(params = param.final, data = train.xgb.dat, nrounds = xgb.cv.fit$best_iteration)
-  xgb.tuned$doxgb = doxgb   
-
-  return(xgb.tuned)
+  xgb.tuned.fit = xgb.train(params = param.final, data = train.xgb.dat, nrounds = xgb.cv.fit$best_iteration)
+  doxgb$nrounds.final = xgb.cv.fit$best_iteration
+  xgb.tuned.fit$doxgb = doxgb   
+  xgb.tuned.fit$param.final = param.final
+#  names( xgb.tuned.fit ) 
+#  xgb.tuned.fit$niter
+#  xgb.tuned.fit$params
+#  xgb.tuned.fit$param.final
+#  xgb.tuned.fit$param.final = param.final   ## use xgb.tuned.fit$params 
+#  xgb.tuned.fit$nrounds.final = xgb.cv.fit$best_iteration ## ## use xgb.tuned.fit$niter 
+##  class(xgb.tuned.fit) = "xgb.tuned" ## class already assigned as "xgb.Booster"
+  return(xgb.tuned.fit)
   if (track >= 3) { print("XGB Tuned - return") }
 }
 

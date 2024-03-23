@@ -1,7 +1,7 @@
 ---
 title: "Using stepreg"
 author: "Walter K. Kremers, Mayo Clinic, Rochester MN"
-date: "1 March 2024" 
+date: "22 March 2024" 
 output: pdf_document 
 vignette: >
   %\VignetteIndexEntry{Using stepreg}
@@ -9,13 +9,13 @@ vignette: >
   %\VignetteEncoding{UTF-8}
 ---
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
   evalload = TRUE ; evalmodel = FALSE ;
   evalload = FALSE ; evalmodel = TRUE ;
+knitr::opts_chunk$set(echo = TRUE) 
 library(glmnet)
 library(survival)
 library(Matrix)
-source("~Kremers/Documents/Rpackages/glmnetr_supl/_load_glmnetr_vig_240301.R" , echo=TRUE)
+source("~/Documents/Rpackages/glmnetr_supl/_load_glmnetr_vig_240322.R" , echo=TRUE)
 ```
 # The Package
 The stepreg() and cv.stepreg() funcitons in the _glmnetr_ package were written for convenience and stability as opposed to speed or broad applicability.  When fitting lasso models we wanted to compare these to standard stepwise regression models.  Keeping a more modern approach we tune by either number of terms included in the model (James, Witten, Hastie and Tibshirani, An Introduction to Statistical Learning with applications in R, 2nd ed., Springer, New York, 2021) or by the p critical value for  model inclusion, as this too is a common tuning parameter when fitting stepwise models.
@@ -51,12 +51,12 @@ print(dim(xs))
 # Check the rank of the design matrix, i.e. the degrees of freedom in the predictors 
 rankMatrix(xs)[[1]]
 # Inspect the first few rows and some select columns 
-print(xs[1:10,c(1:12,18:20)])
+print(round(xs[1:10,c(1:12,18:20)],digits=6))
 ```
 # Cross validation (CV) informed stepwise model fit
 To fit stepwise regression models where the number of model terms are informed by cross validation to select df, the number of model terms, and p, the entry threshold, we can use the function cv.stepreg() function.
 ```{r load 1, include=FALSE, eval=evalload}
-load( file="~Kremers/Documents/Rpackages/glmnetr_supl/using_stepreg_outputs_240301.RLIST" ) 
+load( file="~/Documents/Rpackages/glmnetr_supl/using_stepreg_outputs_240322.RLIST" ) 
 ```
 ```{r  Fit a relaxed lasso model informed by cross validation, eval=evalmodel }
 # Fit a relaxed lasso model informed by cross validation 
@@ -93,7 +93,7 @@ nested.gau.fit = nested.glmnetr(xs,NULL,y_,NULL,family="gaussian",
 #                                dostep=1,doaic=1,folds_n=3,steps_n=30,track=0) 
 y_ = simdata$y_
 nested.gau.fit = nested.glmnetr(xs,NULL,y_,NULL,family="gaussian",
-                                dostep=1,doaic=1,folds_n=3,steps_n=30,track=0) 
+                                dostep=1,doaic=1,folds_n=3,steps_n=30,track=1) 
 ```
 ```{r  Nested cross-validation model evaluation summary}
 #names(nested.gau.fit)
@@ -121,5 +121,5 @@ preds = predict(nested.gau.fit$cv.stepreg.fit,xs)
 t( preds[1:8,] )
 ```
 ```{r save1, include=FALSE, eval=evalmodel}
-save( cv.stepwise.fit , nested.gau.fit , file="~Kremers/Documents/Rpackages/glmnetr_supl/using_stepreg_outputs_240301.RLIST" ) 
+save( cv.stepwise.fit , nested.gau.fit , file="~/Documents/Rpackages/glmnetr_supl/using_stepreg_outputs_240322.RLIST" )
 ```

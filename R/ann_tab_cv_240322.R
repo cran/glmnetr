@@ -1,11 +1,6 @@
-##########################################################################################################
-##### Yet to do - randomly resort data at ties in time for Cox model (when there are ties) ###############
-##########################################################################################################
-##########################################################################################################
-
 ################################################################################
+##### ann_tab_cv_yymmdd.R ######################################################
 ################################################################################
-
 #' calculate cross-entry for multinomial outcomes
 #'
 #' @param xx the sigmoid of the link, i.e, the estimated probabilities, i.e. xx = 1/(1+exp(-xb)) 
@@ -17,7 +12,7 @@
 calceloss = function (xx,yy) {
   celoss = 1  
   if (is.vector(xx)) {
-    if ((min(xx) < 0) | (max(xx) > 1)) { 
+    if ((min(xx) < 0) | (max(xx) > 1)) {   ## this means xx is the xbeta and not the prob 
       xx = 1/(1+exp(-xx)) 
       xx[xx<1e-6] = 1e-6
       xx[xx > (1-1e-6)] = (1-1e-6) 
@@ -57,7 +52,6 @@ calceloss = function (xx,yy) {
 #' @param rreturn 1 (default) to return an R (numeric) vector, 0 to return a torch tensor 
 #'
 #' @return a weight matrix in tensor format
-#' @export
 #'
 wtzero = function(tnsr, lasso=0, lscale=5, scale=1, rreturn=1, trnspose=0 ) { 
   weight_r = as.matrix(tnsr)
@@ -99,7 +93,6 @@ wtzero = function(tnsr, lasso=0, lscale=5, scale=1, rreturn=1, trnspose=0 ) {
 #' @param trnspose 1 to transpose the matrix before returning, 0 to not. 
 #'
 #' @return a weight matrix in tensor format
-#' @export
 #'
 wtmiddle = function(tnsr, lasso=0, rreturn=1, trnspose=0 ) { 
   weight_r = as.matrix(tnsr)
@@ -146,7 +139,6 @@ wtmiddle = function(tnsr, lasso=0, rreturn=1, trnspose=0 ) {
 #' @param trnspose 1 to transpose the matrix before returning, 0 to not. 
 #'
 #' @return a weight matrix in tensor format
-#' @export
 #'
 wtlast = function(tnsr, lasso=0, lscale=5, scale=1, rreturn=1, trnspose=0 ) { 
   weight_r = as.matrix(tnsr)
@@ -184,7 +176,7 @@ wtlast = function(tnsr, lasso=0, lscale=5, scale=1, rreturn=1, trnspose=0 ) {
 #' @param rreturn 1 (default) to return an R (numeric) vector, 0 to return a torch tensor 
 #'
 #' @return a weight matrix in tensor format
-#' @export
+
 bsint = function(tnsr, lasso=0, rreturn=1) { 
   bias_r = as.numeric(tnsr)
   lng = length(bias_r)
@@ -210,14 +202,12 @@ bsint = function(tnsr, lasso=0, rreturn=1) {
 
 ################################################################################
 ################################################################################
-
 #' Standardize a data set 
 #'
 #' @param datain The data matrix set to be standardized 
 #' @param lasso 1 to not standardize the first column, 0 (default) to not 
 #'
-#' @return a standarized data matrix 
-#' @export
+#' @return a standardized data matrix 
 #'
 dtstndrz = function(datain, lasso=0) {
   if (lasso >= 1) {
@@ -251,8 +241,6 @@ dtstndrz = function(datain, lasso=0) {
 #'
 #' @return predictions from an nerual network model accounting from a lasso model 
 #' 
-#' @export
-#'
 prednn_tl = function (lassomod, nnmodel, datain, lasso=1) {
   lassopred = predict(lassomod, datain)
   lassobeta = predict(lassomod)
@@ -342,7 +330,7 @@ prednn_tl = function (lassomod, nnmodel, datain, lasso=1) {
 #' @importFrom survival Surv coxph coxph.control concordance 
 #' 
 #' @seealso
-#'   \code{\link{ann_tab_cv_best}} , \code{\link{summary.nested.glmnetr}} , \code{\link{glmnetr.compcv}} , \code{\link{glmnetr.simdata}}
+#'   \code{\link{ann_tab_cv_best}} , \code{\link{predict_ann_tab}}, \code{\link{nested.glmnetr}} 
 #' 
 #' @author Walter Kremers (kremers.walter@mayo.edu)
 #' 
@@ -1195,19 +1183,19 @@ return( rlist )
 #' @param actv     for ACTiVation function.  Activation function between layers, 
 #' 1 for relu, 2 for gelu, 3 for sigmoid. 
 #' @param drpot    fraction of weights to randomly zero out.  NOT YET implemented. 
-#' @param mylr     learning rate for the optimzaiton step in teh neural network model fit
+#' @param mylr     learning rate for the optimization step in teh neural network model fit
 #' @param wd       weight decay for the model fit.  
 #' @param l1       a possible L1 penalty weight for the model fit, default 0 for not considered  
-#' @param lasso    1 to indicate the first collumn of the input matrix is an offset 
+#' @param lasso    1 to indicate the first column of the input matrix is an offset 
 #' term, often derived from a lasso model 
-#' @param lscale Scale used to allow ReLU to exend +/- lscale before capping the 
+#' @param lscale Scale used to allow ReLU to extend +/- lscale before capping the 
 #' inputted linear estimated 
-#' @param scale Scale used to transform the inital random paramter assingments by 
+#' @param scale Scale used to transform the initial random parameter assingments by 
 #' dividing by scale
 #' @param resetlw  1 as default to re-adjust weights to account for the offset every 
 #' epoch.  This is only used in case lasso is set to 1 
 #' @param minloss default of 1 for minimizing loss, else maximizing agreement (concordance 
-#' for Cox and Binomial, R-square for Gaussian), as function of epochs by cross validaition  
+#' for Cox and Binomial, R-square for Gaussian), as function of epochs by cross validation  
 #' @param gotoend fit to the end of epochs.  Good for plotting and exploration 
 #' @param bestof   how many models to run, from which the best fitting model will be selected.
 #' @param seed an optional a numerical/integer vector of length 2, for R and torch 
@@ -1216,10 +1204,10 @@ return( rlist )
 #' @param foldid  a vector of integers to associate each record to a fold.  Should 
 #' be integers from 1 and fold_n.  
 #' 
-#' @return an artifical neural network model fit 
+#' @return an artificial neural network model fit 
 #' 
 #' @seealso
-#'   \code{\link{ann_tab_cv}} , \code{\link{nested.glmnetr}} , \code{\link{summary.nested.glmnetr}} , \code{\link{glmnetr.compcv}} , \code{\link{glmnetr.simdata}}
+#'   \code{\link{ann_tab_cv}} , \code{\link{predict_ann_tab}}, \code{\link{nested.glmnetr}}
 #' 
 #' @author Walter Kremers (kremers.walter@mayo.edu)
 #' 

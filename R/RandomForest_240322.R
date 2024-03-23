@@ -1,5 +1,6 @@
 ################################################################################
-
+##### RandomForest_yymmdd.R ####################################################
+################################################################################
 #' Fit a Random Forest model on data provided in matrix and vector formats.
 #' 
 #' @description Fit an Random Forest model using the rfsrc() function of the 
@@ -22,6 +23,8 @@
 #' when fitting the final model.  More trees should give a better fit but 
 #' require more computations and storage for the final. 
 #' model.   
+#' @param nsplitc This nsplit of rfsrc(), a non-negative integer for the  number of 
+#' random splits for a predictor.
 #' @param seed a seed for set.seed() so one can reproduce the model fit.  If 
 #' NULL the program will generate a random seed.  Whether specified or NULL, the 
 #' seed is stored in the output object for future reference.  Note,
@@ -33,13 +36,18 @@
 #'
 #' @return a Random Forest model fit 
 #' 
+#' @seealso 
+#'    \code{\link{summary.rf_tune}} , \code{\link{predict_nested_rf}} , \code{\link{rederive_rf}} , \code{\link{nested.glmnetr}}
+#' 
 #' @author Walter Kremers (kremers.walter@mayo.edu)
 #' 
 #' @importFrom randomForestSRC rfsrc 
 #'
 #' @export
 #' 
-rf_tune = function(xs, start=NULL, y_, event=NULL, family=NULL, mtryc=NULL, ntreec=NULL, seed=NULL, track=0) {
+rf_tune = function(xs, start=NULL, y_, event=NULL, family=NULL, mtryc=NULL, ntreec=NULL, nsplitc=8, seed=NULL, track=0) {
+  
+  if (is.matrix(y_)) { y_ = as.numeric(y_) }
   
   if (is.null(seed)) { seed = round(runif(1)*1e9) } 
   set.seed( seed ) 
@@ -52,6 +60,10 @@ rf_tune = function(xs, start=NULL, y_, event=NULL, family=NULL, mtryc=NULL, ntre
     print(family) 
   }
   
+  if        (family == "binomial") { splitrule="entropy" ; splitrule="mse" 
+  } else if (family == "gaussian") { splitrule="mse"
+  } else if (family == "cox"     ) { splitrule="logrank" } 
+                                                     
   if (track >= 1) { 
     time_start = diff_time()
     time_split = time_start
@@ -89,6 +101,12 @@ rf_tune = function(xs, start=NULL, y_, event=NULL, family=NULL, mtryc=NULL, ntre
     } else { ntreec = c(25, 250) }
   }
   
+  if (is.null(nsplitc)) {
+    nsplitc = c(8)
+  } else if ((is.na(nsplitc[1])) | (nsplitc[1] < 2)) {
+    nsplitc[1] = 8 
+  }
+  
   ##------------------------------------------------------------------------------
   
   ##mtryc = mtryc[1:3]
@@ -100,12 +118,13 @@ rf_tune = function(xs, start=NULL, y_, event=NULL, family=NULL, mtryc=NULL, ntre
   if (skip == 0) {
     
     for ( k_ in c(1:length(mtryc))) {
+      set.seed( seed ) 
       if (family == "cox") {
-        rf = rfsrc( Surv(y_, event) ~ . , data=df, mtry=mtryc[k_], nsplit=8, 
-                    ntree=ntreec[1], membership = TRUE, importance=TRUE) 
+        rf = rfsrc( Surv(y_, event) ~ . , data=df, mtry=mtryc[k_], nsplit=nsplitc[1], ntree=ntreec[1], 
+                    splitrule=splitrule, membership = TRUE, importance=TRUE) 
       } else {
-        rf = rfsrc( y_ ~ . , data=df, mtry=mtryc[k_], nsplit=8, 
-                    ntree=ntreec[1], membership = TRUE, importance=TRUE) 
+        rf = rfsrc( y_ ~ . , data=df, mtry=mtryc[k_], nsplit=nsplitc[1], ntree=ntreec[1], 
+                    splitrule=splitrule, membership = TRUE, importance=TRUE) 
       }
       
       if (k_ ==1) {
@@ -122,7 +141,7 @@ rf_tune = function(xs, start=NULL, y_, event=NULL, family=NULL, mtryc=NULL, ntre
         rf_best = rf 
       }
       
-      if (k_ > 1) { err.ratev = c(err.ratev, rf$err.rate[length(rf$err.rate)]) } 
+      if (k_ > 1) { err.ratev[k_] = rf$err.rate[length(rf$err.rate)] } 
       
       if (track >= 2) { 
         print( c(k_, mtryc[k_], mtry_best, rf$err.rate[length(rf$err.rate)] ) )
@@ -131,12 +150,13 @@ rf_tune = function(xs, start=NULL, y_, event=NULL, family=NULL, mtryc=NULL, ntre
     }
     
     if (ntreec[2] > ntreec[1]) {
+      set.seed( seed ) 
       if (family == "cox") {
-        rf_tuned = rfsrc( Surv(y_, event) ~ . , data=df, mtry=mtryc[k_best], nsplit=8, 
-                    ntree=ntreec[2], membership = TRUE, importance=TRUE) 
+        rf_tuned = rfsrc( Surv(y_, event) ~ . , data=df, mtry=mtryc[k_best], nsplit=nsplitc[1], ntree=ntreec[2], 
+                    splitrule=splitrule, membership = TRUE, importance=TRUE) 
       } else {
-        rf_tuned = rfsrc( y_ ~ . , data=df, mtry=mtryc[k_best], nsplit=8, 
-                    ntree=ntreec[2], membership = TRUE, importance=TRUE) 
+        rf_tuned = rfsrc( y_ ~ . , data=df, mtry=mtryc[k_best], nsplit=nsplitc[1], ntree=ntreec[2], 
+                    splitrule=splitrule, membership = TRUE, importance=TRUE) 
       }
     } else {
       rf_tuned = rf_best
@@ -147,10 +167,13 @@ rf_tune = function(xs, start=NULL, y_, event=NULL, family=NULL, mtryc=NULL, ntre
       time_split = diff_time(time_start, time_split)
     }
     
-    rffit = list(rf_tuned=rf_tuned, err.ratev=err.ratev, rf_tuned$err.rate[length(rf_tuned$err.rate)], 
-                 mtryc=mtryc, ntreec=ntreec, seed=seed )
+#    rffit = list(rf_tuned=rf_tuned, err.ratev=err.ratev, err.rate=rf_tuned$err.rate[length(rf_tuned$err.rate)], 
+#                 mtryc=mtryc, ntreec=ntreec, seed=seed )
 
-  } else { rffit = list(rffit="NONE") }
+#    rf_tuned$err.ratev=err.ratev    
+    rffit = list(rf_tuned=rf_tuned, err.ratev=err.ratev, mtryc=mtryc, ntreec=ntreec, seed=seed )
+
+  } else { rf_tuned = list(rffit="NONE") }
   
   class(rffit) <- c("rf_tune")
   
@@ -166,6 +189,9 @@ rf_tune = function(xs, start=NULL, y_, event=NULL, family=NULL, mtryc=NULL, ntre
 #' @param ... optional pass through parameters to pass to summary.rfsrc() 
 #'
 #' @return summary to console
+#' 
+#' @seealso 
+#'    \code{\link{predict_nested_rf}} , \code{\link{rf_tune}} , \code{\link{nested.glmnetr}}
 #' 
 #' @export
 #'
@@ -186,6 +212,9 @@ summary.rf_tune = function(object, ...) {
 #' @param ... optional pass through parameters to pass to print.rfsrc() 
 #'
 #' @return summary to console
+#' 
+#' @seealso 
+#'    \code{\link{summary.rf_tune}} , \code{\link{predict_nested_rf}} , \code{\link{rf_tune}} , \code{\link{nested.glmnetr}}
 #' 
 #' @export
 #'

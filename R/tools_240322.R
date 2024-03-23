@@ -1,4 +1,5 @@
 ################################################################################
+##### tools_yymmdd.R ###########################################################
 ################################################################################
 #' Get seeds to store, facilitating replicable results 
 #'
@@ -9,6 +10,9 @@
 #' @param folds_ann_n The number of folds for the ANN fits 
 #'
 #' @return seed(s) in a list format for input to subsequent runs
+#' 
+#' @seealso
+#'   \code{\link{nested.glmnetr}} 
 #' 
 #' @export
 #'
@@ -123,6 +127,9 @@ glmnetr_seed = function(seed, folds_n=10, folds_ann_n=NULL) {
 #' @param fold_n the numbe of folds to be constructed
 #'
 #' @return foldid's in a vector the same length as event
+#' 
+#' @seealso
+#'   \code{\link{get.foldid}} , \code{\link{nested.glmnetr}} 
 #'  
 #' @export
 #'
@@ -178,7 +185,7 @@ factor.foldid = function(event, fold_n=10) {
 #' @return A numeric vector with foldid's for use in a cross validation 
 #' 
 #' @seealso
-#'   \code{\link{cv.glmnetr}} , \code{\link{nested.glmnetr}}  , \code{\link{factor.foldid}} 
+#'   \code{\link{factor.foldid}} , \code{\link{nested.glmnetr}} 
 #'  
 #' @export
 #' 
@@ -227,6 +234,9 @@ get.foldid = function( y_, event, family, folds_n , stratified = 1 ) {
 #'
 #' @return Saturated log likelihood for the Efron and Breslow approximations.
 #' 
+#' @seealso
+#'   \code{\link{nested.glmnetr}} 
+#' 
 #' @export
 #'
 cox.sat.dev =  function(y_, e_) {
@@ -260,7 +270,10 @@ diff_time1 = function(time1, time2) {
   secs   = difftime(time1, time2, units="secs") ;   
   class(secs) = NULL ; 
   secs = floor( secs %% 60) 
-  return(c(hour, minute, secs))
+  hr_mn_sc = c(hour, minute, secs)
+#  print(paste( "hr_mn_sc = ", length( hr_mn_sc),"\n"))
+  #names(hr_mn_sc) = c("Hour", "Min", "Sec") 
+  return(hr_mn_sc)
 }
 
 ###############################################################################################################
@@ -272,6 +285,9 @@ diff_time1 = function(time1, time2) {
 #' @param time_last last time for calculating split time
 #'
 #' @return Time of program invocation 
+#' 
+#' @seealso
+#'   \code{\link{nested.glmnetr}} 
 #' 
 #' @export 
 #'
@@ -324,14 +340,15 @@ diff_time = function(time_start=NULL, time_last=NULL) {
 #' yt for a survival time, event for an indicator of event (1) or censoring (0), 
 #' in the Cox proportional hazards survival model setting, yb for 
 #' yes/no (binomial) outcome data, and beta the beta used in random number generation. 
-#' @export
 #' 
+#' @seealso
+#'   \code{\link{nested.glmnetr}} 
+#'
+#' @export
+#'
 #' @importFrom stats rnorm runif rexp rbinom rbeta 
 #' @importFrom Matrix rankMatrix
 #' 
-#' @seealso
-#'   \code{\link{glmnetr}} , \code{\link{cv.glmnetr}} , \code{\link{nested.glmnetr}}  
-#'
 #' @examples
 #' sim.data=glmnetr.simdata(nrows=1000, ncols=100, beta=NULL)
 #' # for Cox PH survial model data 
@@ -442,6 +459,9 @@ glmnetr.simdata = function(nrows=1000, ncols=100, beta=NULL, intr=NULL) {
 #' @return a list with devrat.cv for the deviance ratios for the indivual folds, 
 #' and devrat, a single collective deviance ratio
 #' 
+#' @seealso
+#'   \code{\link{nested.glmnetr}} 
+#' 
 #' @export
 #'
 devrat_ = function( m2.ll.mod, m2.ll.null, m2.ll.sat, n__ ) {
@@ -450,4 +470,5 @@ devrat_ = function( m2.ll.mod, m2.ll.null, m2.ll.sat, n__ ) {
   return(list(devrat.cv=devrat.cv, devrat=devrat))
 }
 
-
+###############################################################################################################
+###############################################################################################################

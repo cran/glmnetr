@@ -1,6 +1,7 @@
-###############################################################################################################
-###############################################################################################################
-## do cross validation to choose tuning paramter, i.e. lambda and gamma #######################################
+################################################################################
+##### cv.glmnetr_yymmdd.R ######################################################
+################################################################################
+## do cross validation to choose tuning parameter, i.e. lambda and gamma #######
 #' Get a cross validation informed relaxed lasso model fit.
 #'
 #' @description
@@ -56,11 +57,11 @@
 #'  
 #' @return A cross validation informed relaxed lasso model fit.
 #' 
+#' @seealso
+#'   \code{\link{summary.cv.glmnetr}} , \code{\link{predict.cv.glmnetr}} , \code{\link{glmnetr}} , \code{\link{nested.glmnetr}} 
+#'   
 #' @author Walter Kremers (kremers.walter@mayo.edu)
 #' 
-#' @seealso
-#'   \code{\link{glmnetr}} , \code{\link{nested.glmnetr}}  , \code{\link{glmnetr.simdata}} 
-#'   
 #' @export
 #' 
 #' @importFrom stats runif 
@@ -104,7 +105,7 @@ cv.glmnetr = function( xs, start=NULL, y_, event=NULL, family="gaussian", lambda
     track=time
     cat(" Please use track option instead of time option.  time option will be dropped in future versions.")
   }
-  if (track==1) { time_start = diff_time() }
+  if (track>=1) { time_start = diff_time() }
   
   # coxcontrol = survival::coxph.control()                                      ## if switch to coxph.fit 
   # glmcontrol = glm.control()                                                  ## if switch to glm.fit 
@@ -122,7 +123,7 @@ cv.glmnetr = function( xs, start=NULL, y_, event=NULL, family="gaussian", lambda
   }
   
   ##============================================================================  initial panalized fit 
-  if (track==1) {
+  if (track>=1) {
     cat(paste0("  Fitting cv.glmnet() with relax=FALSE to get range for lambda", "\n"))
   }
   if (family=="cox") {                                                          ## TODO1 - move to inside of glmnetr 
@@ -153,7 +154,7 @@ cv.glmnetr = function( xs, start=NULL, y_, event=NULL, family="gaussian", lambda
   #  df.l.rank = sum(cv.glmnet.fit.g1$df < rankMatrix(xs)[1])
   #  lamda = lambda[1:min(lambda_n, df.l.rank)]
   
-  if (track==1) { time_last = diff_time(time_start) }
+  if (track>=1) { time_last = diff_time(time_start) }
   
   if (fine==1) {
     ratio = sqrt(cv.glmnet.fit.g1$lambda[2]/cv.glmnet.fit.g1$lambda[1]) 
@@ -171,18 +172,18 @@ cv.glmnetr = function( xs, start=NULL, y_, event=NULL, family="gaussian", lambda
     }
   } 
   
-  if (track==1) { cat(paste0("Split for Beta g:1  ")) ; time_last = diff_time(time_start, time_last) }
+  if (track>=1) { cat(paste0("Split for Beta g:1  ")) ; time_last = diff_time(time_start, time_last) }
   
   glmnetr.fit = glmnetr( xs, start, y_, event, lambda=lambda, gamma=gamma, object=cv.glmnet.fit.g1, track=0, family=family, ...) 
   
 #  if (family!="cox") { length(glmnetr.fit$a0g0) }
   
-  if (track==1) { cat(paste0("Split for Beta g:0  ")) ; time_last = diff_time(time_start, time_last) }
+  if (track>=1) { cat(paste0("Split for Beta g:0  ")) ; time_last = diff_time(time_start, time_last) }
   
   devratiolist = glmnetr_devratio( cv.glmnet.fit.g1, glmnetr.fit, xs_new=xs, start_new=start, y_new=y_, event_new=event, family=family, ties=ties) 
   devratio     = devratiolist$devratio 
   
-  if (track==1) { cat(paste0("Split for dev.ratio ")) ; time_last = diff_time(time_start, time_last) }
+  if (track>=1) { cat(paste0("Split for dev.ratio ")) ; time_last = diff_time(time_start, time_last) }
   
   neventsg0 = 0 
   
@@ -196,7 +197,7 @@ cv.glmnetr = function( xs, start=NULL, y_, event=NULL, family="gaussian", lambda
   ##============================================================================  begin folds  
   for (i_ in 1:folds_n) {
     ##=== begin folds ==========================================================
-    if (track==1) {
+    if (track>=1) {
       cat(paste0("\n", " ########## Entering Cross Validation fold  ", i_, "  of  " , folds_n , "  ############################" , "\n"))
     }
     ##### set up train and test data sets in matrix form for glmnet & stepreg #####
@@ -273,31 +274,19 @@ cv.glmnetr = function( xs, start=NULL, y_, event=NULL, family="gaussian", lambda
     
     if ( sum(deviance < 0) > 0 ) { print( sum(testevent)) }
     
-    if (track==1) { time_last = diff_time(time_start, time_last) }
+    if (track>=1) { time_last = diff_time(time_start, time_last) }
     ##=== end folds ============================================================
-  } ## end of fold ########################################################################
+  } 
+  ##============================================================================  END folds  
   
-#  print(class(glmnetr.fit$betag1))
-#  print(glmnetr.fit$betag1)
-#  dimbetag1 = dim( glmnetr.fit$betag1 ) 
-  # matrix ( data=rep(0,(6*folds_n)), nrow = folds_n, ncol = 6 ) 
-
-#  the followoing line works in program, but not examples using devtools::check 
-#  nzero = colSums( (glmnetr.fit$betag1!=0)*1 )[1:lambda_n]                      ## MOD221129
-## therefore the code - Start MOD221129 
   betag1 = as.matrix(glmnetr.fit$betag1)
-#  betag1 = matrix(data=rep(0,(dimbetag1[1]*dimbetag1[2]), nrow=dimbetag1[1], ncol=dimbetag1[2])
-#  dimbetag1 = dim( glmnetr.fit$betag1 ) 
-#  betag1 = matrix(data=rep(0,(dimbetag1[1]*dimbetag1[2])), nrow=dimbetag1[1], ncol=dimbetag1[2])
-#  for (im in c(1:dimbetag1[1])) {
-#    for (jm in c(1:dimbetag1[2])) {
-#      betag1[im,jm] = glmnetr.fit$betag1[im,jm]
-#    }
-#  }
-  nzero = colSums( betag1!=0 )[1:lambda_n]  
-# stop mod221129    
+  betag0 = as.matrix(glmnetr.fit$betag0)
+  nzero.g1 = colSums( betag1!=0 )[1:lambda_n]  
+  nzero = colSums( betag0!=0 )[1:lambda_n]  
+#  nzero.g1
+#  nzero
+#  nzero.g1 - nzero
   names(nzero) = NULL
-  nzero
   
   #=============================================================================
   
@@ -350,7 +339,7 @@ cv.glmnetr = function( xs, start=NULL, y_, event=NULL, family="gaussian", lambda
   if (gamma.min.r.index == 0) { gamma.min.r.index = gamma_n }
   lambda.min.r = lambda[lambda.min.r.index]
   gamma.min.r  = gamma[gamma.min.r.index]
-  nzero.min.r = nzero[lambda.min.r.index]
+  nzero.min.r = ifelse( gamma.min.r == 0, nzero[lambda.min.r.index], nzero.g1[lambda.min.r.index] ) 
   
   ##========== get lambda.1se relaxed ==========================================
   
@@ -384,7 +373,7 @@ cv.glmnetr = function( xs, start=NULL, y_, event=NULL, family="gaussian", lambda
   lambda.1se.r = lambda[lambda.1se.r.index]
   gamma.1se.r  = gamma[gamma.1se.r.index]
   
-  nzero.1se.r = nzero[lambda.1se.r.index]
+  nzero.1se.r = ifelse( gamma.1se.r == 0, nzero[lambda.1se.r.index], nzero.g1[lambda.1se.r.index] )  
   
   index.r = matrix(rep(0,4), nrow=2, ncol=2)
   index.r[1,1] = lambda.min.r.index
@@ -505,6 +494,10 @@ cv.glmnetr = function( xs, start=NULL, y_, event=NULL, family="gaussian", lambda
                        index=index.r, 
                        lambda.min.g0 = lambda.min.g0 , lambda.1se.g0 = lambda.1se.g0 , index.g0=index.g0, statlist_ll=statlist_ll )
   
+  nzero.g0 = colSums( glmnetr.fit$betag0[,1:lambda_n] != 0 )
+#  print(nzero)
+#  print(nzero.g0)
+  
   ## the fully relaxed fit    ##beta      = glmnetr.fit$betag0
   glmnet.fit$relaxed =  list( a0        = glmnetr.fit$a0g0[1:lambda_n] ,
                               beta      = glmnetr.fit$betag0[,1:lambda_n] ,
@@ -575,10 +568,10 @@ cv.glmnetr = function( xs, start=NULL, y_, event=NULL, family="gaussian", lambda
 #' @return A list with two matrices, one for the model coefficients with
 #'     gamma=1 and the other with gamma=0.  
 #'     
-#' @export 
-#' 
 #' @seealso
-#'   \code{\link{cv.glmnetr}} , \code{\link{nested.glmnetr}}  , \code{\link{glmnetr.simdata}} 
+#'   \code{\link{predict.glmnetr}} , \code{\link{cv.glmnetr}} , \code{\link{nested.glmnetr}} 
+#'   
+#' @export 
 #'   
 #' @importFrom stats formula glm 
 #' @importFrom survival Surv coxph 
@@ -611,7 +604,7 @@ glmnetr = function(xs_tmp, start_tmp, y_tmp, event_tmp, family="cox", lambda=NUL
     track=time
     cat(" Please use track option instead of time option.  time option will be dropped in future versions.")
   }
-  if (track==1) { time_start = diff_time() }
+  if (track>=1) { time_start = diff_time() }
   
   xs_tmp_ncol = dim(xs_tmp)[2]
   
@@ -632,7 +625,7 @@ glmnetr = function(xs_tmp, start_tmp, y_tmp, event_tmp, family="cox", lambda=NUL
   lambda = cv.glmnet.fit$lambda 
   lambda_n = length( lambda )    
     
-  if (track==1) { time_last = diff_time(time_start) }
+  if (track>=1) { time_last = diff_time(time_start) }
   
   a0g1 = NULL 
   
@@ -722,7 +715,7 @@ glmnetr = function(xs_tmp, start_tmp, y_tmp, event_tmp, family="cox", lambda=NUL
   }
   #---------------------------------------------------------------------------
     
-  if (track==1) { time_last = diff_time(time_start, time_last) }
+  if (track>=1) { time_last = diff_time(time_start, time_last) }
 
   rownames(betag0) = xs_tmpnames 
 #  colnames(betag0) = colnames(betag1)

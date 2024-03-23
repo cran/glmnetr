@@ -1,3 +1,5 @@
+################################################################################
+##### aicreg_yymmdd.R ##########################################################
 #' Identify model based upon AIC criteria from a stepreg() putput 
 #'
 #' @param xs predictor input - an n by p matrix, where n (rows) is sample size, and p (columns) 
@@ -20,6 +22,9 @@
 #'
 #' @return The identified model in form of a glm() or coxph() output object, with an 
 #' entry of the stepreg() output object.
+#' 
+#' @seealso
+#'   \code{\link{stepreg}} , \code{\link{cv.stepreg}} , \code{\link{nested.glmnetr}} 
 #' 
 #' @export
 #' 
