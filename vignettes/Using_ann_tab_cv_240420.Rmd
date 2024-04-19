@@ -1,7 +1,7 @@
 ---
 title: "Using ann_tab_cv() and transfer learning" 
 author: "Walter K. Kremers, Mayo Clinic, Rochester MN"
-date: "22 March 2024"
+date: "20 April 2024"
 output: pdf_document 
 vignette: >
   %\VignetteIndexEntry{Using ann_tab_cv}
@@ -12,7 +12,7 @@ vignette: >
   evalload = TRUE  ; evalmodel = FALSE ;
   evalload = FALSE ; evalmodel = TRUE  ;
 knitr::opts_chunk$set(echo = TRUE)
-source("~/Documents/Rpackages/glmnetr_supl/_load_glmnetr_vig_240322.R" , echo=FALSE)
+source("~/Documents/Rpackages/glmnetr_supl/_load_glmnetr_vig_240409.R" , echo=FALSE)
 ```
 # The functions
 The ann_cv_lin() function fits a neural network (NN) model to tabular data.  The network has a simple "sequential" structure with linear components and by default ReLU activations.  It has two hidden layers where the number of terms in the two layers can be specified by the user.  Data for input are in a format as with the nested.glmnetr() function.  Models can be fit as generalizations to the Cox, logistic or linear regression models.
@@ -57,7 +57,7 @@ print(xs[1:10,c(1:12,18:20)])
 To fit a NN model we can use a simple function call as in
 ```{r  load ann_tab_cv() fits, include=FALSE, eval=evalload}
 ## always run ann_tab_cox_ex1 & nested_cox_fit_ex2 
-load( file="~/Documents/Rpackages/glmnetr_supl/using_ann_tab_cv_outputs_240322.RLIST" ) 
+load( file="~/Documents/Rpackages/glmnetr_supl/using_ann_tab_cv_outputs_240412.RLIST" ) 
 ```
 ```{r  fit ann_tab_cox_ex1, an ann_tab_cv() model}
 ## fit a model with some monitoring to the R console 
@@ -312,5 +312,5 @@ Just as one can assign a subset of the bias and weight (initial) values for the 
 Just as we have informed the NN model with the results form a relaxed lasso model fit we an do the same with gradient boosting machines by either adding the lasso predicted as an additional predictor or including it as an offset.  This is done by setting doxgb=1 in the nested.glmnetr() call. Results are similar but different from those for the NN models.  For our data sets the GBMs took much longer to run since we used a search algorithm to find a "best" hyperparameter set.
 ```{r save1, include=FALSE, eval=evalmodel}
 save( ann_tab_cox_ex1, nested_cox_fit_ex2, nested_nrm_fit_ex3, nested_bin_fit_ex4 , nested_nrm_fit_ex5 ,  
-      file="~/Documents/Rpackages/glmnetr_supl/using_ann_tab_cv_outputs_240322.RLIST") 
+      file="~/Documents/Rpackages/glmnetr_supl/using_ann_tab_cv_outputs_240412.RLIST") 
 ```

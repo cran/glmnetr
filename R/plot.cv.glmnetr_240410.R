@@ -315,7 +315,6 @@ plot.cv.glmnetr = function(x, gam=NULL, lambda.lo=NULL, plup=0, title=NULL, coef
 #' 
 #' @description Plot the nested cross validation performance numbers, cross 
 #' validated relaxed lasso deviances or coefficients from a nested.glmnetr() call.  
-
 #'
 #' @param x A nested.glmnetr output object
 #' @param type type of plot to be produced form the (nested) cross validation 
@@ -365,7 +364,7 @@ plot.cv.glmnetr = function(x, gam=NULL, lambda.lo=NULL, plup=0, title=NULL, coef
 #' some numerical information to the R Console.  
 #' 
 #' @seealso
-#'   \code{\link{plot_perf_glmnetr}} , \code{\link{plot.cv.glmnetr}} , \code{\link{nested.glmnetr}}
+#'   \code{\link{plot_perf_glmnetr}} , \code{\link{calplot}} , \code{\link{plot.cv.glmnetr}} , \code{\link{nested.glmnetr}}
 #'
 #' @author Walter Kremers (kremers.walter@mayo.edu)
 #' 

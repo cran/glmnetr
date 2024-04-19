@@ -11,7 +11,7 @@
 #' case of RF by out-of-bag calculations), and a second  layer of CV 
 #' (or analogously for the RF) is 
 #' used to evaluate the performance of these CV informed model fits.  For
-#' step wise regression CV is used to inform either a p-value for entry or degress of 
+#' step wise regression CV is used to inform either a p-value for entry or degrees of 
 #' freedom (df) for the final model choice.  For input 
 #' we require predictors (features) to be in numeric matrix format with no missing 
 #' values.  This is similar to how the glmnet package expects predictors.  For 
@@ -246,7 +246,8 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
                           seed=NULL, foldid=NULL, limit=1, fine=0, ties="efron", keepdata=0, keepxbetas=1,  
                           track=0, ... ) {
   
-  pver = "0.4-4 dev 240322" 
+  pver = "glmnetr version 0.4-5 (2024-04-20)" 
+#  pver = "0.4-5 dev 240412" 
   
   if (is.null(keepdata)) { keepdata = 0 }
   if (is.null(keepxbetas)) { keepxbetas = 0 }
@@ -319,6 +320,12 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
     }
   }
   
+  if ( (doxgb_ == 1) & (family == "cox") & (!is.null(start))) { 
+    doxgb_ = 0
+    cat( "  The gradient boosting machine fitting routine does not fit Cox model with (start,stop) time data\n",
+         " gradient boosting machine models will not be fit\n\n")
+  }
+  
 #  cat(paste('  xgbkeep = ', xgbkeep)) 
 
   if (is.list(doxgb)) {
@@ -332,6 +339,7 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
   }
 
   ## set up dorf ===============================================================  
+  ## https://www.randomforestsrc.org/articles/survival.html#ensemble-chf-and-survival-function
   dorf_ = 0 
   
   if (is.null(dorf)) { dorf = 0 }
@@ -349,7 +357,7 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
     mtryc = dorf$mtryc 
     ntreec = dorf$ntreec 
     nsplitc = dorf$nsplitc 
-    if ( is.null(dorf$keep) ) { rfkeep = 1 }
+    if ( is.null(dorf$keep) ) { dorf$keep = 1 }
     rfkeep = dorf$keep 
   }
   
@@ -358,6 +366,18 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
   if (is.null(doann)) { doann = 0 }
   if ((!is.list(doann)) & ( doann[1] >= 1 )) { doann_ = 1 ;  doann = as.list(doann) }
   if (is.list(doann)) { doann_ = 1 } 
+  
+  if ( (doann_==1) & (family == "cox") & (!is.null(start))) { 
+    cat( "  The neural network fitting routine does not fit Cox model with (start,stop) time data\n",
+         " neural network models will not be fit\n\n")
+    doann_ = 0
+  }
+
+  if ( (dorpart == 1) & (family == "cox") & (!is.null(start))) { 
+    dorpart = 0
+    cat( "  The recursive partitioning fitting routine does not fit Cox model with (start,stop) time data\n",
+         " recursive partitioning machine models will not be fit\n\n")
+  }
   
   eppr = NULL 
   eppr2 = NULL 
@@ -413,7 +433,7 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
   if (track >= 1) { time_start = diff_time() }
 
   ## general input check #######################################################
-  
+
   if (ties != "breslow") { ties="efron" }
   
   if ( is.null(ensemble) ) { ensemble = c(1, rep(0,7)) } 
@@ -717,12 +737,14 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
       }
     }
     
-    if ((family == "cox") & (is.null(start))) {
-      cv_ridge_fit_f = cv.glmnet( xs, Surv(y_, event), family=family, alpha=0, nfolds=folds_n, foldid=foldid, ... )  
-    } else if ((family == "cox") & (!is.null(start))) {
-      cv_ridge_fit_f = cv.glmnet( xs, Surv(start, y_, event), family=family, alpha=0, nfolds=folds_n, foldid=foldid, ... )  
-    } else {
-      cv_ridge_fit_f = cv.glmnet( xs, y_, family=family, alpha=0, nfolds=folds_n, foldid=foldid, ... )  
+    if (folds_n >= 3) {
+      if ((family == "cox") & (is.null(start))) {
+        cv_ridge_fit_f = cv.glmnet( xs, Surv(y_, event), family=family, alpha=0, nfolds=folds_n, foldid=foldid, ... )  
+      } else if ((family == "cox") & (!is.null(start))) {
+        cv_ridge_fit_f = cv.glmnet( xs, Surv(start, y_, event), family=family, alpha=0, nfolds=folds_n, foldid=foldid, ... )  
+      } else {
+        cv_ridge_fit_f = cv.glmnet( xs, y_, family=family, alpha=0, nfolds=folds_n, foldid=foldid, ... )  
+      }
     }
     
 #    cat(" table(foldid)" )
@@ -743,7 +765,8 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
     pred1seR0 = predict(cv_glmnet_fit_f, xs, lam=cv_glmnet_fit_f$relaxed$lambda.1se.g0, gam=0)
     predminR0 = predict(cv_glmnet_fit_f, xs, lam=cv_glmnet_fit_f$relaxed$lambda.min.g0, gam=0)
 #    predminR0 = predict(cv_glmnet_fit_f, xs, gam=0)
-    predridge = predict(cv_ridge_fit_f , xs, s="lambda.min")
+    if (folds_n >= 3) { predridge = predict(cv_ridge_fit_f , xs, s="lambda.min")
+    } else {  predridge = rep(0,dim(xs)[1]) }
     
 #      cat( cor(cbind(pred1se, predmin, pred1seR, predminR, pred1seR0, predminR0)) ) 
 #      cat( cor(cbind(predmin, predminR, predminR0, predminRp, y_)) ) 
@@ -785,7 +808,8 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
       lasso.nzero[6] = cv_glmnet_fit_f$nzero [ cv_glmnet_fit_f$relaxed$index.g0[1] ]
 #      lasso.nzero[6] = length(predict(cv_glmnet_fit_f, gam=0)$beta)
     }
-    lasso.nzero[7] = cv_ridge_fit_f$nzero[ cv_ridge_fit_f$index ][1]
+    if (folds_n >= 3) { lasso.nzero[7] = cv_ridge_fit_f$nzero[ cv_ridge_fit_f$index ][1]
+    } else { lasso.nzero[7] = 0 }
     names(lasso.nzero) = nms 
     
     ## calibrate lasso ##
@@ -807,11 +831,6 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
   
   ###############################################################################################################
   ##### XGBoost fit #############################################################################################
-  if ( (doxgb_==1) & (family=="cox") & !is.null(start) ) { 
-    doxgb_ = 0  
-    cat("\n xgboost() does not fit Cox model with (start, stop) time data.  doxgb set to 0. \n\n" ) 
-  } 
-  
   if (doxgb_==1) { 
     if (track >= 1) { cat(paste0("\n", " ########## Initial XGBoost fit on all data ###########################################" , "\n")) }
     
@@ -1117,13 +1136,19 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
     names(rpart.lincal.naive)  = nms
     names(rpart.nzero       )  = nms
     
-    xbetas = cbind(xbetas, xbetas0)
+    xbetas0.rpart = xbetas0
     
     if (track >= 1) { time_last = diff_time(time_start, time_last) } 
   }
   
   ###############################################################################################################
   ##### Neural Network fit ######################################################################################
+  if ( (doann_ == 1) & (family == "cox") & (!is.null(start))) { 
+    cat( "  The neural network fitting routine does not fit Cox model with (start,stop) time data\n",
+         "  neural network models will not be fit\n")
+    doann_ = 0
+  }
+  
   if (doann_ == 1) { 
     if (track >= 1) { cat(paste0("\n", " ########## Initial Neural Network fit on all data #############################################" , "\n")) }
     
@@ -1204,8 +1229,13 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
     }
     
     getwd = 0 ; getwd2 = 0 ; 
-    if (wd  < 0) { getwd  = 1 ; wd  = abs(wd ) * cv_ridge_fit_f$lambda.min } 
-    if (wd2 < 0) { getwd2 = 1 ; wd2 = abs(wd2) * cv_ridge_fit_f$lambda.min }
+    if (folds_n >= 3) {
+      if (wd  < 0) { getwd  = 1 ; wd  = abs(wd ) * cv_ridge_fit_f$lambda.min } 
+      if (wd2 < 0) { getwd2 = 1 ; wd2 = abs(wd2) * cv_ridge_fit_f$lambda.min }
+    } else {
+      if (wd  < 0) { getwd  = 1 ; wd  = abs(wd ) } 
+      if (wd2 < 0) { getwd2 = 1 ; wd2 = abs(wd2) }
+    }
     
     getl1 = 0 ; getl12 = 0 ; 
     if (l1  < 0) { getl1  = 1 ; l1  = abs(l1 ) * cv_glmnet_fit_f$relaxed$lambda.min.g0 } 
@@ -1340,11 +1370,14 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
       names(ann.intcal.naive)  = nms
       names(ann.lincal.naive)  = nms
       
-      xbetas = cbind(xbetas, xbetas0)
+      xbetas0.ann = xbetas0 
     } 
     
     if (track >= 1) { time_last = diff_time(time_start, time_last)  }
   }
+  
+  if (doann_  == 1) { xbetas = cbind(xbetas, xbetas0.ann) }
+  if (dorpart == 1) { xbetas = cbind(xbetas, xbetas0.rpart) }
   
   ##### STEPWISE and AIC fits #################################################################################    
   
@@ -1601,12 +1634,14 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
           }
         }
 
-        if ((family == "cox") & (is.null(trainstart))) {
-          cv_ridge_fit = cv.glmnet( trainxs, Surv(trainy_, trainevent), family=family, alpha=0, nfolds=folds_n, foldid=foldidcv, ... )  
-        } else if ((family == "cox") & (!is.null(trainstart))) {
-          cv_ridge_fit = cv.glmnet( trainxs, Surv(trainstart, trainy_, trainevent), family=family, alpha=0, nfolds=folds_n, foldid=foldidcv, ... )  
-        } else {
-          cv_ridge_fit = cv.glmnet( trainxs, trainy_, family=family, alpha=0, nfolds=folds_n, foldid=foldidcv, ... )  
+        if (folds_n >= 3) {
+          if ((family == "cox") & (is.null(trainstart))) {
+            cv_ridge_fit = cv.glmnet( trainxs, Surv(trainy_, trainevent), family=family, alpha=0, nfolds=folds_n, foldid=foldidcv, ... )  
+          } else if ((family == "cox") & (!is.null(trainstart))) {
+            cv_ridge_fit = cv.glmnet( trainxs, Surv(trainstart, trainy_, trainevent), family=family, alpha=0, nfolds=folds_n, foldid=foldidcv, ... )  
+          } else {
+            cv_ridge_fit = cv.glmnet( trainxs, trainy_, family=family, alpha=0, nfolds=folds_n, foldid=foldidcv, ... )  
+          }
         }
         
         lasso.nzero.cv[i_,1] = cv_glmnet_fit$nzero [ cv_glmnet_fit$index[2] ]
@@ -1617,7 +1652,9 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
           lasso.nzero.cv[i_,5] = cv_glmnet_fit$nzero [ cv_glmnet_fit$relaxed$index.g0[2] ]
           lasso.nzero.cv[i_,6] = cv_glmnet_fit$nzero [ cv_glmnet_fit$relaxed$index.g0[1] ]
         }
-        lasso.nzero.cv[i_,7] = cv_ridge_fit$nzero[ cv_ridge_fit$index ][1]
+        if (folds_n >= 3) { lasso.nzero.cv[i_,7] = cv_ridge_fit$nzero[ cv_ridge_fit$index ][1] 
+        } else { lasso.nzero.cv[i_,7] = 0 }
+        
         lassogammacv[i_,1]= cv_glmnet_fit$relaxed$gamma.1se 
         lassogammacv[i_,2]= cv_glmnet_fit$relaxed$gamma.min 
         
@@ -1629,7 +1666,8 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
         predminR  = predict(cv_glmnet_fit, testxs, lam="lambda.min" , gam="gamma.min" )  ###### min RELAXED lasso ##########################
         pred1seR0 = predict(cv_glmnet_fit, testxs, lam=cv_glmnet_fit$relaxed$lambda.1se.g0, gam=0)  ###### 1se gamma = 0 RELAXED lasso #####
         predminR0 = predict(cv_glmnet_fit, testxs, lam=cv_glmnet_fit$relaxed$lambda.min.g0, gam=0)  ###### min gamma = 0 RELAXED lasso #####
-        predridge = predict(cv_ridge_fit , testxs)  ###### min gamma = 0 RELAXED lasso #####
+        if (folds_n >= 3) { predridge = predict(cv_ridge_fit , testxs)
+        } else { predridge = rep(0,dim(testxs)[1]) }
         
         perfm1 = perf_gen( testy__ , pred1se  , family )
         perfm2 = perf_gen( testy__ , predmin  , family )
@@ -1941,8 +1979,10 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
           # table(round(diag(cov(trainxs_z1L)),digits=8))
         }
         
-        if (getwd  == 1) { wd  = cv_ridge_fit$lambda.min } 
-        if (getwd2 == 1) { wd2 = cv_ridge_fit$lambda.min }
+        if (folds_n >= 3) {
+          if (getwd  == 1) { wd  = cv_ridge_fit$lambda.min } 
+          if (getwd2 == 1) { wd2 = cv_ridge_fit$lambda.min }
+        }
         
         if (getl1  == 1) { l1  = cv_glmnet_fit$relaxed$lambda.min.g0 } 
         if (getl12 == 1) { l12 = cv_glmnet_fit$relaxed$lambda.min.g0 }
@@ -2250,7 +2290,7 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
     nestedcv$lasso.agree.naive  = lasso.agree.naive 
     nestedcv$lasso.nzero        = lasso.nzero
     nestedcv$cv_glmnet_fit      = cv_glmnet_fit_f 
-    nestedcv$cv_ridge_fit       = cv_ridge_fit_f 
+    if (folds_n >= 3) { nestedcv$cv_ridge_fit = cv_ridge_fit_f } 
   } 
   
   #-----------------------------------------------------------------------------

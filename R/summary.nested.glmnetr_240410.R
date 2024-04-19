@@ -1,7 +1,7 @@
 ################################################################################
 ##### summary.nested.glmnetr_yymmdd.R ##########################################
 ################################################################################
-#' Print an abbreviated summary of a nested.glmnetr() output object
+#' A redirect to the summary() function for nested.glmnetr() output objects 
 #'
 #' @param x a nested.glmnetr() output object.  
 #' @param ... additional pass through inputs for the print function.
@@ -9,7 +9,7 @@
 #' @return - a nested cross validation fit summary, or a cross validation model summary.  
 #' 
 #' @seealso
-#'    \code{\link{glmnetr.compcv}} , \code{\link{summary.nested.glmnetr}} , \code{\link{nested.glmnetr}}
+#'    \code{\link{summary.nested.glmnetr}} , \code{\link{nested.glmnetr}}
 #'    
 #' @export
 #'
@@ -117,7 +117,8 @@ roundperf = function(summdf, digits=3, do_ncv=1) {
 #' @return - a nested cross validation fit summary, or a cross validation model summary.  
 #' 
 #' @seealso
-#'   \code{\link{glmnetr.compcv}} , \code{\link{summary.cv.glmnetr}} , \code{\link{roundperf}}, \code{\link{nested.glmnetr}} 
+#'   \code{\link{glmnetr.compcv}} , \code{\link{glmnetr.cis}} , \code{\link{summary.cv.glmnetr}} , \code{\link{roundperf}} , 
+#'   \code{\link{plot.nested.glmnetr}} , \code{\link{calplot}} , \code{\link{nested.glmnetr}} 
 #' 
 #' @export
 #'
@@ -898,7 +899,7 @@ glmnetr.compcv0 = function(a, b, digits=4, txt=0, pow=1) {
 #' @return A printout to the R console. 
 #' 
 #' @seealso
-#'   \code{\link{summary.nested.glmnetr}} , \code{\link{nested.glmnetr}} 
+#'   \code{\link{glmnetr.cis}} , \code{\link{summary.nested.glmnetr}} , \code{\link{nested.glmnetr}} 
 #' 
 #' @export
 #'

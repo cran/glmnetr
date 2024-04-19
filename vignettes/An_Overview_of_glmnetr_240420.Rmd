@@ -1,7 +1,7 @@
 ---
-title: "An Overview of glmnetr"
-author: "Walter K. Kremers, Mayo Clinic, Rochester MN"
-date: "22 March 2024"
+title: "An Overview of glmnetr" 
+author: "Walter K. Kremers, Mayo Clinic, Rochester MN" 
+date: "20 April 2024" 
 output: pdf_document 
 vignette: >
   %\VignetteIndexEntry{An Overview of glmnetr}
@@ -12,7 +12,7 @@ vignette: >
   evalload = TRUE ; evalmodel = FALSE
   evalload = FALSE ; evalmodel = TRUE
 knitr::opts_chunk$set(echo=TRUE)
-source("~/Documents/Rpackages/glmnetr_supl/_load_glmnetr_vig_240322.R" , echo=TRUE)
+source("~/Documents/Rpackages/glmnetr_supl/_load_glmnetr_vig_240409.R" , echo=TRUE)
 ```
 # The Package 
 The nested.glmnetr() function of the 'glmnetr' package allows the user to fit multiple machine learning models on a common dataset with a single function call allowing an efficient comparison of different modeling approaches.  Additionally this function uses cross validation (CV) to estimate model performances for these different modeling approaches.  As most of these machine learning models choose hyperparameters informed by a cross validation or some sort of out of bag (OOB) performance measure, the nested.glmnetr() function provides model performance estimates based upon either a nested cross validation (NCV) or analogous approach.  Measures of model performance include concordances for survival time and binomial outcomes and R-squares for quantitative numeric outcomes, as well as deviance ratios, i.e.  1-deviance(model)/deviance(nullmodel), and linear calibration coefficients.  Too often one sees performance reports including things like sensitivity, specificity or F1 scores in absence of any consideration of calibration.  Whereas linear calibration does not exhaust the needs of calibration considerations, it does provide a first high level insight.  As the purpose of the nested.glmnetr() function is to not only describe performance but to derive the models, each of the fitted models as well as performance measures are stored in a single output object.
@@ -44,7 +44,9 @@ generates simulated data for analysis.  We extract data in the format required f
 ```{r Extract data from the simulation output object}
 # Extract simulated survival data 
 xs = simdata$xs        # matrix of predictors 
-y_ = simdata$yt        # vector of survival times 
+y_ = simdata$y_        # vector of Gaussian (normal) outcomes
+yb = simdata$yb        # vector of binomial outcomes 
+yt = simdata$yt        # vector of survival times 
 event = simdata$event  # indicator of event vs. censoring
 ```
 Inspecting the predictor matrix we see
@@ -60,20 +62,19 @@ print(xs[1:10,c(1:12,18:20)])
 # Performance of cross validation (CV) informed relaxed lasso model
 Because the values for lambda and gamma informed by CV are specifically chosen to give a best fit, model fit statistics for the CV informed model, when based upon the same train data used to derive the model, will be biased.  (Using the common terminology of machine learning, both the "training" and "validation" data inform the model fit.)  To address this one can perform a CV on the CV derived estimates, that is a nested cross validation as argued for in SRDM ( Simon R, Radmacher MD, Dobbin K, McShane LM. Pitfalls in the Use of DNA Microarray Data for Diagnostic and Prognostic Classification. J Natl Cancer Inst (2003) 95  (1):  14-18. https://academic.oup.com/jnci/article/95/1/14/2520188 ).  For this second layer of CV, there is no usage of information from the hold out data back to the model fit.  (Using the common terminology of machine learning, each of the hold-out subsets of this outer layer of CV is treated as a "test" dataset for calculation of model performance, and the results combined across these multiple hold out "test" sets.)  We demonstrate the model performance evaluation by nested cross validation first for the lasso models with the evaluation of other machine learning models being similar.  For this performance evaluation we use the nested.glmnetr() function which first fits all models based upon all data and then performs the cross validation for calculation of concordances or R-squares, deviance ratios and linear calibration summaries.
 ```{r load, include=FALSE, eval=evalload} 
-yg = simdata$y_                           # vector of Gaussian (normal) outcomes
-load( file="~/Documents/Rpackages/glmnetr_supl/using_glmnetr_outputs_240322.RLIST" ) 
+load( file="~/Documents/Rpackages/glmnetr_supl/using_glmnetr_outputs_240412.RLIST" ) 
 ```
 ```{r Fit a relaxed lasso model informed by cross validation 1, include=FALSE, eval=evalmodel}
 set.seed(465783345) 
-nested.cox.fit = nested.glmnetr(xs, NULL, y_, event, family="cox", 
-                                dolasso=1, dostep=1, steps_n=40, folds_n=10, track=0) 
+nested.cox.fit = nested.glmnetr(xs, NULL, yt, event, family="cox", 
+                                dolasso=1, dostep=1, steps_n=40, folds_n=10, track=1) 
 ```
 ```{r Fit a relaxed lasso model informed by cross validation 2, include=TRUE, eval=FALSE}
 set.seed(465783345) 
-nested.cox.fit = nested.glmnetr(xs, NULL, y_, event, family="cox", 
+nested.cox.fit = nested.glmnetr(xs, NULL, yt, event, family="cox", 
                                 dolasso=1, dostep=1, steps_n=40, folds_n=10, track=1) ) 
 ```
-Note, in the derivation of the relaxed lasso model fits, individual coefficients may be unstable even when the model may be stable which elicits warning messages.  We suppress these warnings here.  The first term in the call to nested.glmnetr(), xs, is the design matrix for predictors.  The second input term, here given the value NULL, is for the start time in case the (start, stop) time data setup is used in a Cox survival model fit. The third term, here y_, is the outcome variable for the linear regression or logistic regression model and the time of event or censoring in case of the Cox model, and finally the forth term is the event indicator variable for the Cox model taking the value 1 in case of an event or 0 in case of censoring at time y_.  The forth term would be NULL for either linear or logistic regression.  If one sets track=1 the program will update progress in the R console, else for track=0 it will not.  We recommend setting track=1 when running the program interactively.  Depending on the size of the dataset and the different machine learning models fit, run time can be long and it can be helpful to view the progress in calculations.  
+Note, in the derivation of the relaxed lasso model fits, individual coefficients may be unstable even when the model may be stable which elicits warning messages.  We suppress these warnings here.  The first term in the call to nested.glmnetr(), xs, is the design matrix for predictors.  The second input term, here given the value NULL, is for the start time in case the (start, stop) time data setup is used in a Cox survival model fit. The third term, here yt, is the outcome variable for the linear regression or logistic regression model and the time of event or censoring in case of the Cox model, and finally the forth term is the event indicator variable for the Cox model taking the value 1 in case of an event or 0 in case of censoring at time yt.  The forth term would be NULL for either linear or logistic regression.  If one sets track=1 the program will update progress in the R console, else for track=0 it will not.  We recommend setting track=1 when running the program interactively.  Depending on the size of the dataset and the different machine learning models fit, run time can be long and it can be helpful to view the progress in calculations.  
 
 As usual with R functions and packages we use the summary function to describe output.  Here the summary function displays a brief summary of the input data before proceeding to describe model performances.  The data summary includes sample size, number of events, number of candidate model predictors, degress of freedom in these predictors as well as average deviance and some average minus 2 log likelihoods.  Model performances are displayed for the different lasso models, e.g. standard, relaxed, fully relaxed as well as the ridge regression and stepwise regression models.  Hyperparamters considered for stepwise regression are degress of freedom (df) and p, the p-value for entry into the regression equation, as discussed by JWHT (James, Witten, Hastie and Tibshirani, An Introduction to Statistical Learning with applications in R, 2nd ed., Springer, New York, 2021).  Performance measures include deviance ratio, linear calibration coefficients and measures of agreement, here for the Cox model framework concordance.  Additionally there are the deviance ratio and agreement values naively calculated on the whole dataset.
 ```{r  Summarize relaxed lasso model perfromance informed by cross validation 1 }
@@ -111,7 +112,7 @@ This figure has multiple lines, depicting deviance as a function of lambda for d
 A plot depicting model fits as a function of lambda is given in the next figure.
 ```{r  Plot coefficients from a cross validation informed lasso model}
 # Plot coefficients informed by a cross validation   
-plot(nested.cox.fit, type="coefs")
+plot(nested.cox.fit, type="coef")
 ```
 In this plot of coefficients we use the same orientation for lambda as in the plot for deviances with larger values of the lambda penalty to the right and corresponding to fewer non-zero coefficients.  The displayed coefficients are for the minimizing gamma=`r gamma.min` as noted in the title, and the minimizing lambda indicated by the vertical line.  Since the fully relaxed lasso model had a deviance almost that of the relaxed lasso model we also plot the coefficients using the option gam=0.
 \newpage
@@ -143,12 +144,26 @@ predicteds = predict(nested.cox.fit, xs)
 predicteds[1:20]
 ```
 # Nested cross validation (NCV) for multiple models
-Here we evaluate multiple machine learning models, in particular the lasso, ridge, XGB, random forest and neural network models.  For this example we perform an analysis for the generalizations of linear regression in contrast to the Cox model in the last example.  The glmnetr.simdata() function used above actually creates an output object list containing xs for the predictor matrix, yt for time to event or censoring and an event indicator,  as well as y_ for "gaussian" and yb for "binomial" data.
-```{r  Nested cross-validation evaluation for multiple machine learning models, include=FALSE, eval=evalmodel}
-yg = simdata$y_ 
-nested.gau.fit = nested.glmnetr(xs,NULL,yg,NULL,family="gaussian",
+Here we evaluate multiple machine learning models, in particular the lasso, ridge, XGB, random forest and neural network models.  For this example we perform an analysis for the generalizations of linear regression in contrast to the Cox model in the last example.  The glmnetr.simdata() function used above actually creates an output object list containing xs for the predictor matrix, yt for time to event or censoring and an event indicator, as well as y_ for "gaussian" and yb for "binomial" data.
+```{r  Nested cross-validation evaluation for multiple machine learning models - gaussian , include=FALSE, eval=evalmodel}
+nested.gau.fit = nested.glmnetr(xs,NULL,y_,NULL,family="gaussian",
       dolasso=1, doxgb=list(nrounds=250), dorf=1, doann=1, ensemble=c(1,0,0,0, 0,1,0,1), 
-      folds_n=10, seed=219301029, track=0) 
+      folds_n=10, seed=219301029, track=1) 
+```
+```{r  Nested cross-validation evaluation for multiple machine learning models - binomial, include=FALSE, eval=evalmodel}
+nested.bin.fit = nested.glmnetr(xs,NULL,yb,NULL,family="binomial",
+      dolasso=1, doxgb=list(nrounds=250), dorf=1, doann=1, ensemble=c(1,0,0,0, 0,1,0,1), 
+      folds_n=10, seed=219301029, track=1) 
+```
+```{r  Nested cross-validation evaluation for multiple machine learning models - cox, include=FALSE, eval=evalmodel}
+strt = 0.32 * yt 
+nested.cox.fit2 = nested.glmnetr(xs,strt,yt,event,family="cox",
+      dolasso=1, doxgb=list(nrounds=250), dorf=1, doann=1, dorpart=1, ensemble=c(1,0,0,0, 0,1,0,1), 
+      folds_n=10, seed=219301029, track=1) 
+```
+
+```{r  Nested cross-validation evaluation for multiple machine learning models - binomial check, include=FALSE, eval=evalmodel}
+nested.bin.fit
 ```
 ```{r  Mock Nested cross-validation evaluation for multiple machine learning models, eval=FALSE}
 # Nested cross validation evaluating a machine learning model suite with guassian errors
@@ -156,9 +171,9 @@ nested.gau.fit = nested.glmnetr(xs,NULL,yg,NULL,family="gaussian",
 # simdata=glmnetr.simdata(nrows=1000, ncols=100, beta=NULL)
 #
 # extract linear regression model data
-yg = simdata$y_                           # outcome vector with Gaussian (normal) errors
+y_ = simdata$y_                           # outcome vector with Gaussian (normal) errors
 # Get the ML model fits 
-nested.gau.fit = nested.glmnetr(xs,NULL,yg,NULL,family="gaussian",
+nested.gau.fit = nested.glmnetr(xs,NULL,y_,NULL,family="gaussian",
       dolasso=1, doxgb=list(nrounds=250), dorf=1, doann=1, ensemble=c(1,0,0,0, 0,1,0,1), 
       folds_n=10, seed=219301029, track=1) 
 ```
@@ -215,11 +230,12 @@ round(1000*quantile(xb.hat,c(0.01,0.05,0.1,0.25,0.5,0.75,0.90,0.95,0.99)))/1000
 fit1 = coxph(Surv(y_, event) ~ pspline(xb.hat))
 print(fit1)
 ```
+More ideas for calibration can be found in the "Calibration" vignette.  
 \newpage
 ```{r Calibration plot termplot}
 termplot(fit1,term=1,se=TRUE)
 ```
-From this spline fit we see the log hazard ratio is roughly linear in the relaxed lasso predicteds.
+From this spline fit we see the log hazard ratio is roughly linear in the relaxed lasso predicteds.  Still, a calibration badsed upon data not used in model derivation would be stronger.  Calibration is discussed in more detail in the "Calibration of Machine Learning Models" vignette. 
 
 # Model replicability and model comparisons
 To facilitate reproducible results the nested.glmnetr() function stores the seeds used to generate the pseudo random samples used for assigning observations to folds in the outer loop, as well as the fold ids themselves, for all models.  Additionally, the program stores the seeds when generating the folds in the inner loop for lasso, XGB, neural network and stepwise regressions as well as the seeds used when generating the bootstrap samples for the random forest models.  Using the seeds from a prior call to nested.glmnetr(), one can reproduce the results from this earlier call.  Because the seeds are saved for folds both in the inner and outer loop, results can be reproduced even when rerunning an analysis for a single model.  If we did not save and manage the seeds the user might have to run all models included in an earlier run to verify or inspect a single model fit.  If the seed option is unspecified in the call to nested.glmnetr(), one should be cautious when using set.seed() in one's own code as this too will effect the pseudo randomness used in the ML calculations, which could unwantingly yield identical results when pseudo independent runs are intended.
@@ -233,5 +249,5 @@ glmnetr.compcv(nested.gau.fit, type="devrat")
 ```   
 As the outer CV loop performance calculations are saved in the nested.glmntr() output object (with names like lasso.agree.cv, lasso.lincal.cv, xgb.agree.cv, xgb.lincal.cv, etc.) comparisons not provided by glmnetr.compcv() can be calculated from these stored CV data.
 ```{r save1, include=FALSE, eval=evalmodel}
-save( nested.cox.fit , nested.gau.fit , file="~/Documents/Rpackages/glmnetr_supl/using_glmnetr_outputs_240322.RLIST" ) 
+save( nested.cox.fit , nested.cox.fit2, nested.gau.fit , nested.bin.fit , file="~/Documents/Rpackages/glmnetr_supl/using_glmnetr_outputs_240412.RLIST" ) 
 ```

@@ -326,7 +326,8 @@ prednn_tl = function (lassomod, nnmodel, datain, lasso=1) {
 #### note, self is a "direct to" and not a function.  It can be found in ~tabnet/R/tab-network.R but not in ~tabnet/NAMESPACE 
 #' @importFrom torch nn_relu nn_gelu nn_sigmoid nn_identity nn_softmax nn_module 
 #' @importFrom torch nn_linear nnf_linear nn_parameter nn_sequential nn_dropout torch_tensor torch_float optim_adam 
-#' @importFrom torch nnf_binary_cross_entropy nn_bce_loss nn_mse_loss nnf_mse_loss nn_cross_entropy_loss 
+#' @importFrom torch nnf_binary_cross_entropy nn_bce_loss nn_mse_loss nnf_mse_loss nn_cross_entropy_loss  
+##### why is torch_manual_seed not caught by checks ?? 
 #' @importFrom survival Surv coxph coxph.control concordance 
 #' 
 #' @seealso
