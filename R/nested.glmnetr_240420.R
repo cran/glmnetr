@@ -246,8 +246,8 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
                           seed=NULL, foldid=NULL, limit=1, fine=0, ties="efron", keepdata=0, keepxbetas=1,  
                           track=0, ... ) {
   
-  pver = "glmnetr version 0.4-5 (2024-04-20)" 
-#  pver = "0.4-5 dev 240412" 
+  pver = "glmnetr version 0.4-6 (2024-04-21)" 
+#  pver = "0.4-6 dev 240421" 
   
   if (is.null(keepdata)) { keepdata = 0 }
   if (is.null(keepxbetas)) { keepxbetas = 0 }

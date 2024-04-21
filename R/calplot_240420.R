@@ -50,7 +50,7 @@
 #' 
 #' @importFrom stats quantile 
 #' @importFrom graphics box rug title
-#' @importFrom survival coxph
+#' @importFrom survival coxph pspline
 #' @importFrom splines ns
 #' 
 #' 
