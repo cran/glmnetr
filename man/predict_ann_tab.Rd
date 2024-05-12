@@ -39,7 +39,7 @@ one can run nested.glmnetr() with folds_n = 0 to derive the full data models wit
 doing a cross validation.
 }
 \seealso{
-\code{\link{predict_nested_xgb}} , \code{\link{predict_nested_rf}} , \code{\link{ann_tab_cv}} , \code{\link{nested.glmnetr}}
+\code{\link{ann_tab_cv}} , \code{\link{nested.glmnetr}}
 }
 \author{
 Walter Kremers (kremers.walter@mayo.edu)

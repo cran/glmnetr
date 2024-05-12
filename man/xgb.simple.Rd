@@ -68,7 +68,7 @@ preds[1:8]
 
 }
 \seealso{
-\code{\link{predict_nested_xgb}} , \code{\link{xgb.tuned}} , \code{\link{nested.glmnetr}}
+\code{\link{xgb.tuned}} , \code{\link{nested.glmnetr}}
 }
 \author{
 Walter K Kremers with contributions from Nicholas B Larson

@@ -87,7 +87,7 @@ data.full <- xgboost::xgb.DMatrix(data = sim.data$xs, label = Surv.xgb)
 
 }
 \seealso{
-\code{\link{predict_nested_xgb}} , \code{\link{xgb.simple}} , \code{\link{rederive_xgb}} , \code{\link{nested.glmnetr}}
+\code{\link{xgb.simple}} , \code{\link{rederive_xgb}} , \code{\link{nested.glmnetr}}
 }
 \author{
 Walter K Kremers with contributions from Nicholas B Larson

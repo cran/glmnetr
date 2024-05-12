@@ -31,7 +31,8 @@
 #' @return a XGBoost model fit 
 #' 
 #' @seealso
-#'   \code{\link{predict_nested_xgb}} , \code{\link{xgb.tuned}} , \code{\link{nested.glmnetr}} 
+#   \code{\link{predict_nested_xgb}} , 
+#'   \code{\link{xgb.tuned}} , \code{\link{nested.glmnetr}} 
 #' 
 #' @author Walter K Kremers with contributions from Nicholas B Larson
 #'
@@ -200,11 +201,10 @@ xgb.simple = function(train.xgb.dat,
 #' @return a tuned XGBoost model fit 
 #' 
 #' @seealso
-#'   \code{\link{predict_nested_xgb}} , \code{\link{xgb.simple}} , \code{\link{rederive_xgb}} , \code{\link{nested.glmnetr}} 
+#   \code{\link{predict_nested_xgb}} , 
+#'   \code{\link{xgb.simple}} , \code{\link{rederive_xgb}} , \code{\link{nested.glmnetr}} 
 #' 
 #' @author Walter K Kremers with contributions from Nicholas B Larson
-#'
-#' @export
 #'
 #' @importFrom smoof makeSingleObjectiveFunction 
 #' @importFrom ParamHelpers makeParamSet makeNumericParam makeIntegerParam 
@@ -212,6 +212,8 @@ xgb.simple = function(train.xgb.dat,
 #' @importFrom xgboost xgb.cv xgb.train xgb.DMatrix getinfo 
 ## @importFrom DiceKriging
 ## @importFrom rgenoud
+#'
+#' @export
 #'
 #' @examples 
 #' \donttest{

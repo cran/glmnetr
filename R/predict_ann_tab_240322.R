@@ -31,7 +31,8 @@
 #' @return a vector of predicteds
 #' 
 #' @seealso
-#'    \code{\link{predict_nested_xgb}} , \code{\link{predict_nested_rf}} , \code{\link{ann_tab_cv}} , \code{\link{nested.glmnetr}}  
+#     \code{\link{predict_nested_xgb}} , \code{\link{predict_nested_rf}} , 
+#'     \code{\link{ann_tab_cv}} , \code{\link{nested.glmnetr}}  
 #' 
 #' @author Walter Kremers (kremers.walter@mayo.edu)
 #' 
