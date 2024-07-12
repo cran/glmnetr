@@ -259,7 +259,7 @@ xgb_xbhat = function(xgb_model, xs_, family, tol=1e-5) {
 #
 #' @noRd
 
-rf_xbhat = function(rf_model, dframe, ofst=NULL, family, tol=1e-05) {
+rf_xbhat = function(rf_model, dframe, ofst=NULL, family, tol=1e-05) { 
   if (family == "cox") {
     hrhat = predict(object=rf_model, newdata=dframe)$predicted
     hrhat[(hrhat<tol)] = tol
@@ -382,6 +382,13 @@ ann_xbhat = function(object, newdat, family="binomial", tol=1e-5) {
 }
 
 ###############################################################################################################
+
+cal_train_xbhat = function( pred, trainy__, pred.tr, family ) { 
+  perf.tr  = perf_gen( trainy__ , pred.tr  , family )
+  pred.cal = perf.tr[4] + pred * perf.tr[5]
+  return( pred.cal )
+}
+
 
 
 

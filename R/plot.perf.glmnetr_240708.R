@@ -57,13 +57,17 @@ plot_perf_glmnetr = function( x, type="devrat", pow=2, ylim=1, fold=1, xgbsimple
   
   object = x 
   
-  if (object$do_ncv == 0) {
-    warning("  Model performance plots are not generated when do_ncv = 0")
+  if (object$resample == 0) {
+    warning("  Model performance plots are not generated when resample = 0")
   } else {
-    if (is.null(type)) { type == "agree" }
+    if (is.null(type)) { type == "devrat" }
     if (is.null(fold)) { fold = 1 
-    } else if (fold != 0) { fold = 1 }
-    
+    } else {
+      if (fold > 0.6) { fold=round(fold)
+      } else if (fold < 0) { fold = 1 
+      } else { fold=round(fold,digits=1) }
+    }
+
     family = object$sample[1] 
     
     if (is.null(pow)) { 
@@ -93,9 +97,9 @@ plot_perf_glmnetr = function( x, type="devrat", pow=2, ylim=1, fold=1, xgbsimple
     ensemble = object$ensemble 
     ensemble
     
-    m2.ll.null = object$null.m2LogLik.cv
-    m2.ll.sat  = object$sat.m2LogLik.cv
-    n__ = object$n.cv
+    m2.ll.null = object$null.m2LogLik.rep
+    m2.ll.sat  = object$sat.m2LogLik.rep
+    n__ = object$n.rep
     
     null.dev = as.numeric(object$sample[6])
     sat.m2LogLik = as.numeric(object$sample[8])
@@ -109,12 +113,12 @@ plot_perf_glmnetr = function( x, type="devrat", pow=2, ylim=1, fold=1, xgbsimple
     i_ = 0 
     
     if (object$fits[1] == 1) {
-      if         (type == "agree") {  object1 = object$lasso.agree.cv 
-      } else if (type == "lincal") {  object1 = object$lasso.lincal.cv 
-      } else if (type == "intcal") {  object1 = object$lasso.intcal.cv 
-      } else if (type == "devian") {  object1 = object$lasso.devian.cv 
+      if         (type == "agree") {  object1 = object$lasso.agree.rep 
+      } else if (type == "lincal") {  object1 = object$lasso.lincal.rep 
+      } else if (type == "intcal") {  object1 = object$lasso.intcal.rep 
+      } else if (type == "devian") {  object1 = object$lasso.devian.rep 
       } else if (type == "devrat") {
-        object1 = object$lasso.devian.cv
+        object1 = object$lasso.devian.rep
         devratl = list()
         for (j_ in c(1:7)) {
           devratl[[j_]] = devrat_(object1[,j_], m2.ll.null, m2.ll.sat, n__ ) ; object1[,j_] = devratl[[j_]][[1]]
@@ -162,12 +166,12 @@ plot_perf_glmnetr = function( x, type="devrat", pow=2, ylim=1, fold=1, xgbsimple
     ##### XGB ####################################################################
     if (object$fits[2] == 1) {
       
-      if         (type == "agree") {  object1 = object$xgb.agree.cv 
-      } else if (type == "lincal") {  object1 = object$xgb.lincal.cv 
-      } else if (type == "intcal") {  object1 = object$xgb.intcal.cv 
-      } else if (type == "devian") {  object1 = object$xgb.devian.cv 
+      if         (type == "agree") {  object1 = object$xgb.agree.rep 
+      } else if (type == "lincal") {  object1 = object$xgb.lincal.rep 
+      } else if (type == "intcal") {  object1 = object$xgb.intcal.rep 
+      } else if (type == "devian") {  object1 = object$xgb.devian.rep 
       } else if (type == "devrat") {
-        object1 = object$xgb.devian.cv
+        object1 = object$xgb.devian.rep
         devratl = list()
         for (j_ in c(1:6)) {
           devratl[[j_]] = devrat_(object1[,j_], m2.ll.null, m2.ll.sat, n__ ) ; object1[,j_] = devratl[[j_]][[1]]
@@ -251,12 +255,12 @@ plot_perf_glmnetr = function( x, type="devrat", pow=2, ylim=1, fold=1, xgbsimple
     ##### Random Forest ##########################################################
     if (object$fits[3] ==1) {
       
-      if         (type == "agree") {  object1 = object$rf.agree.cv 
-      } else if (type == "lincal") {  object1 = object$rf.lincal.cv 
-      } else if (type == "intcal") {  object1 = object$rf.intcal.cv 
-      } else if (type == "devian") {  object1 = object$rf.devian.cv
+      if         (type == "agree") {  object1 = object$rf.agree.rep 
+      } else if (type == "lincal") {  object1 = object$rf.lincal.rep 
+      } else if (type == "intcal") {  object1 = object$rf.intcal.rep 
+      } else if (type == "devian") {  object1 = object$rf.devian.rep
       } else if (type == "devrat") {
-        object1 = object$rf.devian.cv
+        object1 = object$rf.devian.rep
         devratl = list()
         for (j_ in c(1:3)) {
           devratl[[j_]] = devrat_(object1[,j_], m2.ll.null, m2.ll.sat, n__ ) ; object1[,j_] = devratl[[j_]][[1]]
@@ -312,12 +316,12 @@ plot_perf_glmnetr = function( x, type="devrat", pow=2, ylim=1, fold=1, xgbsimple
     if ( is.na( object$fits[8] ) ) { object$fits[8] = 0 }
     if (object$fits[8] ==1) {
       
-      if         (type == "agree") {  object1 = object$orf.agree.cv 
-      } else if (type == "lincal") {  object1 = object$orf.lincal.cv 
-      } else if (type == "intcal") {  object1 = object$orf.intcal.cv 
-      } else if (type == "devian") {  object1 = object$orf.devian.cv
+      if         (type == "agree") {  object1 = object$orf.agree.rep 
+      } else if (type == "lincal") {  object1 = object$orf.lincal.rep 
+      } else if (type == "intcal") {  object1 = object$orf.intcal.rep 
+      } else if (type == "devian") {  object1 = object$orf.devian.rep
       } else if (type == "devrat") {
-        object1 = object$orf.devian.cv
+        object1 = object$orf.devian.rep
         devratl = list()
         for (j_ in c(1:3)) {
           devratl[[j_]] = devrat_(object1[,j_], m2.ll.null, m2.ll.sat, n__ ) ; object1[,j_] = devratl[[j_]][[1]]
@@ -372,12 +376,12 @@ plot_perf_glmnetr = function( x, type="devrat", pow=2, ylim=1, fold=1, xgbsimple
     ##### Neural Network #########################################################
     if (object$fits[5] == 1) {
       
-      if        (type == "agree" ) {  object1 = object$ann.agree.cv 
-      } else if (type == "lincal") {  object1 = object$ann.lincal.cv 
-      } else if (type == "intcal") {  object1 = object$ann.intcal.cv 
-      } else if (type == "devian") {  object1 = object$ann.devian.cv 
+      if        (type == "agree" ) {  object1 = object$ann.agree.rep 
+      } else if (type == "lincal") {  object1 = object$ann.lincal.rep 
+      } else if (type == "intcal") {  object1 = object$ann.intcal.rep 
+      } else if (type == "devian") {  object1 = object$ann.devian.rep 
       } else if (type == "devrat") {
-        object1 = object$ann.devian.cv
+        object1 = object$ann.devian.rep
         devratl = list()
         for (j_ in c(1:8)) {
           devratl[[j_]] = devrat_(object1[,j_], m2.ll.null, m2.ll.sat, n__ ) ; object1[,j_] = devratl[[j_]][[1]]
@@ -422,12 +426,12 @@ plot_perf_glmnetr = function( x, type="devrat", pow=2, ylim=1, fold=1, xgbsimple
     ##### RPART ##################################################################
     if (object$fits[4] == 1) {
       
-      if        (type == "agree" ) {  object1 = object$rpart.agree.cv 
-      } else if (type == "lincal") {  object1 = object$rpart.lincal.cv 
-      } else if (type == "intcal") {  object1 = object$rpart.intcal.cv 
-      } else if (type == "devian") {  object1 = object$rpart.devian.cv 
+      if        (type == "agree" ) {  object1 = object$rpart.agree.rep 
+      } else if (type == "lincal") {  object1 = object$rpart.lincal.rep 
+      } else if (type == "intcal") {  object1 = object$rpart.intcal.rep 
+      } else if (type == "devian") {  object1 = object$rpart.devian.rep 
       } else if (type == "devrat") {
-        object1 = object$rpart.devian.cv
+        object1 = object$rpart.devian.rep
         devratl = list()
         for (j_ in c(1:9)) {
           devratl[[j_]] = devrat_(object1[,j_], m2.ll.null, m2.ll.sat, n__ ) ; object1[,j_] = devratl[[j_]][[1]]
@@ -511,17 +515,17 @@ plot_perf_glmnetr = function( x, type="devrat", pow=2, ylim=1, fold=1, xgbsimple
     
     ##### Step Wise ##############################################################
     if ( (object$fits[6] == 1) | (object$fits[7] == 1) ) {
-      object1 = object$step.agree.cv
+      object1 = object$step.agree.rep
       object2 = object$step.agree.naive
-      object3 = object$step.agree.cv
+      object3 = object$step.agree.rep
       object3 = colMeans(object3,na.rm=T)
       
-      if        (type == "agree" ) {  object1 = object$step.agree.cv 
-      } else if (type == "lincal") {  object1 = object$step.lincal.cv 
-      } else if (type == "intcal") {  object1 = object$step.intcal.cv 
-      } else if (type == "devian") {  object1 = object$step.devian.cv
+      if        (type == "agree" ) {  object1 = object$step.agree.rep 
+      } else if (type == "lincal") {  object1 = object$step.lincal.rep 
+      } else if (type == "intcal") {  object1 = object$step.intcal.rep 
+      } else if (type == "devian") {  object1 = object$step.devian.rep
       } else if (type == "devrat") {
-        object1 = object$step.devian.cv
+        object1 = object$step.devian.rep
         devratl = list()
         for (j_ in c(1:3)) {
           devratl[[j_]] = devrat_(object1[,j_], m2.ll.null, m2.ll.sat, n__ ) ; object1[,j_] = devratl[[j_]][[1]]
@@ -644,18 +648,44 @@ plot_perf_glmnetr = function( x, type="devrat", pow=2, ylim=1, fold=1, xgbsimple
                 " coefficients are by convention 0\n"))
     } else {
       if (plot != 0) {
-        if (fold == 1) {
-          interaction.plot(toplot1[,1], toplot1[,2], (toplot1[,3])^pow, col=toplot1[,2], 
-                           ylab=ylab, xlab="",legend=F, ylim=ylim,
-                           xaxt = "n")
+        if (fold > 0) {
+          lwd2 = 2 
+          if (fold == 1 ) {
+            if ( length(unique(toplot1[,2])) >=20) { lwd2 = 3 } else { lwd2 = 2 }
+            interaction.plot(toplot1[,1], toplot1[,2], (toplot1[,3])^pow, col=toplot1[,2], 
+                             ylab=ylab, xlab="",legend=F, ylim=ylim,
+                             xaxt = "n")
+            lines(toplot3[,1], toplot3[,3]^pow,col=1,lwd=lwd2) 
+          } else if (fold > 1) {
+            #            select fold random lines for plotting
+            nunique = length( unique(toplot1[,2]) )
+            if (fold < nunique) { 
+              set.seed( object$seed$seedr[1] )
+              smp = sample(nunique, fold, replace=0)
+            } else { 
+              smp = c(1:nunique) 
+            }
+            slct = toplot1[,2] %in% smp
+            if ( fold >=20) { lwd2 = 3 } else { lwd2 = 2 }
+            interaction.plot(toplot1[slct,1], toplot1[slct,2], (toplot1[slct,3])^pow, col=toplot1[,2], 
+                             ylab=ylab, xlab="",legend=F, ylim=ylim,
+                             xaxt = "n")
+            lines(toplot3[,1], toplot3[,3]^pow,col=1,lwd=lwd2) 
+          } else {
+            lwd2 = 2
+            plot(toplot3[,1], toplot3[,3]^pow, type='l', col=1, lwd=2, ylim=ylim, axes=0, xlab="", ylab=ylab) 
+            axis(2)
+            box()
+          }
           axis(1, at = c(1:length(nms)), labels = nms, las=2)
           if (!((type %in% c("devian","devrat")) & (family == "cox"))) { 
-            lines(toplot2[,1], toplot2[,3]^pow,col=2,lwd=2) 
+            lines(toplot2[,1], toplot2[,3]^pow,col=2,lwd=lwd2) 
           }
-          lines(toplot3[,1], toplot3[,3]^pow,col=1,lwd=2) 
+          
           if (type == "lincal") { abline(h=1, lty=3, col=1, lwd=2) }
           if ((type == "intcal") | (type == "devrat")) { abline(h=0, lty=3, col=1, lwd=2) }
-        } else {
+        } 
+        if (fold == 0) {
           pch = toplot3[,4]
           pch = ifelse( pch == 1, 19, pch)
           pch = ifelse( pch == 2, 17, pch)
@@ -667,9 +697,10 @@ plot_perf_glmnetr = function( x, type="devrat", pow=2, ylim=1, fold=1, xgbsimple
           axis(1, at = c(1:length(nms)), labels = nms, las=2)
         }
       }
-      if (plot %in% c(0,2)) { return( list(toplot1=toplot1, toplot2=toplot2, toplot3=toplot3, nms=nms) ) }
+    }
+    if (plot %in% c(0,2)) { return( list(toplot1=toplot1, toplot2=toplot2, toplot3=toplot3, nms=nms) ) }
     }
   }
-}
+
 
 

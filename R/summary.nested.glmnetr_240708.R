@@ -35,7 +35,7 @@ print.nested.glmnetr = function(x, ...) {
 #' the option table=0 
 #' @param digits the minimum number of decimals to display the elements of the data
 #' frame 
-#' @param do_ncv 1 (default) if the summdf object is a summary for an analysis including
+#' @param resample 1 (default) if the summdf object is a summary for an analysis including
 #' nested cross validation, 0 if only the full data models were fit.
 #'
 #' @return a data frame with same form as the input but with rounding for easier 
@@ -46,8 +46,8 @@ print.nested.glmnetr = function(x, ...) {
 #' 
 #' @export 
 #'
-roundperf = function(summdf, digits=3, do_ncv=1) {
-  if (do_ncv == 1) {
+roundperf = function(summdf, digits=3, resample=1) {
+  if (resample == 1) {
     set1 = c(1,2,5,6,8) 
     set2 = c(3) 
     set3 = c(4:7)
@@ -60,7 +60,9 @@ roundperf = function(summdf, digits=3, do_ncv=1) {
     digitst = digits 
     for (i_ in c(0:3)) {
       if (sum(!is.na(summdf[j_])) == 0 )  {
-        if (min(abs(summdf[j_]), rm.na=TRUE) < 2*10^(-digits-i_)) { digitst = digits + i_ + 1 }
+        conditin = (min(abs(summdf[j_]), rm.na=TRUE) < 2*10^(-digits-i_)) 
+        if (is.na(conditin)) { conditin = 0 } 
+        if ( conditin ) { digitst = digits + i_ + 1 }
       }
     }
     #        print(c(j_,digitst))
@@ -71,7 +73,9 @@ roundperf = function(summdf, digits=3, do_ncv=1) {
     for (i_ in c(0:3)) {
       #          print( summdf[j_] )
       #          print( summdf[j_] - 1)
-      if (min(abs(summdf[j_][!is.na(summdf[j_])]-1)) < 2*10^(-digits-i_)) { digitst = digits + i_ + 1 }
+      conditin = (min(abs(summdf[j_][!is.na(summdf[j_])]-1)) < 2*10^(-digits-i_)) 
+      if (is.na(conditin)) { conditin = 0 }
+      if (conditin) { digitst = digits + i_ + 1 }
       #          print(c(i_,digitst))
     }
     
@@ -80,7 +84,9 @@ roundperf = function(summdf, digits=3, do_ncv=1) {
   for ( j_ in set3 ) {
     digitst = digits 
     for (i_ in c(0:3)) {
-      if (max(abs(summdf[j_])) > (1 -2*10^(-digits-i_))) { digitst = digits + i_ + 1 }
+      conditin = (max(abs(summdf[j_])) > (1 -2*10^(-digits-i_)))
+      if (is.na(conditin)) { conditin = 0 }
+      if (conditin) { digitst = digits + i_ + 1 }
     }
     summdf[j_] = round(summdf[j_], digits=digitst)
   }
@@ -112,6 +118,9 @@ roundperf = function(summdf, digits=3, do_ncv=1) {
 #' @param tuning 1 to print tuning parameters, 0 (default) to not print
 #' @param width character width of the text body preceding the performance 
 #' measures which can be adjusted between 60 and 120.
+#' @param cal 1 print out performance statistics for lasso models calibrated on 
+#' training data. 0 (default) to not print.  Note, these training data calibrated
+#' estimates may not do very well for some of the other machine learning models.   
 #' @param ... Additional arguments passed to the summary function.  
 #' 
 #' @return - a nested cross validation fit summary, or a cross validation model summary.  
@@ -136,12 +145,29 @@ roundperf = function(summdf, digits=3, do_ncv=1) {
 # cvfit = FALSE ; pow=2 ; printg1 = FALSE ; digits = 3 ; Call=NULL ; onese = 0 ; table = 1 ; 
 
 summary.nested.glmnetr = function(object, cvfit=FALSE, pow=2, printg1=FALSE, 
-                                  digits=4, Call=NULL, onese=0, table=1, tuning=0, width=84, ...) {
-# cvfit=FALSE ; pow=2 ; printg1=FALSE ; digits=4 ; Call=NULL ; onese=0 ; table=1 ; tuning=0 ; width=108  
+                                  digits=4, Call=NULL, onese=0, table=1, tuning=0, width=84, cal=0, ...) {
+# cvfit=FALSE ; pow=2 ; printg1=FALSE ; digits=4 ; Call=NULL ; onese=0 ; table=1 ; tuning=0 ; width=108  ; cal = 1 ; 
+  
+  ## AltDevRat
+#  x = colSums ( n.rep*( null.m2LogLik.rep - devian.rep )) / sum((null.m2LogLik.rep - sat.m2LogLik.rep)*n.rep)
+#  y = colMeans( n.rep*((null.m2LogLik.rep - devian.rep )/(null.m2LogLik.rep - sat.m2LogLik.rep))/mean(n.rep) ) ## biased due to Jensen's inequality 
+#  z = colSums ( n.rep*((null.m2LogLik.rep - devian.rep )/(null.m2LogLik.rep - sat.m2LogLik.rep)))/sum(n.rep)  ## y == z 
+#  w = colSums ( n.rep*( null.m2LogLik.rep - devian.rep )) / ( as.numeric(object$sample[2]) * as.numeric(object$sample[6])) # sum((null.m2LogLik.rep - sat.m2LogLik.rep)*n.rep) ## wont work for Cox 
+  get.DevRat = function( devian.rep, null.m2LogLik.rep, sat.m2LogLik.rep, n.rep, bootstrap ) {
+    if (bootstrap == 0) {
+      AllDevRat = colSums( n.rep*( null.m2LogLik.rep - devian.rep ))/sum((null.m2LogLik.rep - sat.m2LogLik.rep)*n.rep )
+    } else {
+      AllDevRat = colMeans( ( null.m2LogLik.rep - devian.rep ) / (null.m2LogLik.rep - sat.m2LogLik.rep) ) 
+    }
+    return( AllDevRat )
+  }
+  ## devain.rep = 
+  ## colSums(  n.rep*( null.m2LogLik.rep - devian.rep ))/sum((null.m2LogLik.rep-sat.m2LogLik.rep)*n.rep)
+  ## colMeans( n.rep*((null.m2LogLik.rep - devian.rep )/null.m2LogLik.rep)/mean(n.rep) )
   
   mlength = 116 ## biggest for asthetics 
-  mlength = 108 ## 3 lines  
-  mlength = 95 ## 4 lines for all models 
+  mlength = 108 ## ~3 lines  
+  mlength = 95 ## ~4 lines 
   mlength = 77 ## 5 lines 
   mlength = 80 ## "standard" width
   mlength = 84 ## good for R markdown 
@@ -154,7 +180,9 @@ summary.nested.glmnetr = function(object, cvfit=FALSE, pow=2, printg1=FALSE,
   } else {
     if (!(table %in% c(0,1,2,3))) { table = 1 }
     if (!is.null(Call)) { 
-      if (Call != 0) { Call = object$Call 
+      if (Call != 0) { 
+        Call = object$Call 
+        if ( is.null(Call) ) { Call = object$call }
       } else { Call = NULL }
     }
     sample  = object$sample 
@@ -170,7 +198,8 @@ summary.nested.glmnetr = function(object, cvfit=FALSE, pow=2, printg1=FALSE,
     doorf   = fits[8]
     if (is.na(doorf)) { doorf = 0 } 
     ensemble = object$ensemble
-    do_ncv  = object$do_ncv
+    resample  = object$resample
+    bootstrap = (object$tuning[8] >= 1)*1
     
     family = sample[1]
 #    sample[6] = round(as.numeric(sample[6]), digits=digits)
@@ -205,8 +234,9 @@ summary.nested.glmnetr = function(object, cvfit=FALSE, pow=2, printg1=FALSE,
     if (doaic ==1) { func.fit.aic      = object$func.fit.aic   }
 
     if (!is.null(Call)) { 
-      cat(paste0("\n     function call :\n\n"))  
+      cat(paste0("\n","function call :\n\n"))  
       print(Call) 
+      cat("\n") 
     }
     
     if ( table %in% c(1,2,3) ) { 
@@ -331,19 +361,10 @@ summary.nested.glmnetr = function(object, cvfit=FALSE, pow=2, printg1=FALSE,
     }
     
     if (family == "cox") { perunit = "deviance per event " } else { perunit = "deviance per record " }
-    
-    get.DevRat = function( devian.cv, null.m2LogLik.cv, sat.m2LogLik.cv, n.cv ) {
-      ncoldevian = dim(devian.cv)[2] 
-      AllDevRat = rep(1,ncoldevian)
-      for (j_ in c(1:ncoldevian)) {
-        AllDevRat[j_] = devrat_(devian.cv[,j_], null.m2LogLik.cv, sat.m2LogLik.cv, n.cv )[[2]]
-      }
-      return( AllDevRat )
-    }
-    
-    null.m2LogLik.cv = object$null.m2LogLik.cv
-    sat.m2LogLik.cv = object$sat.m2LogLik.cv
-    n.cv = object$n.cv 
+
+    null.m2LogLik.rep = object$null.m2LogLik.rep
+    sat.m2LogLik.rep = object$sat.m2LogLik.rep
+    n.rep = object$n.rep 
     
     last = "none"
     if (doaic  == 1) { last = "aic"  
@@ -394,10 +415,15 @@ summary.nested.glmnetr = function(object, cvfit=FALSE, pow=2, printg1=FALSE,
         hstring[c(i_:(i_+4))] = c("and", "Akaike", "Information", "Criterion", "(AIC),") 
         i_ = i_ + 5 
       }
-      if (do_ncv == 1) {
+      if (resample == 1) {
+        if (bootstrap == 0) {
         hstring0 = c("average", "(Ave)", "model", "performance", "measures", "from",
-                     "the", paste0(object$tuning[1], "-fold"), "(nested)", "cross", "validation", "are", "given", "together", "with", "naive",
-                     "summaries", "calculated", "using", "all", "data", "without", "cross", "validation")
+                     "the", paste0(object$tuning[1], "-fold"), "(NESTED)", "Cross", "Validation", "are", "given", "together", "with", "naive",
+                     "summaries", "calculated", "using", "all", "data", "without", "cross", "validation") }
+        if (bootstrap == 1) {
+        hstring0 = c("average", "(Ave)", "model", "performance", "measures", "from",
+                     "the", paste0(object$tuning[8], "-resample"), "BOOTSTRAP", "of", "the", "cross", "validation", "derived", "models", "are",
+                     "given", "together", "with", "naive", "summaries", "calculated", "using", "all", "data", "without", "resampling") }
         tlen = length( hstring0 )
         hstring[c(i_:(i_+tlen-1))] = hstring0 
         i_ = i_ + tlen -1
@@ -414,7 +440,7 @@ summary.nested.glmnetr = function(object, cvfit=FALSE, pow=2, printg1=FALSE,
 #      print (hstring) 
       
       mlength = min(mlength, 120)
-      if (do_ncv == 0) { mlength = min(76,mlength) } 
+      if (resample == 0) { mlength = min(76,mlength) } 
       mlength = max(mlength,60) 
       
       cat("\n")
@@ -436,41 +462,60 @@ summary.nested.glmnetr = function(object, cvfit=FALSE, pow=2, printg1=FALSE,
     ## CALCULATE PERFORMANCE SUMMARIES #########################################
 
     lasso = NULL 
+    lasso.cal = NULL 
     if (dolasso == 1) {
-      if (do_ncv ==1) {
-        lassoAllDevRat = get.DevRat( object$lasso.devian.cv, null.m2LogLik.cv, sat.m2LogLik.cv, n.cv )
-        lassoAveDevian = colMeans(object$lasso.devian.cv, na.rm=TRUE)  
-        lassoAveIntcal = colMeans(object$lasso.intcal.cv, na.rm=TRUE)  
-        lassoAveLincal = colMeans(object$lasso.lincal.cv, na.rm=TRUE)  
-        lassoAveAgree  = colMeans(object$lasso.agree.cv, na.rm=TRUE)
-        lassoAveNzero  = colMeans(object$lasso.nzero.cv, na.rm=TRUE)  
+      if (resample ==1) {
+        lassoAllDevRat = get.DevRat( object$lasso.devian.rep, null.m2LogLik.rep, sat.m2LogLik.rep, n.rep, bootstrap )
+        lassoAveDevian = colMeans(object$lasso.devian.rep, na.rm=TRUE)  
+        lassoAveIntcal = colMeans(object$lasso.intcal.rep, na.rm=TRUE)  
+        lassoAveLincal = colMeans(object$lasso.lincal.rep, na.rm=TRUE)  
+        lassoAveAgree  = colMeans(object$lasso.agree.rep, na.rm=TRUE)
+        lassoAveNzero  = colMeans(object$lasso.nzero.rep, na.rm=TRUE)  
+        lassoCalAllDevRat = get.DevRat( object$lasso.cal.devian.rep, null.m2LogLik.rep, sat.m2LogLik.rep, n.rep, bootstrap ) 
+        lassoCalAveDevian = colMeans(object$lasso.cal.devian.rep, na.rm=TRUE)  
+        lassoCalAveIntcal = colMeans(object$lasso.cal.intcal.rep, na.rm=TRUE)  
+        lassoCalAveLincal = colMeans(object$lasso.cal.lincal.rep, na.rm=TRUE)  
+        lassoCalAveAgree  = colMeans(object$lasso.cal.agree.rep, na.rm=TRUE)
       }
       lasso.agree.naive = object$lasso.agree.naive 
       if (family == "gaussian") { 
         lasso.agree.naive = lasso.agree.naive ^pow
-        if (do_ncv ==1) { lassoAveAgree = lassoAveAgree ^pow } 
+        if (resample ==1) { 
+          lassoAveAgree = lassoAveAgree ^pow
+          lassoCalAveAgree = lassoCalAveAgree ^pow
+        } 
       }
-      ## sqrt( apply(lasso.agree.cv,2,var) ) 
+      ## sqrt( apply(lasso.agree.rep,2,var) ) 
 
       #        ((m2.ll.null - m2.ll.mod)/(m2.ll.null - m2.ll.sat ))
-      lasso.devrat.naive = (as.numeric(object$sample[7]) - object$lasso.devian.naive) / 
-        (as.numeric(object$sample[7]) - as.numeric(object$sample[8]))
+      lasso.devrat.naive     = (as.numeric(object$sample[7]) - object$lasso.devian.naive   ) / (as.numeric(object$sample[7]) - as.numeric(object$sample[8]))
+      lasso.cal.devrat.naive = (as.numeric(object$sample[7]) - object$lasso.cal.devian.naive) / (as.numeric(object$sample[7]) - as.numeric(object$sample[8]))
   
-      if (do_ncv == 1) {
+      if (resample == 1) {
         lasso = data.frame( lassoAllDevRat , lassoAveIntcal, lassoAveLincal , lassoAveAgree, lassoAveNzero, 
-                            lasso.devrat.naive, object$lasso.agree.naive, object$lasso.nzero)
+                            lasso.devrat.naive, object$lasso.agree.naive, object$lasso.nzero )
+        lasso.cal = data.frame( lassoCalAllDevRat , lassoCalAveIntcal, lassoCalAveLincal , lassoCalAveAgree, lassoAveNzero, 
+                            lasso.cal.devrat.naive, object$lasso.intcal.naive, object$lasso.lincal.naive ) 
         names(lasso) = colnames1 
+        names(lasso.cal) = colnames1 
+        names(lasso.cal) = c( colnames1[c(1:5)] , "Niave DevRat", "Naive Int", "Naive Slope")  
       } else {
         lasso = data.frame( lasso.devrat.naive, object$lasso.agree.naive, object$lasso.nzero) 
         names(lasso) = colnames0 
+        lasso.cal = data.frame( lasso.cal.devrat.naive, object$lasso.intcal.naive, object$lasso.lincal.naive ) 
+        names(lasso.cal) = c("Naive DevRat", "Naive Int", "Naive Slope")  
       }
       rownames = paste0(c(rep("LASSO ",6),""), row.names(lasso)) 
-      rownames[7] = "Ridge                      " 
+      rownames[7]             = "Ridge                      " 
       row.names(lasso) = rownames 
-      
-      if (onese == 0) { lasso = lasso[c(2,4,6,7),] } 
-      lassor = roundperf(lasso, digits, do_ncv) 
-      if ((family == "cox") & (do_ncv==1)) { lassor = lassor[,-2] }      
+      if (onese == 0) {
+        lasso     = lasso[ c(2,4,6,7) , ]
+        lasso.cal = lasso.cal[ c(2,4,6,7) , ]
+      } 
+      lassor = roundperf(lasso, digits, resample) 
+      if ((family == "cox") & (resample==1)) { lassor = lassor[,-2] }      
+      lassor.cal = roundperf(lasso.cal, digits, resample) 
+      if ((family == "cox") & (resample==1)) { lassor.cal = lassor.cal[,-2] }      
     }        
       
     ## XGB #####################################################################
@@ -481,22 +526,22 @@ summary.nested.glmnetr = function(object, cvfit=FALSE, pow=2, printg1=FALSE,
       en2 = ifelse (sum(ensemble[c(2,6)])>=1, 1, 0)
       en3 = ifelse (sum(ensemble[c(3,4,7,8)])>=1, 1, 0)
       enx = c(en1, en2, en3, en1, en2, en3) 
-      if (do_ncv ==1) {
-        xgbAllDevRat = get.DevRat( object$xgb.devian.cv, null.m2LogLik.cv, sat.m2LogLik.cv, n.cv )
-        xgbAveDevian = colMeans( object$xgb.devian.cv, na.rm=TRUE )
-        xgbAveIntcal = colMeans( object$xgb.intcal.cv, na.rm=TRUE )
-        xgbAveLincal = colMeans( object$xgb.lincal.cv, na.rm=TRUE )
-        xgbAveAgree  = colMeans( object$xgb.agree.cv, na.rm=TRUE ) 
-        xgbAveNzero  = colMeans( object$xgb.nzero.cv, na.rm=TRUE ) 
+      if (resample ==1) {
+        xgbAllDevRat = get.DevRat( object$xgb.devian.rep, null.m2LogLik.rep, sat.m2LogLik.rep, n.rep, bootstrap )
+        xgbAveDevian = colMeans( object$xgb.devian.rep, na.rm=TRUE )
+        xgbAveIntcal = colMeans( object$xgb.intcal.rep, na.rm=TRUE )
+        xgbAveLincal = colMeans( object$xgb.lincal.rep, na.rm=TRUE )
+        xgbAveAgree  = colMeans( object$xgb.agree.rep, na.rm=TRUE ) 
+        xgbAveNzero  = colMeans( object$xgb.nzero.rep, na.rm=TRUE ) 
       }
       xgb.agree.naive = object$xgb.agree.naive
       if (family == "gaussian") { 
         xgb.agree.naive = xgb.agree.naive ^pow 
-        if (do_ncv ==1) { xgbAveAgree = xgbAveAgree ^pow }
+        if (resample ==1) { xgbAveAgree = xgbAveAgree ^pow }
       }
       xgb.devrat.naive = (as.numeric(object$sample[7]) - object$xgb.devian.naive) / 
                    (as.numeric(object$sample[7]) - as.numeric(object$sample[8]))
-      if (do_ncv == 1) {
+      if (resample == 1) {
         xgb = data.frame( xgbAllDevRat , xgbAveIntcal, xgbAveLincal , xgbAveAgree, xgbAveNzero, xgb.devrat.naive, xgb.agree.naive, object$xgb.nzero )
         names( xgb ) = colnames1 
 #        xgb
@@ -507,8 +552,8 @@ summary.nested.glmnetr = function(object, cvfit=FALSE, pow=2, printg1=FALSE,
       row.names(xgb) = c("XGB (not tuned)            ", "XGB lasso Feature          ", "XGB lasso Offset           ", 
                          "XGB Tuned                  ", "XGB Tuned lasso Feature    ", "XGB Tuned lasso Offset     " )
       xgb = xgb[enx==1,]
-      xgbr = roundperf(xgb, digits, do_ncv) 
-      if ((family == "cox") & (do_ncv==1)) { xgbr = xgbr[,-2] }      
+      xgbr = roundperf(xgb, digits, resample) 
+      if ((family == "cox") & (resample==1)) { xgbr = xgbr[,-2] }      
     }   
     
     ##### Random Forest ########################################################
@@ -520,33 +565,48 @@ summary.nested.glmnetr = function(object, cvfit=FALSE, pow=2, printg1=FALSE,
       en3 = ifelse (sum(ensemble[c(3,4,7,8)])>=1, 1, 0)
       if (family != "gaussian") { en3 = 0 }
       enx = c(en1, en2, en3) 
-      if (do_ncv ==1) {
-        rfAllDevRat = get.DevRat( object$rf.devian.cv, null.m2LogLik.cv, sat.m2LogLik.cv, n.cv )
-        rfAveDevian = colMeans(object$rf.devian.cv, na.rm=TRUE) # [enx==1]   
-        rfAveIntcal = colMeans(object$rf.intcal.cv, na.rm=TRUE)
-        rfAveLincal = colMeans(object$rf.lincal.cv, na.rm=TRUE)
-        rfAveAgree  = colMeans(object$rf.agree.cv, na.rm=TRUE)
-        rfAveMtry   = colMeans(object$rf.mtry.cv, na.rm=TRUE)
+      if (resample ==1) {
+        rfAllDevRat = get.DevRat( object$rf.devian.rep, null.m2LogLik.rep, sat.m2LogLik.rep, n.rep, bootstrap )
+        rfAveDevian = colMeans(object$rf.devian.rep, na.rm=TRUE) # [enx==1]   
+        rfAveIntcal = colMeans(object$rf.intcal.rep, na.rm=TRUE)
+        rfAveLincal = colMeans(object$rf.lincal.rep, na.rm=TRUE)
+        rfAveAgree  = colMeans(object$rf.agree.rep, na.rm=TRUE)
+        rfCalAllDevRat = get.DevRat( object$rf.cal.devian.rep, null.m2LogLik.rep, sat.m2LogLik.rep, n.rep, bootstrap )
+        rfCalAveDevian = colMeans(object$rf.cal.devian.rep, na.rm=TRUE) # [enx==1]   
+        rfCalAveIntcal = colMeans(object$rf.cal.intcal.rep, na.rm=TRUE)
+        rfCalAveLincal = colMeans(object$rf.cal.lincal.rep, na.rm=TRUE)
+        rfCalAveAgree  = colMeans(object$rf.cal.agree.rep, na.rm=TRUE)
+        rfAveMtry   = colMeans(object$rf.mtry.rep, na.rm=TRUE)
       }
       rf.agree.naive = object$rf.agree.naive
       if (family == "gaussian") { 
         rf.agree.naive = rf.agree.naive ^pow 
-        if (do_ncv ==1) { rfAveAgree  = rfAveAgree ^pow }
+        if (resample ==1) { rfAveAgree  = rfAveAgree ^pow; rfCalAveAgree  = rfCalAveAgree ^pow  }
       }
-      rf.devrat.naive = (as.numeric(object$sample[7]) - object$rf.devian.naive) / 
-        (as.numeric(object$sample[7]) - as.numeric(object$sample[8]))
-      if (do_ncv == 1) {
+      rf.devrat.naive     = (as.numeric(object$sample[7]) - object$rf.devian.naive    ) / (as.numeric(object$sample[7]) - as.numeric(object$sample[8]))
+      rf.cal.devrat.naive = (as.numeric(object$sample[7]) - object$rf.cal.devian.naive) / (as.numeric(object$sample[7]) - as.numeric(object$sample[8]))
+      if (resample == 1) {
         rf = data.frame( rfAllDevRat , rfAveIntcal , rfAveLincal , rfAveAgree, rfAveMtry, rf.devrat.naive, rf.agree.naive, object$rf.mtry  )
         names( rf ) = colnames1 
-        rf
+        rf.cal= data.frame( rfCalAllDevRat , rfCalAveIntcal , rfCalAveLincal , rfCalAveAgree, rfAveMtry, rf.devrat.naive, rf.agree.naive, object$rf.mtry  )
+        names( rf.cal ) = colnames1 
+        rf.cal = data.frame( rfCalAllDevRat , rfCalAveIntcal, rfCalAveLincal , rfCalAveAgree, rfAveMtry, 
+                              rf.cal.devrat.naive, object$rf.intcal.naive, object$rf.lincal.naive ) 
+        names( rf.cal) = c( colnames1[c(1:6)], "Naive int", "Naive Slope" )  
       } else {
-        rf = data.frame( rf.devrat.naive, rf.agree.naive , object$rf.mtry )
+        rf = data.frame( rf.devrat.naive, object$rf.agree.naive, object$rf.mtry) 
         names(rf) = colnames0 
+        rf.cal = data.frame( rf.cal.devrat.naive, object$rf.intcal.naive, object$rf.lincal.naive ) 
+        names(rf.cal) = c( "Naive DevRat", "Naive Int", "Naive Slope")  
       }
-      row.names(rf) = c("RF Simple                  ", "RF lasso Feature           ", "RF lasso Offset            " )
+      row.names(rf)     = c("RF Simple                  ", "RF lasso Feature           ", "RF lasso Offset            " )
+      row.names(rf.cal) = c("RF Simple - calibrated     ", "RF lasso Feature, calibrate", "RF lasso Offset, calibrated" )
       rf = rf[enx==1,]
-      rfr = roundperf(rf, digits, do_ncv) 
-      if ((family == "cox") & (do_ncv==1)) { rfr = rfr[,-2] }      
+      rfr = roundperf(rf, digits, resample) 
+      if ((family == "cox") & (resample==1)) { rfr = rfr[,-2] }      
+      rf.cal = rf.cal[enx==1,]
+      rf.calr = roundperf(rf.cal, digits, resample) 
+      if ((family == "cox") & (resample==1)) { rf.calr = rf.calr[,-2] }      
     }
 
     ##### Oblique Random Forest ########################################################
@@ -558,55 +618,78 @@ summary.nested.glmnetr = function(object, cvfit=FALSE, pow=2, printg1=FALSE,
       en3 = ifelse (sum(ensemble[c(3,4,7,8)])>=1, 1, 0)
       if (family != "gaussian") { en3 = 0 }
       enx = c(en1, en2, en3) 
-      if (do_ncv ==1) {
-        orfAllDevRat = get.DevRat( object$orf.devian.cv, null.m2LogLik.cv, sat.m2LogLik.cv, n.cv )
-        orfAveDevian = colMeans(object$orf.devian.cv, na.rm=TRUE) # [enx==1]   
-        orfAveIntcal = colMeans(object$orf.intcal.cv, na.rm=TRUE)
-        orfAveLincal = colMeans(object$orf.lincal.cv, na.rm=TRUE)
-        orfAveAgree  = colMeans(object$orf.agree.cv, na.rm=TRUE)
-        orfAveMtry   = colMeans(object$orf.mtry.cv, na.rm=TRUE)
-      }
+      if (resample ==1) {
+        orfAllDevRat = get.DevRat( object$orf.devian.rep, null.m2LogLik.rep, sat.m2LogLik.rep, n.rep, bootstrap )
+        orfAveDevian = colMeans(object$orf.devian.rep, na.rm=TRUE) # [enx==1]   
+        orfAveIntcal = colMeans(object$orf.intcal.rep, na.rm=TRUE)
+        orfAveLincal = colMeans(object$orf.lincal.rep, na.rm=TRUE)
+        orfAveAgree  = colMeans(object$orf.agree.rep, na.rm=TRUE)
+        orfCalAllDevRat = get.DevRat( object$orf.cal.devian.rep, null.m2LogLik.rep, sat.m2LogLik.rep, n.rep, bootstrap )
+        orfCalAveDevian = colMeans(object$orf.cal.devian.rep, na.rm=TRUE) # [enx==1]   
+        orfCalAveIntcal = colMeans(object$orf.cal.intcal.rep, na.rm=TRUE)
+        orfCalAveLincal = colMeans(object$orf.cal.lincal.rep, na.rm=TRUE)
+        orfCalAveAgree  = colMeans(object$orf.cal.agree.rep, na.rm=TRUE)
+        orfAveMtry   = colMeans(object$orf.mtry.rep, na.rm=TRUE)
+        
+        devian.rep = object$orf.devian.rep     ; ref = orfAllDevRat
+        devian.rep = object$orf.cal.devian.rep ; ref = orfCalAllDevRat
+        ## AltDevRat
+        x = colSums(  n.rep*( null.m2LogLik.rep - devian.rep ))/sum((null.m2LogLik.rep - sat.m2LogLik.rep)*n.rep)
+        y = colMeans( n.rep*((null.m2LogLik.rep - devian.rep )/(null.m2LogLik.rep - sat.m2LogLik.rep))/mean(n.rep) ) ## biased due to Jensen's inequality 
+        z = colSums( n.rep*((null.m2LogLik.rep - devian.rep )/(null.m2LogLik.rep - sat.m2LogLik.rep)))/sum (n.rep)  ## y == z 
+        w = colSums(  n.rep*( null.m2LogLik.rep - devian.rep )) / ( as.numeric(object$sample[2]) * as.numeric(object$sample[6])) # sum((null.m2LogLik.rep - sat.m2LogLik.rep)*n.rep) ## wont work for Cox 
+        if (cal >= 3) { print( cbind( ref , x, y, z, w) ) } 
+      } 
       orf.agree.naive = object$orf.agree.naive
       if (family == "gaussian") { 
         orf.agree.naive = orf.agree.naive ^pow 
-        if (do_ncv ==1) { orfAveAgree  = orfAveAgree ^pow }
+        if (resample ==1) { orfAveAgree  = orfAveAgree ^pow ; orfCalAveAgree  = orfCalAveAgree ^pow }
       }
-      orf.devrat.naive = (as.numeric(object$sample[7]) - object$orf.devian.naive) / 
-        (as.numeric(object$sample[7]) - as.numeric(object$sample[8]))
-      if (do_ncv == 1) {
+      orf.devrat.naive     = (as.numeric(object$sample[7]) - object$orf.devian.naive    ) / (as.numeric(object$sample[7]) - as.numeric(object$sample[8]))
+      orf.cal.devrat.naive = (as.numeric(object$sample[7]) - object$orf.cal.devian.naive) / (as.numeric(object$sample[7]) - as.numeric(object$sample[8]))
+      if (resample == 1) {
         orf = data.frame( orfAllDevRat , orfAveIntcal , orfAveLincal , orfAveAgree, orfAveMtry, orf.devrat.naive, orf.agree.naive, object$orf.mtry  )
         names( orf ) = colnames1 
-        orf
+        orf.cal= data.frame( orfCalAllDevRat , orfCalAveIntcal , orfCalAveLincal , orfCalAveAgree, orfAveMtry, orf.devrat.naive, orf.agree.naive, object$orf.mtry  )
+        names( orf.cal ) = colnames1 
+        orf.cal = data.frame( orfCalAllDevRat , orfCalAveIntcal, orfCalAveLincal , orfCalAveAgree, orfAveMtry, 
+                                orf.cal.devrat.naive, object$orf.intcal.naive, object$orf.lincal.naive ) 
+        names( orf.cal) = c( colnames1[c(1:6)], "Naive int", "Naive Slope" )  
       } else {
-        orf = data.frame( orf.devrat.naive, orf.agree.naive , object$orf.mtry )
+        orf = data.frame( orf.devrat.naive, object$orf.agree.naive, object$orf.mtry) 
         names(orf) = colnames0 
+        orf.cal = data.frame( orf.cal.devrat.naive, object$orf.intcal.naive, object$orf.lincal.naive ) 
+        names(orf.cal) = c( "Naive DevRat", "Naive Int", "Naive Slope")  
       }
-      row.names(orf) = c("ORF Simple                  ", "ORF lasso Feature           ", "ORF lasso Offset            " )
-      orf = orf[enx==1,]
-      orfr = roundperf(orf, digits, do_ncv) 
-      if ((family == "cox") & (do_ncv==1)) { orfr = orfr[,-2] }      
+      row.names(orf)     = c("ORF Simple                  ", "ORF lasso Feature           ", "ORF lasso Offset            " )
+      row.names(orf.cal) = c("ORF Simple - calibrated     ", "ORF lasso Feature, calibrate", "ORF lasso Offset, calibrated" )
+      orf     = orf    [enx==1,]
+      orf.cal = orf.cal[enx==1,]
+      orfr     = roundperf(orf, digits, resample) 
+      orf.calr = roundperf(orf.cal, digits, resample) 
+      if ((family == "cox") & (resample==1)) { orfr = orfr[,-2] ; orf.calr = orf.calr[,-2] }     
     }
     
     ##### ANN ##################################################################
     
     ann = NULL 
     if (doann == 1) { 
-      if (do_ncv ==1) {
-        annAllDevRat = get.DevRat( object$ann.devian.cv, null.m2LogLik.cv, sat.m2LogLik.cv, n.cv )
-        annAveDevian = colMeans(object$ann.devian.cv, na.rm=TRUE)               # [(ensemble==1)]
-        annAveIntcal = colMeans(object$ann.intcal.cv, na.rm=TRUE)
-        annAveLincal = colMeans(object$ann.lincal.cv, na.rm=TRUE)
-        annAveAgree  = colMeans(object$ann.agree.cv , na.rm=TRUE)
-        annAveNzero  = colMeans(object$ann.nzero.cv , na.rm=TRUE)
+      if (resample ==1) {
+        annAllDevRat = get.DevRat( object$ann.devian.rep, null.m2LogLik.rep, sat.m2LogLik.rep, n.rep, bootstrap )
+        annAveDevian = colMeans(object$ann.devian.rep, na.rm=TRUE)               # [(ensemble==1)]
+        annAveIntcal = colMeans(object$ann.intcal.rep, na.rm=TRUE)
+        annAveLincal = colMeans(object$ann.lincal.rep, na.rm=TRUE)
+        annAveAgree  = colMeans(object$ann.agree.rep , na.rm=TRUE)
+        annAveNzero  = colMeans(object$ann.nzero.rep , na.rm=TRUE)
       }
       ann.agree.naive = object$ann.agree.naive
       if (family == "gaussian") { 
         ann.agree.naive = ann.agree.naive ^pow
-        if (do_ncv ==1) { annAveAgree = annAveAgree ^pow }
+        if (resample ==1) { annAveAgree = annAveAgree ^pow }
       }
       ann.devrat.naive = (as.numeric(object$sample[7]) - object$ann.devian.naive) / 
                       (as.numeric(object$sample[7]) - as.numeric(object$sample[8]))
-      if (do_ncv == 1) {
+      if (resample == 1) {
         ann = data.frame( annAllDevRat , annAveIntcal , annAveLincal , annAveAgree, annAveNzero, ann.devrat.naive, ann.agree.naive, object$ann.nzero )
         names( ann ) = colnames1 
       } else {
@@ -615,8 +698,8 @@ summary.nested.glmnetr = function(object, cvfit=FALSE, pow=2, printg1=FALSE,
       }
       row.names(ann)  = annrownames 
       ann = ann[ensemble[c(1:8)]==1,]
-      annr = roundperf(ann, digits, do_ncv) 
-      if ((family == "cox") & (do_ncv==1)) { annr = annr[,-2] }      
+      annr = roundperf(ann, digits, resample) 
+      if ((family == "cox") & (resample==1)) { annr = annr[,-2] }      
     }                                                                           
     
     ##### RPART ################################################################
@@ -628,22 +711,22 @@ summary.nested.glmnetr = function(object, cvfit=FALSE, pow=2, printg1=FALSE,
       en3 = ifelse (sum(ensemble[c(3,4,7,8)])>=1, 1, 0)
       if (family == "binomial") { en3 = 0 }
       enx = c(en1,en1,en1, en2,en2,en2, en3,en3,en3) 
-      if (do_ncv ==1) {
-        rpartAllDevRat = get.DevRat( object$rpart.devian.cv, null.m2LogLik.cv, sat.m2LogLik.cv, n.cv )
-        rpartAveDevian = colMeans(object$rpart.devian.cv, na.rm=TRUE) 
-        rpartAveIntcal = colMeans(object$rpart.intcal.cv, na.rm=TRUE) 
-        rpartAveLincal = colMeans(object$rpart.lincal.cv, na.rm=TRUE) 
-        rpartAveAgree  = colMeans(object$rpart.agree.cv, na.rm=TRUE) 
-        rpartAveNzero  = colMeans(object$rpart.nzero.cv, na.rm=TRUE)                          # [c(3,2,1,6,5,4,9,8,7)]          # [enx==1]
+      if (resample ==1) {
+        rpartAllDevRat = get.DevRat( object$rpart.devian.rep, null.m2LogLik.rep, sat.m2LogLik.rep, n.rep, bootstrap )
+        rpartAveDevian = colMeans(object$rpart.devian.rep, na.rm=TRUE) 
+        rpartAveIntcal = colMeans(object$rpart.intcal.rep, na.rm=TRUE) 
+        rpartAveLincal = colMeans(object$rpart.lincal.rep, na.rm=TRUE) 
+        rpartAveAgree  = colMeans(object$rpart.agree.rep, na.rm=TRUE) 
+        rpartAveNzero  = colMeans(object$rpart.nzero.rep, na.rm=TRUE)                          # [c(3,2,1,6,5,4,9,8,7)]          # [enx==1]
       }
       rpart.agree.naive = object$rpart.agree.naive
       if (family == "gaussian") { 
         rpart.agree.naive = rpart.agree.naive ^pow 
-        if (do_ncv ==1) { rpartAveAgree = rpartAveAgree ^pow }
+        if (resample ==1) { rpartAveAgree = rpartAveAgree ^pow }
       }
       rpart.devrat.naive = (as.numeric(object$sample[7]) - object$rpart.devian.naive) / 
         (as.numeric(object$sample[7]) - as.numeric(object$sample[8]))
-      if (do_ncv == 1) {
+      if (resample == 1) {
         rpart = data.frame( rpartAllDevRat , rpartAveIntcal , rpartAveLincal , rpartAveAgree, rpartAveNzero, rpart.devrat.naive, rpart.agree.naive, object$rpart.nzero )
         #        rpart = rpart[c(3,2,1,6,5,4,9,8,7),]
         names( rpart ) = colnames1 
@@ -660,31 +743,31 @@ summary.nested.glmnetr = function(object, cvfit=FALSE, pow=2, printg1=FALSE,
                          "RPART lasso offs", "RPART lasso offs", "RPART lasso offs"), rownames,"       ")
       row.names(rpart) = rownames 
       rpart = rpart[enx==1,]
-      rpartr = roundperf(rpart, digits, do_ncv) 
-      if ((family == "cox") & (do_ncv==1)) { rpartr = rpartr[,-2] }      
+      rpartr = roundperf(rpart, digits, resample) 
+      if ((family == "cox") & (resample==1)) { rpartr = rpartr[,-2] }      
     }      
     
     ##### STEPWISE p or df tuned & AIC #########################################
 
     step = NULL 
     if ((dostep==1) | (doaic==1)) {
-      if (do_ncv == 1) {
-      StepAllDevRat = get.DevRat( object$step.devian.cv, null.m2LogLik.cv, sat.m2LogLik.cv, n.cv )
-      object$step.devian.cv[ is.na(object$step.devian.cv) ] = max(object$step.devian.cv)
-      StepAveDevian = colMeans( object$step.devian.cv, na.rm=TRUE)
-      StepAveIntcal = colMeans( object$step.intcal.cv, na.rm=TRUE)
-      StepAveLincal = colMeans( object$step.lincal.cv, na.rm=TRUE)
-      StepAveAgree  = colMeans( object$step.agree.cv , na.rm=TRUE)
-      StepAve.nzero = colMeans( object$step.nzero.cv , na.rm=TRUE)
-      StepAve.p     = colMeans( object$step.p.cv     , na.rm=TRUE)
+      if (resample == 1) {
+      StepAllDevRat = get.DevRat( object$step.devian.rep, null.m2LogLik.rep, sat.m2LogLik.rep, n.rep, bootstrap )
+      object$step.devian.rep[ is.na(object$step.devian.rep) ] = max(object$step.devian.rep)
+      StepAveDevian = colMeans( object$step.devian.rep, na.rm=TRUE)
+      StepAveIntcal = colMeans( object$step.intcal.rep, na.rm=TRUE)
+      StepAveLincal = colMeans( object$step.lincal.rep, na.rm=TRUE)
+      StepAveAgree  = colMeans( object$step.agree.rep , na.rm=TRUE)
+      StepAve.nzero = colMeans( object$step.nzero.rep , na.rm=TRUE)
+      StepAve.p     = colMeans( object$step.p.rep     , na.rm=TRUE)
       }
       step.agree.naive = object$step.agree.naive 
       if (family == "gaussian") { 
-        if (do_ncv == 1) { StepAveAgree = StepAveAgree ^pow }
+        if (resample == 1) { StepAveAgree = StepAveAgree ^pow }
       }
       step.devrat.naive = (as.numeric(object$sample[7]) - object$step.devian.naive) / 
         (as.numeric(object$sample[7]) - as.numeric(object$sample[8]))
-      if (do_ncv == 1) {
+      if (resample == 1) {
         step = data.frame( StepAllDevRat , StepAveIntcal , StepAveLincal , StepAveAgree, StepAve.nzero, step.devrat.naive, step.agree.naive, object$step.nzero )
         names( step ) = colnames1 
 #        names( step ) = c("Deviance", "Inter", "Slope", "Concor", "Non Zero", "Deviancd", "ConroR", "Non Zero" )
@@ -698,22 +781,24 @@ summary.nested.glmnetr = function(object, cvfit=FALSE, pow=2, printg1=FALSE,
       } else if ((dostep == 0) & (doaic == 1)) { 
         step = step[c(3),]  
       }
-      stepr = roundperf(step, digits, do_ncv)
-      if ((family == "cox") & (do_ncv==1)) { stepr = stepr[,-2] }      
+      stepr = roundperf(step, digits, resample)
+      if ((family == "cox") & (resample==1)) { stepr = stepr[,-2] }      
     }
     
     ## PRINT ACTUAL PERFORMANCE SUMMARIES ######################################
     ## PRINT ACTUAL PERFORMANCE SUMMARIES ######################################
     
     allstat = rbind(lasso, xgb, rf, orf, ann, rpart, step)
-    mlen = max( nchar( trimws(rownames(allstat)) ) ) 
+    allcalstat = rbind(lasso.cal)
+    mlen = max( nchar( trimws(rownames(allstat)) ) ) + 4
+#    mlencal = max( nchar( trimws(rownames(allstatcal)) ) ) 
     rnms = rownames(allstat)
     rnms = substring ( rnms, 1, mlen)
     rownames(allstat) = rnms
     
     if (dolasso == 1) {
       if ( table %in% c(3) ) {
-        if (do_ncv == 1) {
+        if (resample == 1) {
           cat( "\n  LASSO: Ave is for (nested) CV model performance summary, else \n",
                "        naive summary for fit on all data \n" ) 
         } else {
@@ -725,11 +810,17 @@ summary.nested.glmnetr = function(object, cvfit=FALSE, pow=2, printg1=FALSE,
         print( lassor ) 
         cat("\n") 
       }
+      if (cal >= 1) { 
+        if (resample==0) { colnames(lassor.cal) =c("Naive DevRat", "Naive Cal Int",  "Naive Cal Slope") } 
+        rownames(lassor.cal) = paste0("Train Cal ", rownames(lassor)) 
+        print( lassor.cal )
+        cat("\n") 
+      } 
     }
     
     if (doxgb == 1) {
       if ( table %in% c(3) ) {
-        if (do_ncv == 1) {
+        if (resample == 1) {
           cat( "\n  XGBoost: Ave is for (nested) CV model performance summary, else\n",
                "          naive summary for fit on all data \n" ) 
         } else {
@@ -745,7 +836,7 @@ summary.nested.glmnetr = function(object, cvfit=FALSE, pow=2, printg1=FALSE,
     
     if (dorf == 1) { 
       if ( table %in% c(3) ) {
-        if (do_ncv == 1) {
+        if (resample == 1) {
           cat( "\n  Random Forest: Ave is for CV model performance summary, else\n",
                "                   naive summary for fit on all data \n" ) 
         } else {
@@ -757,11 +848,17 @@ summary.nested.glmnetr = function(object, cvfit=FALSE, pow=2, printg1=FALSE,
         print( rfr )
         cat("\n") 
       }
+      if (cal >= 2) { 
+        if (resample==0) { colnames(rf.calr) =c("Naive DevRat", "Naive Cal Int",  "Naive Cal Slope") } 
+        rownames(rf.calr) = paste0("Train Cal ", rownames(rfr)) 
+        print( rf.calr )
+        cat("\n") 
+      }
     }
     
     if (doorf == 1) { 
       if ( table %in% c(3) ) {
-        if (do_ncv == 1) {
+        if (resample == 1) {
           cat( "\n  Random Forest: Ave is for CV model performance summary, else\n",
                "                   naive summary for fit on all data \n" ) 
         } else {
@@ -773,11 +870,17 @@ summary.nested.glmnetr = function(object, cvfit=FALSE, pow=2, printg1=FALSE,
         print( orfr )
         cat("\n") 
       }
+      if (cal >= 2) { 
+        if (resample==0) { colnames(orf.calr) =c("Naive DevRat", "Naive Cal Int",  "Naive Cal Slope") } 
+        rownames(orf.calr) = paste0("Train Cal ", rownames(orfr)) 
+        print( orf.calr )
+        cat("\n") 
+      } 
     }
       
     if (doann == 1) { 
       if ( table %in% c(3) ) {
-        if (do_ncv == 1) {
+        if (resample == 1) {
           cat( "\n  Artificial Neural Network: Ave is for (nested) CV model performance summary, else\n",
                "                         naive summary for fit on all data \n" ) 
         } else {
@@ -793,7 +896,7 @@ summary.nested.glmnetr = function(object, cvfit=FALSE, pow=2, printg1=FALSE,
     
     if (dorpart == 1) {
       if (table == 3) {
-        if (do_ncv == 1) {
+        if (resample == 1) {
           cat( "\n  Recursive Partitioning: Ave is for CV model performance summary, else\n", 
                "                         naive summary for fit on all data \n" ) 
         } else {
@@ -812,7 +915,7 @@ summary.nested.glmnetr = function(object, cvfit=FALSE, pow=2, printg1=FALSE,
     
     if ((dostep == 1) | (doaic == 1)) {
       if ( table %in% c(3) ) {
-        if (do_ncv == 1) {
+        if (resample == 1) {
           if        ((dostep == 1) & (doaic == 1)) { 
             cat( "\n  Stepwise tuned and AIC: Ave is for (nested) CV model performance summary, else\n")
           } else if ((dostep == 1) & (doaic == 0)) { 

@@ -17,6 +17,7 @@ perf_bin = function(yy, xbhat) {
               agree  = concordance(fit0)[[1]] ,          
               intcal = fit0$coefficients[1] , 
               lincal = fit0$coefficients[2] ) 
+  if (var(xbhat)==0) { retvec[5]=0 }
   return( retvec )
 }
 
@@ -38,6 +39,7 @@ perf_cox = function(SURV, xbhat) {
              agree = fit0$concordance[6] ,
              intcal = 0 , 
              lincal = fit0$coefficients ) 
+  if (var(xbhat)==0) {retvec[5]=0}
   return( retvec )
 }
 
@@ -53,12 +55,20 @@ perf_cox = function(SURV, xbhat) {
 #' @noRd
 
 perf_gau = function(yy, xbhat) {
-  fit0 = glm( yy ~ xbhat , family="gaussian")
-  returnvec = c(  dev1 = sum((yy - xbhat)^2) / length(yy) ,
-                  dev2 = fit0$deviance / length(yy) ,
-                  agree = ifelse( var(xbhat)>0 , cor(x=yy, y=xbhat) , 0 ) ,
-                  intcal = fit0$coefficients[1] , 
-                  lincal = fit0$coefficients[2] )
+  if ( var(xbhat) > 0 ) { 
+    fit0 = glm( yy ~ xbhat , family="gaussian") 
+    returnvec = c(  dev1  = sum((yy - xbhat)^2) / length(yy) ,
+                    dev2  = fit0$deviance / length(yy) ,
+                    agree = cor(x=yy, y=xbhat) ,
+                    intcal = fit0$coefficients[1] , 
+                    lincal = fit0$coefficients[2] )
+  } else { 
+    returnvec = c(  dev1  = sum((yy - xbhat)^2) / length(yy) ,
+                    dev2  = sum((yy - xbhat)^2) / length(yy) ,
+                    agree = 0 ,
+                    intcal = mean(yy) , 
+                    lincal = 0 )
+  }
   return( returnvec )
 }
 
@@ -241,6 +251,14 @@ ann_perform = function(object, newdat, newy, family="binomial", start=NULL, even
 }
 
 ###############################################################################################################
+
+perf_gen_cal_train = function( testy__, pred, trainy__, pred.tr, family ) { 
+  perf.tr  = perf_gen( trainy__ , pred.tr  , family )
+  pred.cal = perf.tr[4] + pred * perf.tr[5]
+  perf.cal = perf_gen( testy__ , pred.cal  , family )
+  return( perf.cal )
+}
+
 
 
 

@@ -171,6 +171,57 @@ factor.foldid = function(event, fold_n=10) {
   return(foldid)
 }
 
+#' Generate foldid's by 0/1 factor for bootstrap like samples where unique option between 0 and 1
+#'
+#' @param event the outcome variable in a vector identifying the different potential 
+#' levels of the outcome
+#' @param fraction the fraction of the whole sample included in the bootstratp sample
+#'
+#' @return foldid's in a vector the same length as event
+#' 
+#' @seealso
+#'   \code{\link{get.foldid}} , \code{\link{nested.glmnetr}} 
+#'  
+#' @export
+#'
+
+boot.factor.foldid = function(event, fraction) { 
+    nobs = length(event)
+    nobs0 = sum(event==0)
+    nobs1 = sum(event==1)
+    noob  = (fraction*nobs )%/%1 + rbinom(1,1,(fraction*nobs )%%1)  
+    noob0 = (fraction*nobs0)%/%1 + rbinom(1,1,(fraction*nobs0)%%1)
+    noob1 = noob - noob0 
+    
+    ids0 = c(1:nobs)[event==0]
+    length(ids0)
+    xids0inb = sort( sample( c(1:nobs0), noob0, replace=0 ) ) 
+    xids0oob = c(1:nobs0)[ -xids0inb ]
+    ids0inb = ids0[ xids0inb]
+    ids0oob = ids0[-xids0inb]
+    table(table(ids0inb))
+    table(table(ids0oob))
+    table(table(c( ids0inb , ids0oob)))
+    
+    ids1 = c(1:nobs)[event==1]
+    length(ids1)
+    xids1inb = sort( sample( c(1:nobs1), noob1, replace=0 ) ) 
+    xids1oob = c(1:nobs1)[ -xids1inb ]
+    ids1inb = ids1[ xids1inb]
+    ids1oob = ids1[-xids1inb]
+    table(table(ids1inb))
+    table(table(ids1oob))
+    table(table(c( ids1inb , ids1oob)))
+    
+    table(table( c(ids0inb, ids0oob, ids1inb, ids1oob) ))
+    
+    returnlist = list(ids0inb=ids0inb, ids0oob=ids0oob, ids1inb=ids1inb, ids1oob=ids1oob) 
+    
+    idsinb = sort( c(returnlist$ids0inb , returnlist$ids1inb) )
+  #  table(table(idsinb))
+  return(returnlist)
+}
+
 ################################################################################
 ################################################################################
 
@@ -478,3 +529,13 @@ devrat_ = function( m2.ll.mod, m2.ll.null, m2.ll.sat, n__ ) {
 
 ###############################################################################################################
 ###############################################################################################################
+
+get.DevRat = function( devian.cv, null.m2LogLik.cv, sat.m2LogLik.cv, n.cv ) {
+  ncoldevian = dim(devian.cv)[2] 
+  AllDevRat = rep(1,ncoldevian)
+  for (j_ in c(1:ncoldevian)) {
+    AllDevRat[j_] = devrat_(devian.cv[,j_], null.m2LogLik.cv, sat.m2LogLik.cv, n.cv )[[2]]
+  }
+  return( AllDevRat )
+}
+

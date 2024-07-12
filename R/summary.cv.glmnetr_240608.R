@@ -198,6 +198,7 @@ predict.cv.glmnetr = function( object, xs_new=NULL, lam=NULL, gam=NULL, comment=
     } else { 
       if (family %in% c("binomial","gaussian")) { 
         beta_ = c(a0,beta_) 
+        names(beta_)[1] = "Int" 
       }
       beta = beta_[(beta_!=0)]
       outputobject=list(beta_=beta_, beta=beta)

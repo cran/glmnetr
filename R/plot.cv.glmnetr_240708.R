@@ -318,7 +318,7 @@ plot.cv.glmnetr = function(x, gam=NULL, lambda.lo=NULL, plup=0, title=NULL, coef
 #'
 #' @param x A nested.glmnetr output object
 #' @param type type of plot to be produced form the (nested) cross validation 
-#' performance measures, and teh lasso model tuning or lasso model 
+#' performance measures, and the lasso model tuning or lasso model 
 #' coefficients. For the lasso model the options include "lasso" to plot deviances
 #' informing hyperparmeter choice or "coef" to plot lasso parameter estimates.  
 #' Else nested cross validation performance measures are 
@@ -354,9 +354,12 @@ plot.cv.glmnetr = function(x, gam=NULL, lambda.lo=NULL, plup=0, title=NULL, coef
 #' apply to type = "lasso". 
 #' @param plot By default 1 to produce a plot, 0 to return the data used in the 
 #' plot in the form of a list. 
-#' @param fold By default 1 to display model performance estimates form individual 
-#' folds when type of "agree", "intcal", "lincal" or "devrat". If 0 then the 
-#' individual fold calculations are not displayed. 
+#' @param fold By default 1 to display model performance estimates form 
+#' individual folds (or replicaitons for boostrap evaluations) when type of 
+#' "agree", "intcal", "lincal", "devrat" for "devian". If 0 then the individual 
+#' fold calculations are not displayed. When there are many replications as
+#' sometimes the case when using bootstrap, one may specify the number of 
+#' randomly selected lines for plotting.   
 #' @param xgbsimple 1 (default) to include results for the untuned XGB model, 0 to not include.  
 #' @param ... Additional arguments passed to the plot function.  
 #'

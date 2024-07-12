@@ -3,14 +3,13 @@
 ################################################################################
 #' Using (nested) cross validation, describe and compare some machine learning model performances
 #' 
-#' @description Performs a nested cross validation for cross validation informed 
-#' relaxed lasso, Gradient Boosting Machine (GBM), Random Forest (RF), (artificial) 
-#' Neural Network (ANN) with two hidden layers, Recursive Partitioning (RPART) 
-#' and step wise regression.  That is
+#' @description Performs a nested cross validation or bootstrap validation 
+#' for cross validation informed relaxed lasso, Gradient Boosting Machine (GBM), 
+#' Random Forest (RF), (artificial) Neural Network (ANN) with two hidden layers, 
+#' Recursive Partitioning (RPART) and step wise regression.  That is
 #' hyper parameters for all these models are informed by cross validation (CV) (or in the 
-#' case of RF by out-of-bag calculations), and a second  layer of CV 
-#' (or analogously for the RF) is 
-#' used to evaluate the performance of these CV informed model fits.  For
+#' case of RF by out-of-bag calculations), and a second  layer of resampling  
+#' is used to evaluate the performance of these CV informed model fits.  For
 #' step wise regression CV is used to inform either a p-value for entry or degrees of 
 #' freedom (df) for the final model choice.  For input 
 #' we require predictors (features) to be in numeric matrix format with no missing 
@@ -47,17 +46,18 @@
 #' the number of folds for the inner loop of the nested cross validation, i.e. 
 #' the number of folds used in model derivation.   
 #' @param stratified 1 to generate fold IDs stratified on outcome or event 
-#' indicators for the binomial or Cox model.
-#' @param do_ncv 1 by default to do the Nested Cross Validation, or 0
-#' to only fit the various models without doing the Nested part. In this case the 
+#' indicators for the binomial or Cox model, 0 to generate foldid's without 
+#' regard to outcome.  Default is 1 for nested CV (i.e. bootstrap=0), and 0 
+#' for bootstrap>=1.
+#' @param resample 1 by default to do the Nested Cross Validation or bootstrap
+#' resampling calculations to assess model performance (see bootstrap option), or 0
+#' to only fit the various models without doing resampling. In this case the 
 #' nested.glmnetr() function will only derive the models based upon the full 
 #' data set.  This may be useful when exploring various models without having to 
-#' the Nested Cross Validation for assessing model performance. for example when
-#' wanting to examine a "lasso informed" extreme gradient boosting 
-#' models (GBM) or Artificial Neural Network (ANN) models which are based upon 
-#' both a lasso fit and a GBM or ANN fit. See the predict_ann_tab() function 
-#' regarding getting predicteds for this "lasso informed" models from a 
-#' nested.glmnetr() output.  
+#' the the timely resampling to assess model performance, for example, when
+#' wanting to examine extreme gradient boosting 
+#' models (GBM) or Artificial Neural Network (ANN) models which can take a long 
+#' time.
 #' @param dolasso fit and do cross validation for lasso model, 0 or 1
 #' @param doxgb fit and evaluate a cross validation informed XGBoost (GBM) 
 #' model.  1 for yes, 0 for no (default).  By default the number of folds used when 
@@ -84,8 +84,8 @@
 #' one would want to keep the full data model but the GBM models can cause the 
 #' output object to require large amounts of storage space so optionally one can 
 #' choose to not keep the final model when the goal is basically only to assess 
-#' model performance for the GBM.  In that case the tuning papramgers for the final
-#' tuned modle ae retained faciliting reccalcualtion of the final model, this will
+#' model performance for the GBM.  In that case the tuning parameters for the final
+#' tuned model ae retained facilitating recalculation of the final model, this will
 #' also require the original training data.  
 #' @param dorf fit and evaluate a random forest (RF) 
 #' model.  1 for yes, 0 for no (default).  Also, if dorf is specified by a list, 
@@ -199,15 +199,22 @@
 #' the model derived using all data as well as for the hold out sets (1/k of the 
 #' data each) for the models derived within the cross validation ((k-1)/k of the 
 #' data for each fit).
+#' @param bootstrap  0 (default) to use nested cross validation, a positive integer
+#' to perform as many iterations of the bootstrap for model evaluation. 
+#' @param unique  0 to use the bootstrap sample as is as training data, 1 to 
+#' include the unique sample elements only once.  A fractional value between 0.5 
+#' and 0.9 will sample without replacement a fraction of this value for training 
+#' and use the remaining as test data.
 #' @param track   1 (default) to track progress by printing to console elapsed and 
 #' split times, 0 to not track
+#' @param do_ncv   Deprecated, and replaced by resample
 #' @param ... additional arguments that can be passed to glmnet() 
 #'  
 #' @return - Model fit performance for LASSO, GBM, Random 
 #' Forest, RPART, artificial neural network (ANN) or STEPWISE models are 
-#' estimated using k-cross validation.  Full data model fits for these models 
-#' are also calculated independently (prior to) the performance evaluation, 
-#' often using a second layer of k-cross validation. 
+#' estimated using k-cross validation or bootstrap.  Full data model fits for 
+#' these models are also calculated independently (prior to) the performance 
+#' evaluation, often using a second layer of resampling validation. 
 #' 
 #' @seealso
 #'   \code{\link{glmnetr.simdata}} , \code{\link{summary.nested.glmnetr}} , \code{\link{nested.compare}} , 
@@ -246,14 +253,50 @@
 #' summary(nested.glmnetr.fit, cvfit=TRUE) 
 #' }
 #' 
-nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_ncv=1, folds_n=10, stratified=1,  
+nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", resample=NULL, folds_n=10, stratified=NULL,  
                           dolasso=1, doxgb=0, dorf=0, doorf=0, doann=0, dorpart=0, dostep=0, doaic=0, 
                           ensemble=0, method="loglik", lambda=NULL, gamma=NULL, relax=TRUE, steps_n=0,
                           seed=NULL, foldid=NULL, limit=1, fine=0, ties="efron", keepdata=0, keepxbetas=1,  
-                          track=0, ...  ) {
-
-  pver = "glmnetr version 0.5-1 (2024-05-10) BETA" 
-  pver = "glmnetr version 0.5-1 (2024-05-10)" 
+                          bootstrap=0, unique=0, track=0, do_ncv=NULL, ...  ) {
+  
+#  cat(paste("\n  (1) bootstrap=",bootstrap, "  unique=", unique, "  stratified=", stratified, "\n\n")) 
+  
+  bootstrap_ = round(abs(bootstrap))
+  if (bootstrap_ > 0.5) { bootstrap = 1 } else { bootstrap = 0 }
+  
+  if (bootstrap == 1) { reps = bootstrap_ 
+  } else { reps = folds_n }
+  
+  if ((((unique>0) & (unique<0.2)) | ((unique<1) & (unique>0.8))) & (bootstrap==1))   {
+    cat(paste("  unique is typically set to about 0.632 so the Out Of Bag sample is similar to the standatd bootstrap.\n",
+                                             " Values < 0.1, or > 0.9 may leave too few events in the training or test sets for stable fits.\n" ))
+  }
+  
+  if (!is.null(stratified)) { if (!(stratified %in% c(0,1))) { stratified = NULL } }
+  if (is.null(stratified)) {
+    if (family == "gaussian"){
+      stratified = 0 
+    } else if (bootstrap==1) {
+      if ((unique>0) & (unique<0)) { stratified = 1 
+      } else { stratified = 0 }
+    } else if (bootstrap==0) { 
+      stratified = 1
+    }
+  } 
+  
+  if ((!(family %in% c("binomial","cox"))) & (stratified==1)) { 
+    stratified = 0
+    cat(paste0("  With family = ", family, ", stratified is set to 0\n"))
+  } 
+  
+#  pver = "glmnetr version 0.5-2 (2024-07-10) BETA" 
+  pver = "glmnetr version 0.5-2 (2024-07-10)" 
+  
+  if ( (!is.null(do_ncv)) & (is.null(resample)) ) { 
+    resample = do_ncv
+    cat(paste("  do_ncv is deprecated and will be dropped from future versions.\n",
+              " Use resample instead as it applies to both (nested) CV and bootstrap." ))
+  } else if ( (is.null(do_ncv)) & (is.null(resample) ) ) { resample = 1 } 
   
   if (is.null(keepdata)) { keepdata = 0 }
   if (is.null(keepxbetas)) { keepxbetas = 0 }
@@ -334,7 +377,7 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
     cat( "  The gradient boosting machine fitting routine does not fit Cox model with (start,stop) time data\n",
          " gradient boosting machine models will not be fit\n\n")
   }
-  
+
 #  cat(paste('  xgbkeep = ', xgbkeep)) 
 
   if (is.list(doxgb)) {
@@ -362,6 +405,12 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
     dorf_ = 1 
   }
   
+  if ( (dorf_ == 1) & (family == "cox") & (!is.null(start))) { 
+    dorf = 0 ; dorf_ = 0 ; 
+    cat( "  The random forest fitting routine does not fit Cox model with (start,stop) time data\n",
+         " random forest models will not be fit\n\n")
+  }
+  
   if (dorf_ == 1) {
     mtryc = dorf$mtryc 
     ntreec = dorf$ntreec 
@@ -371,6 +420,7 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
   }
 
   ## set up doorf ==============================================================    
+  
   doorf_ = 0 
   
   if (is.null(doorf)) { doorf = 0 }
@@ -382,6 +432,12 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
     }
   } else {
     doorf_ = 1 
+  }
+  
+  if ( (doorf_ == 1) & (family == "cox") & (!is.null(start))) { 
+    doorf = 0 ; doorf_ = 0 ; 
+    cat( "  The oblique random forest fitting routine does not fit Cox model with (start,stop) time data\n",
+         " oblique random forest models will not be fit\n\n")
   }
 
   if (doorf_ == 1) {
@@ -400,16 +456,10 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
   
   if ( (doann_==1) & (family == "cox") & (!is.null(start))) { 
     cat( "  The neural network fitting routine does not fit Cox model with (start,stop) time data\n",
-         " neural network models will not be fit\n\n")
+         " artificial neural network models will not be fit\n\n")
     doann_ = 0
   }
 
-  if ( (dorpart == 1) & (family == "cox") & (!is.null(start))) { 
-    dorpart = 0
-    cat( "  The recursive partitioning fitting routine does not fit Cox model with (start,stop) time data\n",
-         " recursive partitioning machine models will not be fit\n\n")
-  }
-  
   eppr = NULL 
   eppr2 = NULL 
   if (doann_ == 1) {
@@ -455,6 +505,16 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
     doann_ = 0 
     cat("\n  ***** torch is NOT installed and so neural networks models will not be fit *****\n")
   }
+  
+  ##############################################################################
+  
+  if ( (dorpart == 1) & (family == "cox") & (!is.null(start))) { 
+    dorpart = 0
+    cat( "  The recursive partitioning fitting routine does not fit Cox model with (start,stop) time data\n",
+         " recursive partitioning models will not be fit\n\n")
+  }
+  
+  ##############################################################################
   
   if (track <= 0) { if (is.null(eppr)) { eppr = -3 } ;  if (is.null(eppr)) { eppr2 = -3 } }
   if (track <= 0) { eppr = min(eppr, -2) ;  eppr2 = min(eppr2,-2) }
@@ -506,11 +566,13 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
   if ( family %in% c("COX", "cox", "coxph") ) { family = "cox" }
   
   #####  SEEDS  ################################################################
-  
-  seed = glmnetr_seed(seed, folds_n, folds_ann_n) 
 
-  seedr_ = seed$seedr[1]
-  seedt_ = seed$seedt[1]
+  seed = glmnetr_seed(seed, reps) 
+  cat( paste( " seed$seedr[1] = ", seed$seedr[1], "\n\n" ) )
+#  cat( paste( " reps  = ", reps, "\n\n" ) ) 
+#  print(seed)
+  seedr_ = seed$seedr[reps+1]
+  seedt_ = seed$seedt[reps+1]
 
   if (is.null(foldid)) { 
     set.seed(seedr_) 
@@ -543,9 +605,7 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
     doxgb$folds = foldid_xgb 
   }
   
-#  doann$foldid_ann = NULL 
   if (doann_ == 1) { 
-    torch_manual_seed( seedt_ ) 
     if (!is.null(doann$foldid_ann)==1) {
       foldid_ann = doann$foldid_ann 
     } else if (folds_ann_n == folds_n) {
@@ -563,135 +623,149 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
     doann$foldid_ann = foldid_ann 
     table( foldid_ann, foldid)
   } 
-
+  
   ## no model statistics #######################################################
-  null.m2LogLik.cv = rep(0,folds_n) 
-  sat.m2LogLik.cv = rep(0,folds_n) 
-  n.cv = rep(0,folds_n) 
+  null.m2LogLik.rep = rep(0, reps) 
+  sat.m2LogLik.rep = rep(0, reps) 
+  n.rep = rep(0, reps) 
+  n00.rep = n.rep 
   
   ## log likelihoods & concordances from LASSO and relaxed lasso by Cross Validation 
-  zero_nby7 = matrix ( data=rep(0,(7*folds_n)), nrow = folds_n, ncol = 7 ) 
-  ones_nby7 = matrix ( data=rep(1,(7*folds_n)), nrow = folds_n, ncol = 7 ) 
-  lasso.devian.cv = ones_nby7
-  lasso.cal.devian.cv = ones_nby7
-  lasso.agree.cv  = zero_nby7
-  lasso.intcal.cv = zero_nby7
-  lasso.lincal.cv = zero_nby7
+  zero_nby7 = matrix ( data=rep(0,(7*reps)), nrow = reps, ncol = 7 ) 
+  ones_nby7 = matrix ( data=rep(1,(7*reps)), nrow = reps, ncol = 7 ) 
+  lasso.devian.rep = ones_nby7
+  lasso.agree.rep  = zero_nby7
+  lasso.intcal.rep = zero_nby7
+  lasso.lincal.rep = zero_nby7
+  lasso.cal.devian.rep = ones_nby7
+  lasso.cal.agree.rep  = zero_nby7
+  lasso.cal.intcal.rep = zero_nby7
+  lasso.cal.lincal.rep = zero_nby7
   ## number of non-zero coefficients in LASSO models 
-  lasso.nzero.cv =  zero_nby7
-  lassogammacv = matrix ( data=rep(0,(2*folds_n)), nrow = folds_n, ncol = 2)
+  lasso.nzero.rep =  zero_nby7
+  lassogammacv = matrix ( data=rep(0,(2*reps)), nrow = reps, ncol = 2)
   nms = c("lasso.1se", "lasso.min", "lasso.1seR", "lasso.minR", "lasso.1seR0", "lasso.minR0", "ridge" )
   nms = c("1se", "min", "1seR", "minR", "1seR.G0", "minR.G0", "ridge" )
-  colnames(lasso.devian.cv) = nms 
-  colnames(lasso.cal.devian.cv) = nms 
-  colnames(lasso.agree.cv ) = nms
-  colnames(lasso.intcal.cv) = nms
-  colnames(lasso.lincal.cv) = nms
-  colnames(lasso.nzero.cv)  = nms
+  colnames(lasso.devian.rep) = nms 
+  colnames(lasso.cal.devian.rep) = nms 
+  colnames(lasso.agree.rep ) = nms
+  colnames(lasso.intcal.rep) = nms
+  colnames(lasso.lincal.rep) = nms
+  colnames(lasso.nzero.rep)  = nms
   colnames(lassogammacv)    = c("1se", "min")
   
   ## log likelihoods & concordances from XGBoost by Cross Validation 
-  zero_nby6 = matrix ( data=rep(0,(6*folds_n)), nrow = folds_n, ncol = 6 ) 
-  ones_nby6 = matrix ( data=rep(1,(6*folds_n)), nrow = folds_n, ncol = 6 ) 
-  xgb.devian.cv = ones_nby6
-  xgb.cal.devian.cv = ones_nby6 
-  xgb.intcal.cv = zero_nby6
-  xgb.lincal.cv = zero_nby6
-  xgb.agree.cv  = zero_nby6
-  xgb.nzero.cv  = zero_nby6
+  zero_nby6 = matrix ( data=rep(0,(6*reps)), nrow = reps, ncol = 6 ) 
+  ones_nby6 = matrix ( data=rep(1,(6*reps)), nrow = reps, ncol = 6 ) 
+  xgb.devian.rep = ones_nby6
+  xgb.cal.devian.rep = ones_nby6 
+  xgb.intcal.rep = zero_nby6
+  xgb.lincal.rep = zero_nby6
+  xgb.agree.rep  = zero_nby6
+  xgb.nzero.rep  = zero_nby6
   xgbnms = c("Simple", "Feature", "Offset", "Tuned", "Feature", "Offset") 
-  colnames(xgb.devian.cv) = xgbnms
-  colnames(xgb.cal.devian.cv) = xgbnms
-  colnames(xgb.intcal.cv) = xgbnms
-  colnames(xgb.lincal.cv) = xgbnms
-  colnames(xgb.agree.cv ) = xgbnms
-  colnames(xgb.nzero.cv ) = xgbnms 
+  colnames(xgb.devian.rep) = xgbnms
+  colnames(xgb.cal.devian.rep) = xgbnms
+  colnames(xgb.intcal.rep) = xgbnms
+  colnames(xgb.lincal.rep) = xgbnms
+  colnames(xgb.agree.rep ) = xgbnms
+  colnames(xgb.nzero.rep ) = xgbnms 
   
   ## log likelihoods & concordances from Random Forest by Cross Validation   
-  zero_nby3 = matrix ( data=rep(0,(3*folds_n)), nrow = folds_n, ncol = 3 ) 
-  ones_nby3 = matrix ( data=rep(1,(3*folds_n)), nrow = folds_n, ncol = 3 ) 
-  rf.mtry.cv     = zero_nby3
-  rf.devian.cv   = ones_nby3
-  rf.cal.devian.cv = ones_nby3
-  rf.agree.cv    = zero_nby3
-  rf.intcal.cv   = zero_nby3
-  rf.lincal.cv   = zero_nby3
+  zero_nby3 = matrix ( data=rep(0,(3*reps)), nrow = reps, ncol = 3 ) 
+  ones_nby3 = matrix ( data=rep(1,(3*reps)), nrow = reps, ncol = 3 ) 
+  rf.mtry.rep     = zero_nby3
+  rf.devian.rep   = ones_nby3
+  rf.agree.rep    = zero_nby3
+  rf.intcal.rep   = zero_nby3
+  rf.lincal.rep   = zero_nby3
+  rf.cal.devian.rep = ones_nby3
+  rf.cal.agree.rep  = zero_nby3
+  rf.cal.intcal.rep = zero_nby3
+  rf.cal.lincal.rep = zero_nby3
   nms = c("None", "Feature", "Offset")
-  colnames(rf.mtry.cv)  = nms 
-  colnames(rf.devian.cv) = nms 
-  colnames(rf.cal.devian.cv) = nms 
-  colnames(rf.agree.cv)  = nms 
-  colnames(rf.intcal.cv) = nms 
-  colnames(rf.lincal.cv) = nms 
+  colnames(rf.mtry.rep)  = nms 
+  colnames(rf.devian.rep) = nms 
+  colnames(rf.cal.devian.rep) = nms 
+  colnames(rf.agree.rep)  = nms 
+  colnames(rf.intcal.rep) = nms 
+  colnames(rf.lincal.rep) = nms 
   
   ## log likelihoods & concordances from Random Forest by Cross Validation   
-  zero_nby3 = matrix ( data=rep(0,(3*folds_n)), nrow = folds_n, ncol = 3 ) 
-  ones_nby3 = matrix ( data=rep(1,(3*folds_n)), nrow = folds_n, ncol = 3 ) 
-  orf.mtry.cv     = zero_nby3
-  orf.devian.cv   = ones_nby3
-  orf.cal.devian.cv = ones_nby3
-  orf.agree.cv    = zero_nby3
-  orf.intcal.cv   = zero_nby3
-  orf.lincal.cv   = zero_nby3
+  zero_nby3 = matrix ( data=rep(0,(3*reps)), nrow = reps, ncol = 3 ) 
+  ones_nby3 = matrix ( data=rep(1,(3*reps)), nrow = reps, ncol = 3 ) 
+  orf.mtry.rep     = zero_nby3
+  orf.devian.rep   = ones_nby3
+  orf.agree.rep    = zero_nby3
+  orf.intcal.rep   = zero_nby3
+  orf.lincal.rep   = zero_nby3
+  orf.cal.devian.rep = ones_nby3
+  orf.cal.agree.rep  = zero_nby3
+  orf.cal.intcal.rep = zero_nby3
+  orf.cal.lincal.rep = zero_nby3
   nms = c("None", "Feature", "Offset")
-  colnames(orf.mtry.cv)  = nms 
-  colnames(orf.devian.cv) = nms 
-  colnames(orf.cal.devian.cv) = nms 
-  colnames(orf.agree.cv)  = nms 
-  colnames(orf.intcal.cv) = nms 
-  colnames(orf.lincal.cv) = nms 
+  colnames(orf.mtry.rep)  = nms 
+  colnames(orf.devian.rep) = nms 
+  colnames(orf.agree.rep)  = nms 
+  colnames(orf.intcal.rep) = nms 
+  colnames(orf.lincal.rep) = nms 
+  colnames(orf.cal.devian.rep) = nms 
+  colnames(orf.cal.agree.rep)  = nms 
+  colnames(orf.cal.intcal.rep) = nms 
+  colnames(orf.cal.lincal.rep) = nms 
+  
   
   ## log likelihoods & concordances from RPART by Cross Validation   
-  ones_nby9 = matrix ( data=rep(1,(9*folds_n)), nrow = folds_n, ncol = 9 )
-  zero_nby9 = matrix ( data=rep(0,(9*folds_n)), nrow = folds_n, ncol = 9 )
-  rpart.nzero.cv  = zero_nby9
-  rpart.devian.cv = ones_nby9
-  rpart.cal.devian.cv = ones_nby9
-  rpart.agree.cv  = zero_nby9
-  rpart.intcal.cv = zero_nby9
-  rpart.lincal.cv = zero_nby9
+  ones_nby9 = matrix ( data=rep(1,(9*reps)), nrow = reps, ncol = 9 )
+  zero_nby9 = matrix ( data=rep(0,(9*reps)), nrow = reps, ncol = 9 )
+  rpart.nzero.rep  = zero_nby9
+  rpart.devian.rep = ones_nby9
+  rpart.cal.devian.rep = ones_nby9
+  rpart.agree.rep  = zero_nby9
+  rpart.intcal.rep = zero_nby9
+  rpart.lincal.rep = zero_nby9
   
   nms = c("cp=0.00", "cp=0.01", "cp=0.02", "F cp=0.00", "F cp=0.01", "F cp=0.02", 
           "O cp=0.00", "O cp=0.01", "O cp=0.02" )
-  colnames(rpart.nzero.cv)  = nms 
-  colnames(rpart.devian.cv) = nms 
-  colnames(rpart.cal.devian.cv) = nms 
-  colnames(rpart.agree.cv)  = nms 
-  colnames(rpart.intcal.cv) = nms 
-  colnames(rpart.lincal.cv) = nms 
+  colnames(rpart.nzero.rep)  = nms 
+  colnames(rpart.devian.rep) = nms 
+  colnames(rpart.cal.devian.rep) = nms 
+  colnames(rpart.agree.rep)  = nms 
+  colnames(rpart.intcal.rep) = nms 
+  colnames(rpart.lincal.rep) = nms 
   
-  ones_nby8 = matrix ( data=rep(1,(8*folds_n)), nrow = folds_n, ncol = 8 )
-  zero_nby8 = matrix ( data=rep(0,(8*folds_n)), nrow = folds_n, ncol = 8 )
+  ones_nby8 = matrix ( data=rep(1,(8*reps)), nrow = reps, ncol = 8 )
+  zero_nby8 = matrix ( data=rep(0,(8*reps)), nrow = reps, ncol = 8 )
   ## log likelihoods & concordances from Neural Networks by Cross Validation   
-  ann.devian.cv   = ones_nby8
-  ann.cal.devian.cv = ones_nby8
-  ann.agree.cv    = ones_nby8
-  ann.intcal.cv   = ones_nby8
-  ann.lincal.cv   = ones_nby8
-  ann.nzero.cv    = ones_nby8
+  ann.devian.rep   = ones_nby8
+  ann.cal.devian.rep = ones_nby8
+  ann.agree.rep    = ones_nby8
+  ann.intcal.rep   = ones_nby8
+  ann.lincal.rep   = ones_nby8
+  ann.nzero.rep    = ones_nby8
   nms = c("Uninformed", "lasso feat", "lasso w's", "lasso update", "lasso terms", "l/lasso feat", "l/lasso w's", "l/lasso update") 
-  colnames(ann.devian.cv) = nms 
-  colnames(ann.cal.devian.cv) = nms 
-  colnames(ann.intcal.cv) = nms 
-  colnames(ann.lincal.cv) = nms 
-  colnames(ann.agree.cv)  = nms 
+  colnames(ann.devian.rep) = nms 
+  colnames(ann.cal.devian.rep) = nms 
+  colnames(ann.intcal.rep) = nms 
+  colnames(ann.lincal.rep) = nms 
+  colnames(ann.agree.rep)  = nms 
   
   ## log likelihoods & conncordances for STEPWISE by Cross Validation 
   ## and coxph models based upon LASSO terms by Cross Validation
-  step.devian.cv = ones_nby3
-  step.cal.devian.cv = ones_nby3
-  step.intcal.cv = zero_nby3
-  step.lincal.cv = zero_nby3
-  step.agree.cv  = zero_nby3
-  step.nzero.cv  = zero_nby3
-  step.p.cv      = matrix ( data=rep(0,(folds_n  )), nrow = folds_n, ncol = 1 )
-  colnames(step.devian.cv) = c("df", "p", "AIC")
-  colnames(step.cal.devian.cv) = c("df", "p", "AIC")
-  colnames(step.intcal.cv) = c("df", "p", "AIC")
-  colnames(step.lincal.cv) = c("df", "p", "AIC")
-  colnames(step.agree.cv ) = c("df", "p", "AIC") 
-  colnames( step.nzero.cv  )  = c("df", "p", "AIC")
-  colnames( step.p.cv   )  = c("p stepwise")
+  step.devian.rep = ones_nby3
+  step.cal.devian.rep = ones_nby3
+  step.intcal.rep = zero_nby3
+  step.lincal.rep = zero_nby3
+  step.agree.rep  = zero_nby3
+  step.nzero.rep  = zero_nby3
+  step.p.rep      = matrix ( data=rep(0,(reps)), nrow = reps, ncol = 1 )
+  colnames(step.devian.rep) = c("df", "p", "AIC")
+  colnames(step.cal.devian.rep) = c("df", "p", "AIC")
+  colnames(step.intcal.rep) = c("df", "p", "AIC")
+  colnames(step.lincal.rep) = c("df", "p", "AIC")
+  colnames(step.agree.rep ) = c("df", "p", "AIC") 
+  colnames( step.nzero.rep  )  = c("df", "p", "AIC")
+  colnames( step.p.rep   )  = c("p stepwise")
   
   #########################################################################################################
   #########################################################################################################
@@ -719,37 +793,40 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
   }
   
   xbetas     = matrix(rep(xbnull,1*nobs), nrow=nobs, ncol=1)
-  xbetas0    = matrix(rep(xbnull,7*nobs), nrow=nobs, ncol=7)
   xbetas.cv  = matrix(rep(xbnull,1*nobs), nrow=nobs, ncol=1)
-  xbetas0.cv.lasso = matrix(rep(xbnull,7*nobs), nrow=nobs, ncol=7)
   
   #########################################################################################################
   ##### LASSO fit #########################################################################################
+  lasso.nzero = rep(0,7) 
+  
   if (dolasso == 1) {
+  
+    xbetas.lasso    = matrix(rep(xbnull,14*nobs), nrow=nobs, ncol=14)  
+    xbetas.cv.lasso = xbetas.lasso 
     
     if (track >= 1) { cat(paste0("\n", " ########## Initial (CV) lasso fit of all data ########################################" , "\n")) }
     if (relax==1) { 
       if (is.null(gamma)) { gamma = c(0, 0.25, 0.5, 0.75, 1) }
       
       cv_glmnet_fit_f = cv.glmnetr( xs, start, y_, event, family=family, 
-                                    lambda=lambda, gamma=gamma, folds_n=folds_n, foldid=foldid, limit=limit, fine=fine, track=track, ties=ties, ... )  
+                                    lambda=lambda, gamma=gamma, folds_n=folds_n, foldid=foldid, limit=limit, fine=fine, track=track, ties=ties , ... )  
     } else {
       if (family=="cox") {
-        if ( is.null(start) ) { cv_glmnet_fit_f = cv.glmnet( xs, Surv(y_, event)       , family="cox", lambda=lambda, foldid=foldid, relax=FALSE, ... )  
-        } else                { cv_glmnet_fit_f = cv.glmnet( xs, Surv(start, y_, event), family="cox", lambda=lambda, foldid=foldid, relax=FALSE, ... )  
+        if ( is.null(start) ) { cv_glmnet_fit_f = cv.glmnet( xs, Surv(y_, event)       , family="cox", lambda=lambda, foldid=foldid, relax=FALSE , ... )  
+        } else                { cv_glmnet_fit_f = cv.glmnet( xs, Surv(start, y_, event), family="cox", lambda=lambda, foldid=foldid, relax=FALSE , ... )  
         } 
       } else {
-        cv_glmnet_fit_f = cv.glmnet( xs, y_, family=family, lambda=lambda, foldid=foldid, relax=FALSE, ... )  
+        cv_glmnet_fit_f = cv.glmnet( xs, y_, family=family, lambda=lambda, foldid=foldid, relax=FALSE , ... )  
       }
     }
     
     if (folds_n >= 3) {
       if ((family == "cox") & (is.null(start))) {
-        cv_ridge_fit_f = cv.glmnet( xs, Surv(y_, event), family=family, alpha=0, nfolds=folds_n, foldid=foldid, ... )  
+        cv_ridge_fit_f = cv.glmnet( xs, Surv(y_, event), family=family, alpha=0, nfolds=folds_n, foldid=foldid , ... )  
       } else if ((family == "cox") & (!is.null(start))) {
-        cv_ridge_fit_f = cv.glmnet( xs, Surv(start, y_, event), family=family, alpha=0, nfolds=folds_n, foldid=foldid, ... )  
+        cv_ridge_fit_f = cv.glmnet( xs, Surv(start, y_, event), family=family, alpha=0, nfolds=folds_n, foldid=foldid , ... )  
       } else {
-        cv_ridge_fit_f = cv.glmnet( xs, y_, family=family, alpha=0, nfolds=folds_n, foldid=foldid, ... )  
+        cv_ridge_fit_f = cv.glmnet( xs, y_, family=family, alpha=0, nfolds=folds_n, foldid=foldid , ... )  
       }
     }
     
@@ -790,10 +867,19 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
     perfm6 = perf_gen( yy , predminR0 , family )
     perfm7 = perf_gen( yy , predridge , family )
     lasso.devian.naive  = c( perfm1[1] , perfm2[1] , perfm3[1] , perfm4[1] , perfm5[1] , perfm6[1] , perfm7[1] )
-    lasso.cal.devian.naive=c(perfm1[2] , perfm2[2] , perfm3[2] , perfm4[2] , perfm5[2] , perfm6[2] , perfm7[2] )    
     lasso.agree.naive   = c( perfm1[3] , perfm2[3] , perfm3[3] , perfm4[3] , perfm5[3] , perfm6[3] , perfm7[3] )
     lasso.intcal.naive  = c( perfm1[4] , perfm2[4] , perfm3[4] , perfm4[4] , perfm5[4] , perfm6[4] , perfm7[4] )
     lasso.lincal.naive  = c( perfm1[5] , perfm2[5] , perfm3[5] , perfm4[5] , perfm5[5] , perfm6[5] , perfm7[5] )
+    lasso.cal.devian.naive=c(perfm1[2] , perfm2[2] , perfm3[2] , perfm4[2] , perfm5[2] , perfm6[2] , perfm7[2] )   
+    
+    pred1se.cal   = cal_train_xbhat( pred1se  , yy, pred1se  , family ) ; #print("HERE 7.1")
+    predmin.cal   = cal_train_xbhat( predmin  , yy, predmin  , family ) ; #print("HERE 7.2")
+    pred1seR.cal  = cal_train_xbhat( pred1seR , yy, pred1seR , family ) ; #print("HERE 7.3")
+    predminR.cal  = cal_train_xbhat( predminR , yy, predminR , family ) ; #print("HERE 7.4") ; print( var( pred1seR0.tr) )
+    pred1seR0.cal = cal_train_xbhat( pred1seR0, yy, pred1seR0, family ) ; #print("HERE 7.5")
+    predminR0.cal = cal_train_xbhat( predminR0, yy, predminR0, family ) ; #print("HERE 7.6")
+    predridge.cal = cal_train_xbhat( predridge, yy, predridge, family ) ; #print("HERE 7.7")
+    
     nms = c("naive_agree_1se" , "naive_agree_min"  , "naive_agree_1seR" , 
             "naive_agree_minR", "naive_agree_1seR0", "naive_agree_minR0", "naive_agree_ridge" ) 
     nms = c("1se", "min", "1seR", "minR", "1seR.G0", "minR.G0", "ridge" )
@@ -824,10 +910,12 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
       if (family=="cox") { ofst = ofst - mean(ofst) }
     }
     
-    xbetas0 = cbind(pred1se, predmin, pred1seR, predminR, pred1seR0, predminR0, predridge)
-    colnames(xbetas0) = c("Lasso.1se", "lasso.min", "lassoR.1se", "lassoR.min", "lassoR0.1se", "lassoR0.min", "ridge" )
-    colnames(xbetas0.cv.lasso) = c("Lasso.1se", "lasso.min", "lassoR.1se", "lassoR.min", "lassoR0.1se", "lassoR0.min", "ridge" )
-    xbetas = cbind(xbetas, xbetas0)
+    xbetas.lasso = cbind(pred1se, predmin, pred1seR, predminR, pred1seR0, predminR0, predridge,
+                         pred1se.cal, predmin.cal, pred1seR.cal, predminR.cal, pred1seR0.cal, predminR0.cal, predridge.cal)
+    colnames( xbetas.lasso ) = c("Lasso.1se", "lasso.min", "lassoR.1se", "lassoR.min", "lassoR0.1se", "lassoR0.min", "ridge",
+                                 "Lasso.1se cal", "lasso.min cal", "lassoR.1se cal", "lassoR.min cal", "lassoR0.1se cal", "lassoR0.min cal", "ridge cal" )
+    colnames(xbetas.cv.lasso) = colnames( xbetas.lasso )
+    xbetas = cbind(xbetas, xbetas.lasso)
 #    cor(xbetas)
     
     if (track >= 1) { cat(paste0(" length(lambda) = " , length(cv_glmnet_fit_f$lambda), "\n" )) } 
@@ -863,11 +951,15 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
       } else if (family == "binomial") { objective = "binary:logistic" 
       } else                           { objective = "reg:squarederror" }
 
-      xbetas0 = matrix(rep(xbnull,6*nobs), nrow=nobs, ncol=6)
-      xbetas0.cv.xgb = matrix(rep(xbnull,6*nobs), nrow=nobs, ncol=6)
+      keepxbetas.xgb = rep(0,6)
+      if (sum(ensemble[c(1,5)])     >= 1) { keepxbetas.xgb[c(1,4)] = c(1,4) }
+      if (sum(ensemble[c(2,6)])     >= 1) { keepxbetas.xgb[c(2,5)] = c(2,5) }
+      if (sum(ensemble[c(3,4,7,8)]) >= 1) { keepxbetas.xgb[c(3,6)] = c(3,6) }
+      xbetas.xgb = matrix(rep(xbnull,6*nobs), nrow=nobs, ncol=6)
+      xbetas.cv.xgb = matrix(rep(xbnull,6*nobs), nrow=nobs, ncol=6)
       xbnames = c("xgb.simple", "xgb.sim.feat", "xgb.sim.offs", "xgb.tuned", "xgb.tun.feat", "xgb.tun.offs")
-      colnames(xbetas0) = xbnames
-      colnames(xbetas0.cv.xgb) = xbnames
+      colnames(xbetas.xgb) = xbnames
+      colnames(xbetas.cv.xgb) = xbnames
       
       ## SIMPLE XGB model full data ################################################
       if (sum(ensemble[c(1,5)]) >= 1) {
@@ -875,21 +967,21 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
         xgb.simple.fit = xgb.simple(full.xgb.dat, objective = objective, seed=seedr_, folds=foldid_xgb, doxgb=doxgb, track=track )
         xgbperf1 = xgb_perform(xgb_model=xgb.simple.fit, xs_=full.xgb.dat, y=y__, family=family )
         doxgb_simple = xgb.simple.fit$doxgb
-        xbetas0[,1] = xgb_xbhat(xgb.simple.fit, full.xgb.dat, family)
+        xbetas.xgb[,1] = xgb_xbhat(xgb.simple.fit, full.xgb.dat, family)
       } else { xgbperf1 = c(1,1,0,0,0) }
       if (sum(ensemble[c(2,6)]) >= 1) {
         if (track >= 2) { cat("\n  XGB Simple Factor  ") } 
         xgb.simple.fitF = xgb.simple(full.xgb.datF, objective = objective, seed=seedr_, folds=foldid_xgb, doxgb=doxgb, track=track )
         xgbperf2 = xgb_perform(xgb.simple.fitF, full.xgb.datF, y=y__, family=family )
         doxgb_simpleF = xgb.simple.fitF$doxgb
-        xbetas0[,2] = xgb_xbhat(xgb.simple.fitF, full.xgb.datF, family)
+        xbetas.xgb[,2] = xgb_xbhat(xgb.simple.fitF, full.xgb.datF, family)
       } else { xgbperf2 = c(1,1,0,0,0) }
       if (sum(ensemble[c(3,4,7,8)]) >= 1) {
         if (track >= 2) { cat("\n  XGB Simple Offset  ") }
         xgb.simple.fitO = xgb.simple(full.xgb.datO, objective = objective, seed=seedr_, folds=foldid_xgb, doxgb=doxgb, track=track )
         xgbperf3 = xgb_perform(xgb.simple.fitO, full.xgb.datO, y=y__, family=family )
         doxgb_simpleO = xgb.simple.fitO$doxgb
-        xbetas0[,3] = xgb_xbhat(xgb.simple.fitO, full.xgb.datO, family)
+        xbetas.xgb[,3] = xgb_xbhat(xgb.simple.fitO, full.xgb.datO, family)
       }  else { xgbperf3 = c(1,1,0,0,0) }
       if (track >= 2) { cat("\n") } 
       ## TUNED XGB fit full data ###################################################
@@ -897,19 +989,19 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
         if (track >= 2) { cat("\n  XGB Tuned  ") }
         xgb.tuned.fit = xgb.tuned(full.xgb.dat, objective = objective, seed=seedr_, folds=foldid_xgb, doxgb=doxgb, track=track )
         xgbperf4   = xgb_perform(xgb.tuned.fit, full.xgb.dat, y=y__, family=family )
-        xbetas0[,4] = xgb_xbhat(xgb.tuned.fit, full.xgb.dat, family)
+        xbetas.xgb[,4] = xgb_xbhat(xgb.tuned.fit, full.xgb.dat, family)
       }  else { xgbperf4 = c(1,1,0,0,0) }
       if (sum(ensemble[c(2,6)]) >= 1) {
         if (track >= 2) { cat("\n  XGB Tuned Factor  ") }
         xgb.tuned.fitF = xgb.tuned(full.xgb.datF, objective = objective, seed=seedr_, folds=foldid_xgb, doxgb=doxgb, track=track )
         xgbperf5 = xgb_perform(xgb.tuned.fitF, full.xgb.datF, y=y__, family=family )
-        xbetas0[,5] = xgb_xbhat(xgb.tuned.fitF, full.xgb.datF, family)
+        xbetas.xgb[,5] = xgb_xbhat(xgb.tuned.fitF, full.xgb.datF, family)
       }  else { xgbperf5 = c(1,1,0,0,0) }
       if (sum(ensemble[c(3,4,7,8)]) >= 1) {
         if (track >= 2) { cat("\n  XGB Tuned Offset  ") }
         xgb.tuned.fitO = xgb.tuned(full.xgb.datO, objective = objective, seed=seedr_, folds=foldid_xgb, doxgb=doxgb, track=track )
         xgbperf6 = xgb_perform(xgb.tuned.fitO, full.xgb.datO, y=y__, family=family )
-        xbetas0[,6] = xgb_xbhat(xgb.tuned.fitO, full.xgb.datO, family)
+        xbetas.xgb[,6] = xgb_xbhat(xgb.tuned.fitO, full.xgb.datO, family)
       }  else { xgbperf6 = c(1,1,0,0,0) }
       if (track >= 2) { cat("\n") } 
       xgb.devian.naive     = c( xgbperf1[1] , xgbperf2[1] , xgbperf3[1] , xgbperf4[1] , xgbperf5[1] , xgbperf6[1] )
@@ -930,7 +1022,7 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
       ##########################################################################
     }
     
-    xbetas = cbind(xbetas, xbetas0)
+    xbetas = cbind(xbetas, xbetas.xgb[,keepxbetas.xgb])
 
     if (track >= 1) { time_last = diff_time(time_start, time_last)  }
   }
@@ -960,33 +1052,45 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
     names(rf.lincal.naive)  = nms
     names(rf.mtry.naive )   = nms
     
-    xbetas0 = matrix(rep(xbnull,3*nobs), nrow=nobs, ncol=3)
-    xbetas0.cv.rf = matrix(rep(xbnull,3*nobs), nrow=nobs, ncol=3)
-    colnames(xbetas0) = c("rf", "rf.feat", "rf.offs")
-    colnames(xbetas0.cv.rf) = c("rf", "rf.feat", "rf.offs")
+    keepxbetas.rf = rep(0,6)
+    if (sum(ensemble[c(1,5)])     >= 1) { keepxbetas.rf[c(1,4)] = c(1,4) }
+    if (sum(ensemble[c(2,6)])     >= 1) { keepxbetas.rf[c(2,5)] = c(2,5) }
+    if (sum(ensemble[c(3,4,7,8)]) >= 1) { keepxbetas.rf[c(3,6)] = c(3,6) }
+    xbetas.rf = matrix(rep(xbnull,6*nobs), nrow=nobs, ncol=6)
+    xbetas.cv.rf = matrix(rep(xbnull,6*nobs), nrow=nobs, ncol=6)
+    colnames(xbetas.rf) = c("rf", "rf.feat", "rf.offs",  "rf cal", "rf.feat cal", "rf.offs cal")
+    colnames(xbetas.cv.rf) = colnames(xbetas.rf) 
     
     if (sum(ensemble[c(1,5)]) >= 1) {
       if (track >= 2) { cat( "     No lasso info\n") } 
-      rf_tuned = rf_tune(xs=xs, y_=y_, event=event, family=family, mtryc=mtryc, ntreec = ntreec, nsplitc=nsplitc, seed=seedr_) 
-      rf_perf1  = rf_perform(rf_model=rf_tuned$rf_tuned, dframe=as.data.frame(xs), ofst=NULL, y__=y__, family=family, tol=tol_)
-      xbetas0[,1] = rf_xbhat(rf_model=rf_tuned$rf_tuned, dframe=as.data.frame(xs), ofst=NULL, family=family, tol=tol_)
+      rf_tuned   = rf_tune(xs=xs, y_=y_, event=event, family=family, mtryc=mtryc, ntreec = ntreec, nsplitc=nsplitc, seed=seedr_) 
+      predm1     = rf_xbhat(rf_model=rf_tuned$rf_tuned, dframe=as.data.frame(xs), ofst=NULL, family=family, tol=tol_) 
+      predm1.cal = cal_train_xbhat( predm1 , y_ , predm1 , family ) 
+      rf_perf1   = c( perf_gen( y_ , predm1 , family ) , rf_tuned$rf_tuned$mtry )
+      rf_perf1_   = rf_perform(rf_model=rf_tuned$rf_tuned, dframe=as.data.frame(xs), ofst=NULL, y__=y__, family=family, tol=tol_)
+#      print( rbind( rf_perf1, rf_perf1_ ))
+      xbetas.rf[ , c(1,4) ] = c( predm1 , predm1.cal )
       if (track >= 2) { time_lasti = diff_time(time_start, time_last) } 
     }  else { rf_perf1 = c(1,1,0,0,0,0) }
     
     if (sum(ensemble[c(2,6)]) >= 1) { 
       if (track >= 2) { cat( "     Relaxed lasso predicteds as feature\n") }
       rf_tunedF = rf_tune(xs=cbind(xs, ofst), y_=y_, event=event, family=family, mtryc=mtryc, ntreec = ntreec, nsplitc=nsplitc, seed=seedr_)
-      rf_perf2 = rf_perform(rf_tunedF$rf_tuned , as.data.frame(cbind(xs,ofst)), NULL, y__, family )
-      xbetas0[,2] = rf_xbhat(rf_tunedF$rf_tuned , as.data.frame(cbind(xs,ofst)), NULL, family )
+      predm2       = rf_xbhat(rf_model=rf_tunedF$rf_tuned, as.data.frame(cbind(xs,ofst)) , ofst=NULL, family=family, tol=tol_) 
+      predm2.cal   = cal_train_xbhat( predm2 , y_ , predm2 , family ) 
+      rf_perf2     = c( perf_gen( y_ , predm2 , family ) , rf_tunedF$rf_tuned$mtry )
+      xbetas.rf[ , c(2,5) ] = cbind( predm2 , predm2.cal )  
       if (track >= 2) { time_lasti = diff_time(time_start, time_lasti) } 
     } else { rf_perf2 = c(1,1,0,0,0,0) }
     
     if ( (sum(ensemble[c(3,4,7,8)]) >= 1) & (family == "gaussian") ) { 
       if (track >= 2) { cat( "     Relaxed lasso predicteds as offset\n") }
       yo = y_ - ofst                                                            ## 231228 
-      rf_tunedO = rf_tune(xs=xs, y_=yo, event=event, family=family, mtryc=mtryc, ntreec = ntreec, nsplitc=nsplitc, seed=seedr_)
-      rf_perf3   = rf_perform(rf_tunedO$rf_tuned , as.data.frame(xs), ofst, y__, family )
-      xbetas0[,3] = rf_xbhat(rf_tunedO$rf_tuned , as.data.frame(xs), ofst, family )
+      rf_tunedO     = rf_tune(xs=xs, y_=yo, event=event, family=family, mtryc=mtryc, ntreec = ntreec, nsplitc=nsplitc, seed=seedr_)
+      predm3       = rf_xbhat(rf_model=rf_tunedO$rf_tuned, dframe=as.data.frame(xs) , ofst=ofst , family=family, tol=tol_) 
+      predm3.cal   = cal_train_xbhat( predm3 , y_ , predm3 , family )  
+      rf_perf3     = c( perf_gen( y_ , predm3 , family ) , rf_tunedO$rf_tuned$mtry ) 
+      xbetas.rf[ , c(3,6)] = cbind(predm3 , predm3.cal )
       if (track >= 2) { time_lasti = diff_time(time_start, time_lasti) } 
     } else { rf_perf3 = c(1,1,0,0,0,0) }
     if (track >= 2) { cat("\n") }
@@ -1017,7 +1121,7 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
       dorf_offs = temp1 
     }
     
-    xbetas = cbind(xbetas, xbetas0)
+    xbetas = cbind(xbetas, xbetas.rf[,keepxbetas.rf])
 
     if (track >= 1) { time_last = diff_time(time_start, time_last) } 
   }
@@ -1045,33 +1149,45 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
     names(orf.lincal.naive)  = nms
     names(orf.mtry.naive )   = nms
     
-    xbetas0 = matrix(rep(xbnull,3*nobs), nrow=nobs, ncol=3)
-    xbetas0.cv.orf = matrix(rep(xbnull,3*nobs), nrow=nobs, ncol=3)
-    colnames(xbetas0) = c("orf", "orf.feat", "orf.offs")
-    colnames(xbetas0.cv.orf) = c("orf", "orf.feat", "orf.offs")
+    keepxbetas.orf = rep(0,6)
+    if (sum(ensemble[c(1,5)])     >= 1) { keepxbetas.orf[c(1,4)] = c(1,4) }
+    if (sum(ensemble[c(2,6)])     >= 1) { keepxbetas.orf[c(2,5)] = c(2,5) }
+    if (sum(ensemble[c(3,4,7,8)]) >= 1) { keepxbetas.orf[c(3,6)] = c(3,6) }
+    xbetas.orf     = matrix(rep(xbnull,6*nobs), nrow=nobs, ncol=6)
+    xbetas.cv.orf = xbetas.orf 
+    colnames(xbetas.orf) = c("orf", "orf.feat", "orf.offs", "orf cal", "orf.feat cal", "orf.offs cal")
+    colnames(xbetas.cv.orf) = colnames(xbetas.orf) 
     
     if (sum(ensemble[c(1,5)]) >= 1) {
       if (track >= 2) { cat( "     No lasso info\n") } 
       orf_tuned = orf_tune(xs=xs, y_=y_, event=event, family=family, mtryc=omtryc, ntreec = ontreec, nsplitc=onsplitc, seed=seedr_, track=track) 
-      orf_perf1  = orf_perform(orf_model=orf_tuned$orf_tuned, dframe=as.data.frame(xs), ofst=NULL, y__=y__, family=family, tol=tol_)
-      xbetas0[,1] = orf_xbhat(orf_model=orf_tuned$orf_tuned, dframe=as.data.frame(xs), ofst=NULL, family=family, tol=tol_)
+      predm1     = orf_xbhat(orf_model=orf_tuned$orf_tuned, dframe=as.data.frame(xs), ofst=NULL, family=family, tol=tol_) 
+      predm1.cal = cal_train_xbhat( predm1 , y_ , predm1 , family ) 
+      orf_perf1   = c( perf_gen( y_ , predm1 , family ) , orf_tuned$orf_tuned$mtry )
+      orf_perf1_   = orf_perform(orf_model=orf_tuned$orf_tuned, dframe=as.data.frame(xs), ofst=NULL, y__=y__, family=family, tol=tol_)
+      #      print( rbind( rf_perf1, rf_perf1_ ))
+      xbetas.orf[ , c(1,4) ] = c( predm1 , predm1.cal )
       if (track >= 2) { time_lasti = diff_time(time_start, time_last) } 
     }  else { orf_perf1 = c(1,1,0,0,0,0) }
     
     if (sum(ensemble[c(2,6)]) >= 1) { 
       if (track >= 2) { cat( "     Relaxed lasso predicteds as feature\n") }
       orf_tunedF = orf_tune(xs=cbind(xs, ofst), y_=y_, event=event, family=family, mtryc=omtryc, ntreec = ontreec, nsplitc=onsplitc, seed=seedr_, track=track)
-      orf_perf2 = orf_perform(orf_tunedF$orf_tuned , as.data.frame(cbind(xs,ofst)), NULL, y__, family, tol=tol_ )
-      xbetas0[,2] = orf_xbhat(orf_tunedF$orf_tuned , as.data.frame(cbind(xs,ofst)), NULL, family, tol=tol_ )
+      predm2       = orf_xbhat(orf_model=orf_tunedF$orf_tuned, as.data.frame(cbind(xs,ofst)) , ofst=NULL, family=family, tol=tol_) 
+      predm2.cal   = cal_train_xbhat( predm2 , y_ , predm2 , family ) 
+      orf_perf2     = c( perf_gen( y_ , predm2 , family ) , orf_tunedF$orf_tuned$mtry )
+      xbetas.orf[ , c(2,5) ] = cbind( predm2 , predm2.cal )  
       if (track >= 2) { time_lasti = diff_time(time_start, time_lasti) } 
     } else { orf_perf2 = c(1,1,0,0,0,0) }
     
     if ( (sum(ensemble[c(3,4,7,8)]) >= 1) & (family == "gaussian") ) { 
       if (track >= 2) { cat( "     Relaxed lasso predicteds as offset\n") }
       yo = y_ - ofst  
-      orf_tunedO = orf_tune(xs=xs, y_=yo, event=event, family=family, mtryc=omtryc, ntreec=ontreec, nsplitc=onsplitc, seed=seedr_, track=track)
-      orf_perf3   = orf_perform(orf_tunedO$orf_tuned , as.data.frame(xs), ofst, y__, family )
-      xbetas0[,3] = orf_xbhat(orf_tunedO$orf_tuned , as.data.frame(xs), ofst, family )
+      orf_tunedO  = orf_tune(xs=xs, y_=yo, event=event, family=family, mtryc=omtryc, ntreec=ontreec, nsplitc=onsplitc, seed=seedr_, track=track)
+      predm3     = orf_xbhat(orf_model=orf_tunedO$orf_tuned, dframe=as.data.frame(xs) , ofst=ofst , family=family, tol=tol_) 
+      predm3.cal = cal_train_xbhat( predm3 , y_ , predm3 , family )  
+      orf_perf3  = c( perf_gen( y_ , predm3 , family ) , orf_tunedO$orf_tuned$mtry ) 
+      xbetas.orf[ , c(3,6)] = cbind(predm3 , predm3.cal )
       if (track >= 2) { time_lasti = diff_time(time_start, time_lasti) } 
     } else { orf_perf3 = c(1,1,0,0,0,0) }
     if (track >= 2) { cat("\n") }
@@ -1098,11 +1214,11 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
     if ( (sum(ensemble[c(3,4,7,8)]) >= 1) & (family == "gaussian") ) {
       object1 = orf_tunedO 
       temp1 = list( oobag_funv = object1$oobag_funv, mtryc = object1$mtryc , ntreec = object1$ntreec , nsplitc=onsplitc, 
-                    mtry = object1$orf_tuned$mtry, nsplit=object1$orf_tuned$n_split,  keep = rfkeep, seed=seedr_ ) 
+                    mtry = object1$orf_tuned$mtry, nsplit=object1$orf_tuned$n_split,  keep = orfkeep, seed=seedr_ ) 
       doorf_offs = temp1 
     }
     
-    xbetas = cbind(xbetas, xbetas0)
+    xbetas = cbind(xbetas, xbetas.orf[,keepxbetas.orf])
     
     if (track >= 1) { time_last = diff_time(time_start, time_last) } 
   }
@@ -1129,13 +1245,17 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
       rpmethod = "anova"
     }
 
-    xbetas0 = matrix(rep(xbnull,9*nobs), nrow=nobs, ncol=9)
-    xbetas0.cv.rpart = matrix(rep(xbnull,9*nobs), nrow=nobs, ncol=9)
+    keepxbetas.rpart = rep(0,9)
+    if (sum(ensemble[c(1,5)])     >= 1) { keepxbetas.rpart[c(1,2,3)] = c(1,2,3) }
+    if (sum(ensemble[c(2,6)])     >= 1) { keepxbetas.rpart[c(4,5,6)] = c(4,5,6) }
+    if (sum(ensemble[c(3,4,7,8)]) >= 1) { keepxbetas.rpart[c(7,8,9)] = c(7,8,9) }
+    xbetas.rpart = matrix(rep(xbnull,9*nobs), nrow=nobs, ncol=9)
+    xbetas.cv.rpart = matrix(rep(xbnull,9*nobs), nrow=nobs, ncol=9)
     xbnames = c("RPART c=0", "RPART c=0.01", "RPART c=0.02",
                 "RPART fe", "RPART fe 0.01", "RPART fe 0.02",
                 "RPART of", "RPART of 0.01", "RPART of 0.02")
-    colnames( xbetas0 ) = xbnames 
-    colnames( xbetas0.cv.rpart ) = xbnames 
+    colnames( xbetas.rpart ) = xbnames 
+    colnames( xbetas.cv.rpart ) = xbnames 
     
     if (sum(ensemble[c(1,5)]) >= 1) {
       set.seed(seedr_)
@@ -1145,9 +1265,9 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
       rp_perf1 = rpart_perform(rpart.fit.00 , df.xs, NULL, y__, family )
       rp_perf2 = rpart_perform(rpart.fit.01 , df.xs, NULL, y__, family )
       rp_perf3 = rpart_perform(rpart.fit.02 , df.xs, NULL, y__, family )
-      xbetas0[,1] = rpart_xbhat(rpart.fit.00 , df.xs, NULL, family )
-      xbetas0[,2] = rpart_xbhat(rpart.fit.01 , df.xs, NULL, family )
-      xbetas0[,3] = rpart_xbhat(rpart.fit.02 , df.xs, NULL, family )
+      xbetas.rpart[,1] = rpart_xbhat(rpart.fit.00 , df.xs, NULL, family )
+      xbetas.rpart[,2] = rpart_xbhat(rpart.fit.01 , df.xs, NULL, family )
+      xbetas.rpart[,3] = rpart_xbhat(rpart.fit.02 , df.xs, NULL, family )
     } else { rp_perf1 = c(1,1,0,0,0,0) ; rp_perf2 = c(1,1,0,0,0,0) ; rp_perf3 = c(1,1,0,0,0,0) } 
     
     if (sum(ensemble[c(2,6)]) >= 1) { 
@@ -1158,9 +1278,9 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
       rp_perf4 = rpart_perform(rpart.fitF.00 , df.xsO, NULL, y__, family )
       rp_perf5 = rpart_perform(rpart.fitF.01 , df.xsO, NULL, y__, family )
       rp_perf6 = rpart_perform(rpart.fitF.02 , df.xsO, NULL, y__, family )
-      xbetas0[,4] = rpart_xbhat(rpart.fitF.00 , df.xsO, NULL, family )
-      xbetas0[,5] = rpart_xbhat(rpart.fitF.01 , df.xsO, NULL, family )
-      xbetas0[,6] = rpart_xbhat(rpart.fitF.02 , df.xsO, NULL, family )
+      xbetas.rpart[,4] = rpart_xbhat(rpart.fitF.00 , df.xsO, NULL, family )
+      xbetas.rpart[,5] = rpart_xbhat(rpart.fitF.01 , df.xsO, NULL, family )
+      xbetas.rpart[,6] = rpart_xbhat(rpart.fitF.02 , df.xsO, NULL, family )
     } else { rp_perf4 = c(1,1,0,0,0,0) ; rp_perf5 = c(1,1,0,0,0,0) ; rp_perf6 = c(1,1,0,0,0,0) } 
     
     if ((sum(ensemble[c(3,4,7,8)]) >= 1) & (!(family %in% c("binomial")))) {
@@ -1173,9 +1293,9 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
       rp_perf7 = rpart_perform(rpart.fitO.00 , df.xsO, ofst, y__, family )
       rp_perf8 = rpart_perform(rpart.fitO.01 , df.xsO, ofst, y__, family )
       rp_perf9 = rpart_perform(rpart.fitO.02 , df.xsO, ofst, y__, family )
-      xbetas0[,7] = rpart_xbhat(rpart.fitO.00 , df.xsO, ofst, family )
-      xbetas0[,8] = rpart_xbhat(rpart.fitO.01 , df.xsO, ofst, family )
-      xbetas0[,9] = rpart_xbhat(rpart.fitO.02 , df.xsO, ofst, family )
+      xbetas.rpart[,7] = rpart_xbhat(rpart.fitO.00 , df.xsO, ofst, family )
+      xbetas.rpart[,8] = rpart_xbhat(rpart.fitO.01 , df.xsO, ofst, family )
+      xbetas.rpart[,9] = rpart_xbhat(rpart.fitO.02 , df.xsO, ofst, family )
     } else { rp_perf7 = c(1,1,0,0,0,0) ; rp_perf8 = c(1,1,0,0,0,0) ; rp_perf9 = c(1,1,0,0,0,0) } 
     
     rpart.devian.naive     = c( rp_perf1[1] , rp_perf2[1] , rp_perf3[1] , rp_perf4[1] , rp_perf5[1] , rp_perf6[1] , rp_perf7[1] , rp_perf8[1] , rp_perf9[1] )
@@ -1193,8 +1313,6 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
     names(rpart.lincal.naive)  = nms
     names(rpart.nzero       )  = nms
     
-    xbetas0.rpart = xbetas0
-    
     if (track >= 1) { time_last = diff_time(time_start, time_last) } 
   }
   
@@ -1202,7 +1320,7 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
   ##### Neural Network fit ######################################################################################
   if ( (doann_ == 1) & (family == "cox") & (!is.null(start))) { 
     cat( "  The neural network fitting routine does not fit Cox model with (start,stop) time data\n",
-         "  neural network models will not be fit\n")
+         "  artificial neural network models will not be fit\n")
     doann_ = 0
   }
   
@@ -1274,12 +1392,14 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
     ## 7 - lasso terms & weights 
     ## 8 - lasso terms & updated weights
     
-    xbetas0 = matrix(rep(xbnull,8*nobs), nrow=nobs, ncol=8)
-    xbetas0.cv.ann = matrix(rep(xbnull,8*nobs), nrow=nobs, ncol=8)
-    xbnames = c("ANN", "ANN.feat", "ANN.offs1", "ANN.offs2", 
+    keepxbetas.ann = c(1:8)[ ensemble[1:8] ] 
+    xbetas.ann = matrix(rep(xbnull,8*nobs), nrow=nobs, ncol=8)
+    xbetas.cv.ann = xbetas.ann
+    xbnames.ann = c("ANN", "ANN.feat", "ANN.offs1", "ANN.offs2", 
                 "ANN.lasso", "ANN.l.feat", "ANN.l.offs1", "ANN.l.offs2")
-    colnames(xbetas0) = xbnames 
-    colnames(xbetas0.cv.ann) = xbnames 
+    colnames(xbetas.ann) = xbnames.ann
+    colnames(xbetas.cv.ann) = xbnames.ann
+#    print(" HERE 1") ; print(xbetas.cv.ann[1,])
 
     if (family %in% c("cox", "binomial", "gaussian")) {
       #     cat(paste(fold_n, family, epochs, eppr, wd, lenz1, lenz2, mylr) )
@@ -1291,7 +1411,7 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
                                       drpot=drpot, wd=wd, l1=l1, scale=scale, minloss=minloss, gotoend=gotoend, bestof=bestof, 
                                       seed = c(seedr_, seedt_) ) 
         ann_perf1 = ann_perform(ann_fit_1_f, xs_z0, y_, family, start, event)
-        xbetas0[,1] = ann_xbhat(ann_fit_1_f, xs_z0, family)
+        xbetas.ann[,1] = ann_xbhat(ann_fit_1_f, xs_z0, family)
       } else { ann_perf1 = c(1,1,0,0,0) }
       
       if (ensemble[2] == 1) { 
@@ -1302,7 +1422,7 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
                                       drpot=drpot, wd=wd, l1=l1, scale=scale, minloss=minloss, gotoend=gotoend, bestof=bestof, 
                                       seed = c(seedr_, seedt_)) 
         ann_perf2 = ann_perform(ann_fit_2_f, xs_z0L, y_, family, start, event)
-        xbetas0[,2] = ann_xbhat(ann_fit_2_f, xs_z0L, family)
+        xbetas.ann[,2] = ann_xbhat(ann_fit_2_f, xs_z0L, family)
       } else { ann_perf2 = c(1,1,0,0,0) }
       
       if (ensemble[3] == 1) { 
@@ -1313,7 +1433,7 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
                                       drpot=drpot, wd=wd2, l1=l12, lasso=1, lscale=lscale, scale=scale, resetlw=0, minloss=minloss, gotoend=gotoend, bestof=bestof, 
                                       seed = c(seedr_, seedt_)) 
         ann_perf3 = ann_perform(ann_fit_3_f, xs_z0L, y_, family, start, event)
-        xbetas0[,3] = ann_xbhat(ann_fit_3_f, xs_z0L, family)
+        xbetas.ann[,3] = ann_xbhat(ann_fit_3_f, xs_z0L, family)
       } else { ann_perf3 = c(1,1,0,0,0) }
       
       if (ensemble[4] == 1) { 
@@ -1324,7 +1444,7 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
                                       drpot=drpot, wd=wd2, l1=l12, lasso=1, lscale=lscale, scale=scale, resetlw=1, minloss=minloss, gotoend=gotoend, bestof=bestof, 
                                       seed = c(seedr_, seedt_)) 
         ann_perf4 = ann_perform(ann_fit_4_f, xs_z0L, y_, family, start, event)
-        xbetas0[,4] = ann_xbhat(ann_fit_4_f, xs_z0L, family)
+        xbetas.ann[,4] = ann_xbhat(ann_fit_4_f, xs_z0L, family)
       } else { ann_perf4 = c(1,1,0,0,0) }
       
       if (ensemble[5] == 1) { 
@@ -1335,7 +1455,7 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
                                       drpot=drpot, wd=wd, l1=l1, scale=scale, minloss=minloss, gotoend=gotoend, bestof=bestof, 
                                       seed = c(seedr_, seedt_)) 
         ann_perf5 = ann_perform(ann_fit_5_f, xs_z1, y_, family, start, event)
-        xbetas0[,5] = ann_xbhat(ann_fit_5_f, xs_z1, family)
+        xbetas.ann[,5] = ann_xbhat(ann_fit_5_f, xs_z1, family)
       } else { ann_perf5 = c(1,1,0,0,0) }
       
       if (ensemble[6] == 1) { 
@@ -1346,7 +1466,7 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
                                       drpot=drpot, wd=wd, l1=l1, scale=scale, minloss=minloss, gotoend=gotoend, bestof=bestof, 
                                       seed = c(seedr_, seedt_)) 
         ann_perf6 = ann_perform(ann_fit_6_f, xs_z1L, y_, family, start, event)
-        xbetas0[,6] = ann_xbhat(ann_fit_6_f, xs_z1L, family)
+        xbetas.ann[,6] = ann_xbhat(ann_fit_6_f, xs_z1L, family)
       } else { ann_perf6 = c(1,1,0,0,0) }
       
       if (ensemble[7] == 1) { 
@@ -1357,7 +1477,7 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
                                       drpot=drpot, wd=wd2, l1=l12,lasso=1, lscale=lscale, scale=scale, resetlw=0, minloss=minloss, gotoend=gotoend, bestof=bestof, 
                                       seed = c(seedr_, seedt_)) 
         ann_perf7 = ann_perform(ann_fit_7_f, xs_z1L, y_, family, start, event)
-        xbetas0[,7] = ann_xbhat(ann_fit_7_f, xs_z1L, family)
+        xbetas.ann[,7] = ann_xbhat(ann_fit_7_f, xs_z1L, family)
       } else { ann_perf7 = c(1,1,0,0,0) }
       
       if (ensemble[8] == 1) { 
@@ -1368,7 +1488,7 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
                                       drpot=drpot, wd=wd2, l1=l12,lasso=1, lscale=lscale, scale=scale, resetlw=1, minloss=minloss, gotoend=gotoend, bestof=bestof, 
                                       seed = c(seedr_, seedt_)) 
         ann_perf8 = ann_perform(ann_fit_8_f, xs_z1L, y_, family, start, event)
-        xbetas0[,8] = ann_xbhat(ann_fit_8_f, xs_z1L, family)
+        xbetas.ann[,8] = ann_xbhat(ann_fit_8_f, xs_z1L, family)
       } else { ann_perf8 = c(1,1,0,0,0) }
       
       if (ensemble[9] == 1.41456) {
@@ -1393,15 +1513,13 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
       names(ann.agree.naive)   = nms
       names(ann.intcal.naive)  = nms
       names(ann.lincal.naive)  = nms
-      
-      xbetas0.ann = xbetas0 
     } 
     
     if (track >= 1) { time_last = diff_time(time_start, time_last)  }
   }
   
-  if (doann_  == 1) { xbetas = cbind(xbetas, xbetas0.ann) }
-  if (dorpart == 1) { xbetas = cbind(xbetas, xbetas0.rpart) }
+  if (doann_  == 1) { xbetas = cbind(xbetas, xbetas.ann  [,keepxbetas.ann  ]) }
+  if (dorpart == 1) { xbetas = cbind(xbetas, xbetas.rpart[,keepxbetas.rpart]) }
   
   ##### STEPWISE and AIC fits #################################################################################    
   
@@ -1413,10 +1531,13 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
 #    step.lincal.naive  = c(0,0,0)
     step.nzero         = c(0,0,0)
     
-    xbetas0 = matrix(rep(xbnull,3*nobs), nrow=nobs, ncol=3)
-    xbetas0.cv.step = matrix(rep(xbnull,3*nobs), nrow=nobs, ncol=3)
-    colnames(xbetas0)         = c("step.df", "step.p", "aic")
-    colnames(xbetas0.cv.step) = c("step.df", "step.p", "aic")
+    keepxbetas.step = c(0,0,0) 
+    if (dostep == 1) { keepxbetas.step[c(1,2)] = c(1,2) }
+    if (doaic == 1) { keepxbetas.step[c(3)] = c(3) }
+    xbetas.step = matrix(rep(xbnull,3*nobs), nrow=nobs, ncol=3)
+    xbetas.cv.step = matrix(rep(xbnull,3*nobs), nrow=nobs, ncol=3)
+    colnames(xbetas.step)         = c("step.df", "step.p", "aic")
+    colnames(xbetas.cv.step) = c("step.df", "step.p", "aic")
   }
 
   ##### STEPWISE fit ##########################################################################################    
@@ -1431,7 +1552,7 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
     if (family != "cox") {  nonzero =  nonzero - 1 }
     xb  = predict( func.fit.df, as.data.frame( xs) )              
     step_perf1 = c(perf_gen(y__, xb, family), nonzero )
-    xbetas0[,1] = xb
+    xbetas.step[,1] = xb
     
     #### stepwise tuned by p (critical value) ##################################
     func.fit.p = cv.stepreg.fit.all$func.fit.p                                
@@ -1439,7 +1560,7 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
     if (family != "cox") {  nonzero =  nonzero - 1 }
     xb     = predict( func.fit.p, as.data.frame( xs) )          
     step_perf2 = c(perf_gen(y__, xb, family), nonzero )
-    xbetas0[,2] = xb
+    xbetas.step[,2] = xb
     
     step.devian.naive[c(1,2)] = c( step_perf1[1], step_perf2[1] )
     step.agree.naive[c(1,2)]  = c( step_perf1[3], step_perf2[3] )
@@ -1461,7 +1582,7 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
     aic_perf1 = perf_gen( y__ , predaic   , family )
     if (family != "cox") { nonzero = func.fit.aic$rank -1
     } else { nonzero = length(func.fit.aic$coefficients) }
-    xbetas0[,3] = predaic
+    xbetas.step[,3] = predaic
     
     step.devian.naive[c(3)]     = c( aic_perf1[1] )
     step.cal.devian.naive[c(3)] = c( aic_perf1[2] )
@@ -1471,7 +1592,7 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
     if (track >= 1) { time_last = diff_time(time_start, time_last) } 
   }
   
-  if ((dostep == 1) | (doaic == 1)) { xbetas = cbind(xbetas, xbetas0) }
+  if ((dostep == 1) | (doaic == 1)) { xbetas = cbind(xbetas, xbetas.step[,keepxbetas.step]) }
   
   ##### track time before outer nested loop ###############################################################
   if (track >= 2) { 
@@ -1483,35 +1604,68 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
   ##### FOLDS #############################################################################################
   
   ## i_ = 1 
-  if (do_ncv != 0) {
-    for (i_ in 1:folds_n) {  
+  if (resample != 0) {
+    for (i_ in 1:reps) {  
+      
+      seedr_ = seed$seedr[i_]
+      seedt_ = seed$seedt[i_]
+
       ##=== begin folds ==========================================================
-      if (track >= 1) { cat(paste0("\n", " ########## Entering Nested Cross Validation outer fold  ", i_, "  of  " , folds_n , "  ############################" , "\n")) }
+      if (track >= 1) { cat(paste0("\n", " ########## Entering Nested Cross Validation outer fold  ", i_, "  of  " , reps , "  ############################" , "\n")) }
       
       ##### set up train and test data sets in matrix form for glmnet & stepreg #####
-      trainxs = xs[(foldid!=i_),]   
-      testxs  = xs[(foldid==i_),]  
-      test1   = c(rep(1,dim(testxs)[1])) 
-      testxs1 = cbind(test1, testxs)                                              ## for models with Intercept 
+
+      if (bootstrap == 0) { 
+        inb = (foldid != i_) ; sum((inb)) ;
+        oob = (foldid == i_) ; sum((oob)) ;
+        inb = c(1:length(foldid))[inb] ; length(inb) ; table(table(inb))
+        oob = c(1:length(foldid))[oob] ; length(oob) ; table(table(oob)) ; table(table(c(inb,oob)))
+      } else if (bootstrap >= 1) {
+        if (unique >= 1) {
+          set.seed( seedr_ )
+          bootid = sample(nobs, nobs, replace = TRUE, prob = NULL) 
+          bootid = unique(bootid)
+        } else if (unique <= 0) {
+#          print("HERE 1")
+          bootid = sample(nobs, nobs, replace = TRUE, prob = NULL)
+        } else { 
+#          print("HERE 2")
+          if (stratified == 1) { 
+            x = boot.factor.foldid(y_, unique) 
+            bootid = c(x$ids0inb, x$ids1inb)                                    ; table(table( c(x$ids0inb, x$ids1inb,x$ids0oob, x$ids1oob) ))
+          } else {  
+            nobsb = round(nobs*unique)                                          ; nobsb
+            bootid = sample(nobs, nobsb, replace = FALSE, prob = NULL)            
+          }
+#          cat(paste(" length(bootid) = ", length(bootid), "\n"))
+        }
+        inb = sort(bootid)  
+        oob = c(1:nobs)[-unique(inb)]                                           ; table( table( c(oob)))
+      }
+      trainxs = xs[ inb ,]                                                      ; table( table( c(inb,oob)))
+      testxs  = xs[ oob ,]  
+      testxs1   = cbind(test1=1, testxs)                                         ## for models with Intercept ## all.equal(testxs1, testxs1x)
       df.trainxs = as.data.frame(trainxs) 
       df.testxs  = as.data.frame(testxs) 
-      dim(trainxs) 
-      dim(testxs) 
-
-      if ( is.null(start) ) {
+      inoob = rep(0,length(y_))
+      inoob[inb] = 1 
+#      print( table(y_,inoob) )
+      n00.rep[i_] = table(y_,inoob)[1,1]
+#      print( colSums(table(y_,inoob)) ) 
+      if ( (family == "cox") & ( !is.null(start) ) ) {
+        trainstart = start[ inb ]    
+        teststart  = start[ oob ]   
+      } else {
         trainstart = NULL
         teststart  = NULL
-      } else {
-        trainstart = start[(foldid!=i_)]    
-        teststart  = start[(foldid==i_)]   
       }
       
-      trainy_ = y_[(foldid!=i_)]    
-      testy_  = y_[(foldid==i_)]   
-      
+      trainy_ = y_[ inb ]    
+      testy_  = y_[ oob ]   
+
       if (family == "cox") {
-        trainevent = event[(foldid!=i_)] ;  
-        testevent  = event[(foldid==i_)] ; 
+          trainevent  = event[ inb ]
+          testevent   = event[ oob ]
       } else {
         trainevent = NULL
         testevent  = NULL 
@@ -1529,6 +1683,23 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
         trainy__ = trainy_
         testy__  = testy_ 
       } 
+      
+      if (family == "binomial") {
+        if (is.factor( testy_ ) ) { 
+          testy_f  = testy_ 
+          trainy_f = trainy_ 
+          testy_n  = as.numeric(testy_ ) - 1 
+          trainy_n = as.numeric(trainy_) - 1 
+        } else { 
+          testy_f  = as.factor( testy_  )
+          trainy_f = as.factor( trainy_ )
+          testy_n  = testy_ 
+          trainy_n = trainy_ 
+        }
+      } else {
+        testy_n  = testy_ 
+        trainy_n = trainy_ 
+      }
 
       if (family=="cox") {
         if ( is.null(start) ) {
@@ -1541,23 +1712,6 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
       } else {
         train_data = data.frame(trainy_, trainxs)
         test_data  = data.frame(testy_ , testxs )
-      }
-      
-      ##### get seeds for CV foldids and pass to CV functions #####
-      
-      seedr_ = seed$seedr[i_+1] 
-      if (is.na(seedr_)) {  
-        cat(paste( " seedr_ should already be set for CV ", i_, "\n")) 
-        seedr_ = round(runif(1)*1e9)       ## duplicate 
-        if (seedr_ == 0) { seedr_ = 1 } 
-        seed$seedr[i_+1] = seedr_          ## duplicate 
-      }
-      seedt_ = seed$seedt[i_+1] 
-      if (is.na(seedt_)) { 
-        cat(paste( " seedt_ should already be set for CV ", i_, "\n")) 
-        seedt_ = round(runif(1)*1e9)       ## duplicate 
-        if (seedt_ == 0) { seedt_ = 1 } 
-        seed$seedt[i_+1] = seedt_          ## duplicate 
       }
 
       ##### get CV foldid #####
@@ -1606,24 +1760,24 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
       if (family == "cox") { 
         if (is.null(start)) { fit0 = coxph( Surv(testy_, testevent) ~ 1, ties=ties )
         } else              { fit0 = coxph( Surv(teststart, testy_, testevent) ~ 1, ties=ties ) } 
-        null.m2LogLik.cv[i_] =  -2*fit0$loglik[1] / fit0$nevent
+        null.m2LogLik.rep[i_] =  -2*fit0$loglik[1] / fit0$nevent
         if (ties == "breslow") {
-          sat.m2LogLik.cv[i_] = - 2 * cox.sat.dev(testy_, testevent)[2] / fit0$nevent
+          sat.m2LogLik.rep[i_] = - 2 * cox.sat.dev(testy_, testevent)[2] / fit0$nevent
         } else {
-          sat.m2LogLik.cv[i_] = - 2 * cox.sat.dev(testy_, testevent)[1] / fit0$nevent
+          sat.m2LogLik.rep[i_] = - 2 * cox.sat.dev(testy_, testevent)[1] / fit0$nevent
         }
-        n.cv[i_] = fit0$nevent 
+        n.rep[i_] = fit0$nevent 
       } else if (family == "binomial") { 
         fit0 = glm( testy_ ~ 1 , family=family)
-        null.m2LogLik.cv[i_] = fit0$null.deviance / length( testy_ )
-        sat.m2LogLik.cv[i_] = 0 
-        n.cv[i_] = length( testy_ )
+        null.m2LogLik.rep[i_] = fit0$null.deviance / length( testy_ )
+        sat.m2LogLik.rep[i_] = 0 
+        n.rep[i_] = length( testy_ )
       } else if (family == "gaussian") { 
-        null.m2LogLik.cv[i_] = var(testy_) * (length(testy_)-1) / length(testy_)
+        null.m2LogLik.rep[i_] = var(testy_) * (length(testy_)-1) / length(testy_)
 #        var(testy_) * (length(testy_)-1) / length(testy_)
 #        mean(testy_^2) - mean(testy_)^2
-        sat.m2LogLik.cv[i_] = 0 
-        n.cv[i_] = length( testy_ )
+        sat.m2LogLik.rep[i_] = 0 
+        n.rep[i_] = length( testy_ )
       }
       
       if (family == "cox") { testxbnull = 0 
@@ -1635,7 +1789,21 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
       } else {
         testxbnull = mean(testy_) 
       }
-      xbetas.cv[(foldid==i_),1] = testxbnull
+      
+#      print(i_)
+#      print(testy_[1:10] )
+#      print(mean(testy_))
+#      print(null.m2LogLik.rep)
+
+      if (bootstrap == 0) {
+        xbetas.cv[ oob ,1] = testxbnull
+      } else if (bootstrap == 1) {
+        if (i_ == 1) { 
+          xbetas.boot.null = cbind(rep(i_,length(oob)), oob, xbnull=testxbnull) 
+        } else {
+          xbetas.boot.null = rbind( xbetas.boot.null, cbind(rep(i_,length(oob)), oob, xbnull=testxbnull) ) 
+        }
+      }
       
       ##### LASSO fit ##########################################################################################
       if (dolasso==1) { 
@@ -1645,39 +1813,39 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
           #  xs=trainxs; start=trainstart; y_=trainy_; event=trainevent; lambda=lambda; gamma=gamma; folds_n=folds_n; limit=limit; fine=fine; track=1; family=family ;         
           cv_glmnet_fit = cv.glmnetr( trainxs, trainstart, trainy_, trainevent, family=family, 
                                       lambda=lambda, gamma=gamma, folds_n=folds_n, foldid=foldidcv, limit=limit, fine=fine, 
-                                      track=0, ties=ties, ... )  
+                                      track=0, ties=ties , ... )  
         } else {
           if (family=="cox") {   
             if ( is.null(start) ) { 
-              cv_glmnet_fit = cv.glmnet( trainxs, Surv(trainy_, trainevent)            , nfolds=folds_n, foldid=foldidcv, family="cox", lambda=lambda, relax=FALSE, ... )  
+              cv_glmnet_fit = cv.glmnet( trainxs, Surv(trainy_, trainevent)            , nfolds=folds_n, foldid=foldidcv, family="cox", lambda=lambda, relax=FALSE , ... )  
             } else                { 
-              cv_glmnet_fit = cv.glmnet( trainxs, Surv(trainstart, trainy_, trainevent), nfolds=folds_n, foldid=foldidcv, family="cox", lambda=lambda, relax=FALSE, ... )  
+              cv_glmnet_fit = cv.glmnet( trainxs, Surv(trainstart, trainy_, trainevent), nfolds=folds_n, foldid=foldidcv, family="cox", lambda=lambda, relax=FALSE , ... )  
             }
           } else {
-            cv_glmnet_fit = cv.glmnet( trainxs, trainy_, family=family, lambda=lambda, nfolds=folds_n, foldid=foldidcv, relax=FALSE, ... )  
-          }
-        }
-
-        if (folds_n >= 3) {
-          if ((family == "cox") & (is.null(trainstart))) {
-            cv_ridge_fit = cv.glmnet( trainxs, Surv(trainy_, trainevent), family=family, alpha=0, nfolds=folds_n, foldid=foldidcv, ... )  
-          } else if ((family == "cox") & (!is.null(trainstart))) {
-            cv_ridge_fit = cv.glmnet( trainxs, Surv(trainstart, trainy_, trainevent), family=family, alpha=0, nfolds=folds_n, foldid=foldidcv, ... )  
-          } else {
-            cv_ridge_fit = cv.glmnet( trainxs, trainy_, family=family, alpha=0, nfolds=folds_n, foldid=foldidcv, ... )  
+            cv_glmnet_fit = cv.glmnet( trainxs, trainy_, family=family, lambda=lambda, nfolds=folds_n, foldid=foldidcv, relax=FALSE , ... )  
           }
         }
         
-        lasso.nzero.cv[i_,1] = cv_glmnet_fit$nzero [ cv_glmnet_fit$index[2] ]
-        lasso.nzero.cv[i_,2] = cv_glmnet_fit$nzero [ cv_glmnet_fit$index[1] ]     
-        if (relax) {
-          lasso.nzero.cv[i_,3] = cv_glmnet_fit$relaxed$nzero.1se 
-          lasso.nzero.cv[i_,4] = cv_glmnet_fit$relaxed$nzero.min 
-          lasso.nzero.cv[i_,5] = cv_glmnet_fit$nzero [ cv_glmnet_fit$relaxed$index.g0[2] ]
-          lasso.nzero.cv[i_,6] = cv_glmnet_fit$nzero [ cv_glmnet_fit$relaxed$index.g0[1] ]
+        if (folds_n >= 3) {
+          if ((family == "cox") & (is.null(trainstart))) {
+            cv_ridge_fit = cv.glmnet( trainxs, Surv(trainy_, trainevent), family=family, alpha=0, nfolds=folds_n, foldid=foldidcv , ... )  
+          } else if ((family == "cox") & (!is.null(trainstart))) {
+            cv_ridge_fit = cv.glmnet( trainxs, Surv(trainstart, trainy_, trainevent), family=family, alpha=0, nfolds=folds_n, foldid=foldidcv , ... )  
+          } else {
+            cv_ridge_fit = cv.glmnet( trainxs, trainy_, family=family, alpha=0, nfolds=folds_n, foldid=foldidcv , ... )  
+          }
         }
-        if (folds_n >= 3) { lasso.nzero.cv[i_,7] = cv_ridge_fit$nzero[ cv_ridge_fit$index ][1] 
-        } else { lasso.nzero.cv[i_,7] = 0 }
+        
+        lasso.nzero.rep[i_,1] = cv_glmnet_fit$nzero [ cv_glmnet_fit$index[2] ]
+        lasso.nzero.rep[i_,2] = cv_glmnet_fit$nzero [ cv_glmnet_fit$index[1] ]     
+        if (relax) {
+          lasso.nzero.rep[i_,3] = cv_glmnet_fit$relaxed$nzero.1se 
+          lasso.nzero.rep[i_,4] = cv_glmnet_fit$relaxed$nzero.min 
+          lasso.nzero.rep[i_,5] = cv_glmnet_fit$nzero [ cv_glmnet_fit$relaxed$index.g0[2] ]
+          lasso.nzero.rep[i_,6] = cv_glmnet_fit$nzero [ cv_glmnet_fit$relaxed$index.g0[1] ]
+        }
+        if (folds_n >= 3) { lasso.nzero.rep[i_,7] = cv_ridge_fit$nzero[ cv_ridge_fit$index ][1] 
+        } else { lasso.nzero.rep[i_,7] = 0 }
         
         lassogammacv[i_,1]= cv_glmnet_fit$relaxed$gamma.1se 
         lassogammacv[i_,2]= cv_glmnet_fit$relaxed$gamma.min 
@@ -1700,21 +1868,61 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
         perfm5 = perf_gen( testy__ , pred1seR0, family )
         perfm6 = perf_gen( testy__ , predminR0, family )
         perfm7 = perf_gen( testy__ , predridge, family )
-        lasso.devian.cv[i_,]  = c( perfm1[1] , perfm2[1] , perfm3[1] , perfm4[1] , perfm5[1] , perfm6[1] , perfm7[1] )
-        lasso.cal.devian.cv[i_,]=c(perfm1[2] , perfm2[2] , perfm3[2] , perfm4[2] , perfm5[2] , perfm6[2] , perfm7[2] )    
-        lasso.agree.cv[i_,]   = c( perfm1[3] , perfm2[3] , perfm3[3] , perfm4[3] , perfm5[3] , perfm6[3] , perfm7[3] )
-        lasso.intcal.cv[i_,]  = c( perfm1[4] , perfm2[4] , perfm3[4] , perfm4[4] , perfm5[4] , perfm6[4] , perfm7[4] )
-        lasso.lincal.cv[i_,]  = c( perfm1[5] , perfm2[5] , perfm3[5] , perfm4[5] , perfm5[5] , perfm6[5] , perfm7[5] )
-
-#        xbetas0.cv.lasso[(foldid==i_),] = cbind(pred1se, predmin, pred1seR, predminR, pred1seR0, predminR0, predridge) 
-        xbetas0.cv.lasso[(foldid==i_),1] = pred1se
-        xbetas0.cv.lasso[(foldid==i_),2] = predmin
-        xbetas0.cv.lasso[(foldid==i_),3] = pred1seR
-        xbetas0.cv.lasso[(foldid==i_),4] = predminR
-        xbetas0.cv.lasso[(foldid==i_),5] = pred1seR0
-        xbetas0.cv.lasso[(foldid==i_),6] = predminR0
-        xbetas0.cv.lasso[(foldid==i_),7] = predridge
+        lasso.devian.rep[i_,]  = c( perfm1[1] , perfm2[1] , perfm3[1] , perfm4[1] , perfm5[1] , perfm6[1] , perfm7[1] )
+        lasso.agree.rep[i_,]   = c( perfm1[3] , perfm2[3] , perfm3[3] , perfm4[3] , perfm5[3] , perfm6[3] , perfm7[3] )
+        lasso.intcal.rep[i_,]  = c( perfm1[4] , perfm2[4] , perfm3[4] , perfm4[4] , perfm5[4] , perfm6[4] , perfm7[4] )
+        lasso.lincal.rep[i_,]  = c( perfm1[5] , perfm2[5] , perfm3[5] , perfm4[5] , perfm5[5] , perfm6[5] , perfm7[5] )
+#        print("HERE 5")
         
+        pred1se.tr   = predict(cv_glmnet_fit, trainxs, lam=cv_glmnet_fit$lambda.1se, gam=1)  ##### 1se lambda model predictions ################
+        predmin.tr   = predict(cv_glmnet_fit, trainxs, lam=cv_glmnet_fit$lambda.min, gam=1)  ##### minimizing lambda model predictions #########
+        pred1seR.tr  = predict(cv_glmnet_fit, trainxs, lam="lambda.1se" , gam="gamma.1se" )  ###### 1se RELAXED lasso ##########################
+        predminR.tr  = predict(cv_glmnet_fit, trainxs, lam="lambda.min" , gam="gamma.min" )  ###### min RELAXED lasso ##########################
+        pred1seR0.tr = predict(cv_glmnet_fit, trainxs, lam=cv_glmnet_fit$relaxed$lambda.1se.g0, gam=0)  ###### 1se gamma = 0 RELAXED lasso #####
+        predminR0.tr = predict(cv_glmnet_fit, trainxs, lam=cv_glmnet_fit$relaxed$lambda.min.g0, gam=0)  ###### min gamma = 0 RELAXED lasso #####
+        if (folds_n >= 3) { predridge.tr = predict(cv_ridge_fit , trainxs)
+        } else { predridge.tr = rep(0,dim(trainxs)[1]) }
+#        print("HERE 6") 
+        
+        pred1se.cal   = cal_train_xbhat( pred1se  , trainy__, pred1se.tr  , family ) ; #print("HERE 7.1")
+        predmin.cal   = cal_train_xbhat( predmin  , trainy__, predmin.tr  , family ) ; #print("HERE 7.2")
+        pred1seR.cal  = cal_train_xbhat( pred1seR , trainy__, pred1seR.tr , family ) ; #print("HERE 7.3")
+        predminR.cal  = cal_train_xbhat( predminR , trainy__, predminR.tr , family ) ; #print("HERE 7.4") ; print( var( pred1seR0.tr) )
+        pred1seR0.cal = cal_train_xbhat( pred1seR0, trainy__, pred1seR0.tr, family ) ; #print("HERE 7.5")
+        predminR0.cal = cal_train_xbhat( predminR0, trainy__, predminR0.tr, family ) ; #print("HERE 7.6")
+        predridge.cal = cal_train_xbhat( predridge, trainy__, predridge.tr, family ) ; #print("HERE 7.7")
+        
+        perfm1.cal = perf_gen( testy__ , pred1se.cal   , family ) 
+        perfm2.cal = perf_gen( testy__ , predmin.cal   , family ) 
+        perfm3.cal = perf_gen( testy__ , pred1seR.cal  , family ) 
+        perfm4.cal = perf_gen( testy__ , predminR.cal  , family ) 
+        perfm5.cal = perf_gen( testy__ , pred1seR0.cal , family ) 
+        perfm6.cal = perf_gen( testy__ , predminR0.cal , family ) 
+        perfm7.cal = perf_gen( testy__ , predridge.cal , family ) 
+        
+        lasso.cal.devian.rep[i_,] = c( perfm1.cal[1] , perfm2.cal[1] , perfm3.cal[1] , perfm4.cal[1] , perfm5.cal[1] , perfm6.cal[1] , perfm7.cal[1] )    
+        lasso.cal.agree.rep [i_,] = c( perfm1.cal[3] , perfm2.cal[3] , perfm3.cal[3] , perfm4.cal[3] , perfm5.cal[3] , perfm6.cal[3] , perfm7.cal[3] )
+        lasso.cal.intcal.rep[i_,] = c( perfm1.cal[4] , perfm2.cal[4] , perfm3.cal[4] , perfm4.cal[4] , perfm5.cal[4] , perfm6.cal[4] , perfm7.cal[4] )
+        lasso.cal.lincal.rep[i_,] = c( perfm1.cal[5] , perfm2.cal[5] , perfm3.cal[5] , perfm4.cal[5] , perfm5.cal[5] , perfm6.cal[5] , perfm7.cal[5] )
+#        print("HERE 8")
+        
+#        print(rbind( lasso.devian.rep[i_,], lasso.cal.devian.rep[i_,] ) )
+#        print(rbind( lasso.agree.rep [i_,], lasso.cal.agree.rep [i_,] ) )
+        if (track == 2) { 
+          print( perfm6 )
+          print( perfm6.cal )
+        } 
+          
+        tmp = cbind(pred1se, predmin, pred1seR, predminR, pred1seR0, predminR0, predridge, 
+                    pred1se.cal, predmin.cal, pred1seR.cal, predminR.cal, pred1seR0.cal, predminR0.cal, predridge.cal )
+        
+        if (bootstrap == 0) {
+          xbetas.cv.lasso[ oob ,] = tmp   
+        } else if (bootstrap == 1) {
+          if (i_ == 1) { xbetas.boot.lasso = tmp 
+          } else {       xbetas.boot.lasso = rbind( xbetas.boot.lasso, tmp ) }
+        }
+
         ## calibrate lasso ##
         if (sum(ensemble[c(2:4,6:8)]) >= 1) { 
           trainpredminR = predict(cv_glmnet_fit, trainxs, lam="lambda.min" , gam="gamma.min" )  ###### min RELAXED lasso as an offset #####
@@ -1792,7 +2000,7 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
             ## xgb_perform(xgb_model, xs_, y=y__, family, tol=tol_) 
             xgb.simple.train = xgb.simple(train.xgb.dat, objective = objective, seed=seedr_, folds=foldidcv_xgb, doxgb=doxgb, track=track )
             xgbperf1 = xgb_perform(xgb_model=xgb.simple.train, xs_=test.xgb.dat, y=testy__, family=family ) 
-            xbetas0.cv.xgb[(foldid==i_),1] = xgb_xbhat(xgb.simple.train, test.xgb.dat, family)
+            xbetas.cv.xgb[ oob ,1] = xgb_xbhat(xgb.simple.train, test.xgb.dat, family)
           } else { xgbperf1 = c(1,1,0,0,0) }
           if (sum(ensemble[c(2,6)]) >= 1)  {
             if (track >= 2) { cat("  XGB Simple Factor, i_=", i_,"\n") 
@@ -1802,46 +2010,51 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
             } 
             xgb.simple.trainF = xgb.simple(train.xgb.datF, objective = objective, seed=seedr_, folds=foldidcv_xgb, doxgb=doxgb, track=track )
             xgbperf2 = xgb_perform(xgb.simple.trainF, test.xgb.datF, y=testy__, family=family) 
-            xbetas0.cv.xgb[(foldid==i_),2] = xgb_xbhat(xgb.simple.trainF, test.xgb.datF, family)
+            xbetas.cv.xgb[ oob ,2] = xgb_xbhat(xgb.simple.trainF, test.xgb.datF, family)
           } else { xgbperf2 = c(1,1,0,0,0) }
           if (sum(ensemble[c(3,4,7,8)]) >= 1) {
             if (track >= 2) { cat("  XGB simple offset, i_=", i_,"\n") }
             xgb.simple.trainO = xgb.simple(train.xgb.datO, objective = objective, seed=seedr_, folds=foldidcv_xgb, doxgb=doxgb, track=track )
             xgbperf3 = xgb_perform(xgb.simple.trainO, test.xgb.datO, y=testy__, family=family) 
-            xbetas0.cv.xgb[(foldid==i_),3] = xgb_xbhat(xgb.simple.trainO, test.xgb.datO, family)
+            xbetas.cv.xgb[ oob ,3] = xgb_xbhat(xgb.simple.trainO, test.xgb.datO, family)
           } else { xgbperf3 = c(1,1,0,0,0) }
           ## TUNED model fit train #######################################################
           if (sum(ensemble[c(1,5)]) >= 1) {
             if (track >= 2) { cat("\n  XGB tuned, i_=", i_) }
             xgb.tuned.train = xgb.tuned(train.xgb.dat, objective = objective, seed=seedr_, folds=foldidcv_xgb, doxgb=doxgb, track=track )
             xgbperf4 = xgb_perform(xgb.tuned.train, test.xgb.dat, y=testy__, family=family) 
-            xbetas0.cv.xgb[(foldid==i_),4] = xgb_xbhat(xgb.tuned.train, test.xgb.dat, family)
+            xbetas.cv.xgb[ oob ,4] = xgb_xbhat(xgb.tuned.train, test.xgb.dat, family)
           } else { xgbperf4 = c(1,1,0,0,0) }
           if (sum(ensemble[c(2,6)]) >= 1) {
             if (track >= 2) { cat("\n  XGB tuned Factor, i_=", i_,"\n") }
             xgb.tuned.trainF = xgb.tuned(train.xgb.datF, objective = objective, seed=seedr_, folds=foldidcv_xgb, doxgb=doxgb, track=track )
             xgbperf5 = xgb_perform(xgb.tuned.trainF, test.xgb.datF, y=testy__, family=family) 
-            xbetas0.cv.xgb[(foldid==i_),5] = xgb_xbhat(xgb.tuned.trainF, test.xgb.datF, family)
+            xbetas.cv.xgb[ oob ,5] = xgb_xbhat(xgb.tuned.trainF, test.xgb.datF, family)
           } else { xgbperf5 = c(1,1,0,0,0) }
           if (sum(ensemble[c(3,4,7,8)]) >= 1) {
             if (track >= 2) { cat("\n  XGB tuned offset, i_=", i_,"\n") }
             xgb.tuned.trainO = xgb.tuned(train.xgb.datO, objective = objective, seed=seedr_, folds=foldidcv_xgb, doxgb=doxgb, track=track )
             xgbperf6 = xgb_perform(xgb.tuned.trainO, test.xgb.datO, y=testy__, family=family) 
-            xbetas0.cv.xgb[(foldid==i_),6] = xgb_xbhat(xgb.tuned.trainO, test.xgb.datO, family)
+            xbetas.cv.xgb[ oob ,6] = xgb_xbhat(xgb.tuned.trainO, test.xgb.datO, family)
           } else { xgbperf6 = c(1,1,0,0,0) }
           ################################################################################
-          xgb.devian.cv[i_,]     = c( xgbperf1[1] , xgbperf2[1] , xgbperf3[1] , xgbperf4[1] , xgbperf5[1] , xgbperf6[1] )
-          xgb.cal.devian.cv[i_,] = c( xgbperf1[2] , xgbperf2[2] , xgbperf3[2] , xgbperf4[2] , xgbperf5[2] , xgbperf6[2] )
-          xgb.agree.cv[i_,]      = c( xgbperf1[3] , xgbperf2[3] , xgbperf3[3] , xgbperf4[3] , xgbperf5[3] , xgbperf6[3] )
-          xgb.intcal.cv[i_,]     = c( xgbperf1[4] , xgbperf2[4] , xgbperf3[4] , xgbperf4[4] , xgbperf5[4] , xgbperf6[4] )
-          xgb.lincal.cv[i_,]     = c( xgbperf1[5] , xgbperf2[5] , xgbperf3[5] , xgbperf4[5] , xgbperf5[5] , xgbperf6[5] )
+          xgb.devian.rep[i_,]     = c( xgbperf1[1] , xgbperf2[1] , xgbperf3[1] , xgbperf4[1] , xgbperf5[1] , xgbperf6[1] )
+          xgb.cal.devian.rep[i_,] = c( xgbperf1[2] , xgbperf2[2] , xgbperf3[2] , xgbperf4[2] , xgbperf5[2] , xgbperf6[2] )
+          xgb.agree.rep[i_,]      = c( xgbperf1[3] , xgbperf2[3] , xgbperf3[3] , xgbperf4[3] , xgbperf5[3] , xgbperf6[3] )
+          xgb.intcal.rep[i_,]     = c( xgbperf1[4] , xgbperf2[4] , xgbperf3[4] , xgbperf4[4] , xgbperf5[4] , xgbperf6[4] )
+          xgb.lincal.rep[i_,]     = c( xgbperf1[5] , xgbperf2[5] , xgbperf3[5] , xgbperf4[5] , xgbperf5[5] , xgbperf6[5] )
           ################################################################################
         }
         
-      xgb.nzero.cv[i_,]      = rep( xs_ncol , 6)
+        if (bootstrap == 1) {
+          if (i_ == 1) { xbetas.boot.xgb = xbetas.cv.xgb[ oob ,] 
+          } else {       xbetas.boot.xgb = rbind( xbetas.boot.xgb, xbetas.cv.xgb[ oob ,] ) }
+        }
+        
+      xgb.nzero.rep[i_,]  = rep( xs_ncol , 6)
       doxgb$folds = foldid_xgb             ## foldidcv_xgb passed do xgb_.tuned(), should be returned to whole sample value 
       if (track >= 1) { time_last = diff_time(time_start, time_last) } 
-        #      if (track >= 1) { cat(paste0(" (Continuing Nested Cross Validation outer fold  ", i_, "  of  " , folds_n , " )" , "\n")) }
+        #      if (track >= 1) { cat(paste0(" (Continuing Nested Cross Validation outer fold  ", i_, "  of  " , reps , " )" , "\n")) }
       }
       
       ##### RandomForest fit ##########################################################################################
@@ -1849,34 +2062,60 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
         if (track >= 1) { cat(" ## Starting Random Forest model fits ##" , "\n") }
         
         if (sum(ensemble[c(1,5)]) >= 1) {
+## CHECK does rf_tune expect a numeric, factor or either for "binimial" ??           
           rf_tuned_train = rf_tune(xs=trainxs, y_=trainy_, event=trainevent, family=family, mtryc=mtryc, ntreec = ntreec, seed=seedr_)
-          rf_perf1 = rf_perform(rf_model=rf_tuned_train$rf_tuned, dframe=as.data.frame(testxs), ofst=NULL, y__=testy__, family=family, tol=tol_)
-          xbetas0.cv.rf[(foldid==i_),1] = rf_xbhat(rf_model=rf_tuned_train$rf_tuned, dframe=as.data.frame(testxs), ofst=NULL, family=family, tol=tol_)
+          predm1       = rf_xbhat(rf_model=rf_tuned_train$rf_tuned, dframe=df.testxs , ofst=NULL, family=family, tol=tol_) 
+          predm1.tr    = rf_xbhat(rf_model=rf_tuned_train$rf_tuned, dframe=df.trainxs, ofst=NULL, family=family, tol=tol_) 
+          predm1.cal   = cal_train_xbhat( predm1 , trainy_n , predm1.tr , family ) 
+          rf_perf1     = c( perf_gen( testy_n , predm1     , family ) , rf_tuned_train$rf_tuned$mtry )
+          rf.cal_perf1 = c( perf_gen( testy_n , predm1.cal , family ) , rf_tuned_train$rf_tuned$mtry )                    
+#          rf.cal_perf1_ = c( perf_gen_cal_train( testy_n , predm1  , trainy_n, predm1.tr , family ) , rf_tuned_train$rf_tuned$mtry ) 
+#          print( rbind( rf.cal_perf1 ,  rf.cal_perf1_ ) )                              
+          xbetas.cv.rf[ oob ,c(1,4)] = cbind( predm1 , predm1.cal )  
+#          rf_perf1_old = rf_perform(rf_model=rf_tuned_train$rf_tuned, dframe=as.data.frame(testxs), ofst=NULL, y__=testy__, family=family, tol=tol_)
+#          print( rbind( rf_perf1, rf_perf1_old ) ) 
           if (track >= 2) { time_lasti = diff_time(time_start, time_last) } 
-        } else { rf_perf1 = c(1,1,0,0,0,0) }
+        } else { rf_perf1 = c(1,1,0,0,0,0) ; rf.cal_perf1 = c(1,1,0,0,0,0) }
         
         if (sum(ensemble[c(2,6)]) >= 1) { 
           rf_tuned_trainF = rf_tune(xs=trainxsO, y_=trainy_, event=trainevent, family=family, mtryc=mtryc, ntreec = ntreec, seed=seedr_)
-          rf_perf2 = rf_perform(rf_model=rf_tuned_trainF$rf_tuned, dframe=df.testxsO, ofst=NULL, y__=testy__, family=family, tol=tol_)
-          xbetas0.cv.rf[(foldid==i_),2] = rf_xbhat(rf_model=rf_tuned_trainF$rf_tuned, dframe=df.testxsO, ofst=NULL, family=family, tol=tol_)
+          predm2       = rf_xbhat(rf_model=rf_tuned_trainF$rf_tuned, dframe=df.testxsO , ofst=NULL, family=family, tol=tol_) 
+          predm2.tr    = rf_xbhat(rf_model=rf_tuned_trainF$rf_tuned, dframe=df.trainxsO, ofst=NULL, family=family, tol=tol_) 
+          predm2.cal   = cal_train_xbhat( predm2 , trainy_n , predm2.tr , family ) 
+          rf_perf2     = c( perf_gen( testy_n , predm2     , family ) , rf_tuned_trainF$rf_tuned$mtry )
+          rf.cal_perf2 = c( perf_gen( testy_n , predm2.cal , family ) , rf_tuned_trainF$rf_tuned$mtry )                    
+          xbetas.cv.rf[ oob ,c(2,5)] = cbind( predm2 , predm2.cal )  
           if (track >= 2) { time_lasti = diff_time(time_start, time_lasti) } 
-        } else { rf_perf2 = c(1,1,0,0,0,0) }
+        } else { rf_perf2 = c(1,1,0,0,0,0) ; rf.cal_perf2 = c(1,1,0,0,0,0) }
         
         if ( (sum(ensemble[c(3,4,7,8)]) >= 1) & (family %in% c("gaussian")) ) {
           trainyo = trainy_ - trainofst 
-          c(var(trainyo), var(trainy__))
           rf_tuned_trainO = rf_tune(xs=trainxs, y_=trainyo, event=NULL, family=family, mtryc=mtryc, ntreec = ntreec, seed=seedr_)
-          rf_perf3 = rf_perform(rf_model=rf_tuned_trainO$rf_tuned, dframe=df.testxs, ofst=testofst, y__=testy__, family=family, tol=tol_)
-          xbetas0.cv.rf[(foldid==i_),3] = rf_xbhat(rf_model=rf_tuned_trainO$rf_tuned, dframe=df.testxs, ofst=testofst, family=family, tol=tol_)
+          predm3       = rf_xbhat(rf_model=rf_tuned_trainO$rf_tuned, dframe=df.testxs , ofst=testofst , family=family, tol=tol_) 
+          predm3.tr    = rf_xbhat(rf_model=rf_tuned_trainO$rf_tuned, dframe=df.trainxs, ofst=trainofst, family=family, tol=tol_) 
+          predm3.cal   = cal_train_xbhat( predm3 , trainy_n , predm3.tr , family ) 
+          rf_perf3     = c( perf_gen( testy_n , predm3     , family ) , rf_tuned_train$rf_tuned$mtry ) 
+          rf.cal_perf3 = c( perf_gen( testy_n , predm3.cal , family ) , rf_tuned_train$rf_tuned$mtry )                    
+          xbetas.cv.rf[ oob , c(3,6)] = cbind(predm3 , predm3.cal )
           if (track >= 2) { time_lasti = diff_time(time_start, time_lasti) } 
-        } else { rf_perf3 = c(1,1,0,0,0,0) }
+        } else { rf_perf3 = c(1,1,0,0,0,0) ; rf.cal_perf3 = c(1,1,0,0,0,0) }
         
-        rf.devian.cv[i_,]     = c( rf_perf1[1] , rf_perf2[1] , rf_perf3[1] )
-        rf.cal.devian.cv[i_,] = c( rf_perf1[2] , rf_perf2[2] , rf_perf3[2] )
-        rf.agree.cv[i_,]      = c( rf_perf1[3] , rf_perf2[3] , rf_perf3[3] )
-        rf.intcal.cv[i_,]     = c( rf_perf1[4] , rf_perf2[4] , rf_perf3[4] )
-        rf.lincal.cv[i_,]     = c( rf_perf1[5] , rf_perf2[5] , rf_perf3[5] )
-        rf.mtry.cv[i_,]       = c( rf_perf1[6] , rf_perf2[6] , rf_perf3[6] )
+        rf.devian.rep[i_,]     = c( rf_perf1[1] , rf_perf2[1] , rf_perf3[1] )
+        rf.agree.rep[i_,]      = c( rf_perf1[3] , rf_perf2[3] , rf_perf3[3] )
+        rf.intcal.rep[i_,]     = c( rf_perf1[4] , rf_perf2[4] , rf_perf3[4] )
+        rf.lincal.rep[i_,]     = c( rf_perf1[5] , rf_perf2[5] , rf_perf3[5] )
+        rf.cal.devian.rep[i_,] = c( rf_perf1[2] , rf_perf2[2] , rf_perf3[2] )
+        rf.mtry.rep[i_,]       = c( rf_perf1[6] , rf_perf2[6] , rf_perf3[6] )
+        
+        rf.cal.devian.rep[i_,]     = c( rf.cal_perf1[1] , rf.cal_perf2[1] , rf.cal_perf3[1] )
+        rf.cal.agree.rep[i_,]      = c( rf.cal_perf1[3] , rf.cal_perf2[3] , rf.cal_perf3[3] )
+        rf.cal.intcal.rep[i_,]     = c( rf.cal_perf1[4] , rf.cal_perf2[4] , rf.cal_perf3[4] )
+        rf.cal.lincal.rep[i_,]     = c( rf.cal_perf1[5] , rf.cal_perf2[5] , rf.cal_perf3[5] )
+        
+        if (bootstrap == 1) {
+          if (i_ == 1) { xbetas.boot.rf = xbetas.cv.rf[ oob ,] 
+          } else {       xbetas.boot.rf = rbind( xbetas.boot.rf, xbetas.cv.rf[ oob ,] ) }
+        }
         
         if (track >= 1) { time_last = diff_time(time_start, time_last) } 
       }
@@ -1884,42 +2123,60 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
       ##### Oblique Random Forest ##########################################################################################
       if (doorf_==1) { 
         if (track >= 1) { cat(" ## Starting Oblique Random Forest model fits ##" , "\n") }
-#        print("HERE 1")
         if (sum(ensemble[c(1,5)]) >= 1) {
-#         orf_tuned_train = orf_tune(xs=trainxs, y_=trainy_, event=trainevent, family=family, mtryc=mtryc, ntreec = ntreec, seed=seedr_, track=2)
           orf_tuned_train = orf_tune(xs=trainxs, y_=trainy_, event=trainevent, family=family, mtryc=omtryc, ntreec = ontreec, nsplitc=onsplitc, seed=seedr_, track=track) 
-          orf_perf1 = orf_perform(orf_model=orf_tuned_train$orf_tuned, dframe=as.data.frame(testxs), ofst=NULL, y__=testy__, family=family, tol=tol_)
-          xbetas0.cv.orf[(foldid==i_),1] = orf_xbhat(orf_model=orf_tuned_train$orf_tuned, dframe=as.data.frame(testxs), ofst=NULL, family=family, tol=tol_)
+          predm1        = orf_xbhat(orf_model=orf_tuned_train$orf_tuned, dframe=df.testxs , ofst=NULL, family=family, tol=tol_) 
+          predm1.tr     = orf_xbhat(orf_model=orf_tuned_train$orf_tuned, dframe=df.trainxs, ofst=NULL, family=family, tol=tol_) 
+          predm1.cal    = cal_train_xbhat( predm1 , trainy_ , predm1.tr , family ) ; 
+          orf_perf1     = c( perf_gen( testy_n , predm1     , family ) , orf_tuned_train$orf_tuned$mtry )
+          orf.cal_perf1 = c( perf_gen( testy_n , predm1.cal , family ) , orf_tuned_train$orf_tuned$mtry )  
+          xbetas.cv.orf[ oob ,c(1,4)] = cbind( predm1 , predm1.cal )  
+#          orf.cal_perf1_= c( perf_gen_cal_train( testy_n , predm1  , trainy_n, predm1.tr , family ) , orf_tuned_train$orf_tuned$mtry ) 
+#          orf_perf1_old = orf_perform(orf_model=orf_tuned_train$orf_tuned, dframe=as.data.frame(testxs), ofst=NULL, y__=testy__, family=family, tol=tol_)
+#          print( rbind( orf_perf1, orf_perf1_old, orf.cal_perf1 , orf.cal_perf1_ ) )
           if (track >= 2) { time_lasti = diff_time(time_start, time_last) } 
-        } else { orf_perf1 = c(1,1,0,0,0,0) }
+        } else { orf_perf1 = c(1,1,0,0,0,0) ; orf.cal_perf1 = c(1,1,0,0,0,0) }
         
-#        print("HERE 2")
         if (sum(ensemble[c(2,6)]) >= 1) { 
           orf_tuned_trainF = orf_tune(xs=trainxsO, y_=trainy_, event=trainevent, family=family, mtryc=omtryc, ntreec = ontreec, nsplitc=onsplitc, seed=seedr_, track=track)
-#          orf_tuned_train  = orf_tune(xs=trainxs , y_=trainy_, event=trainevent, family=family, mtryc=omtryc, ntreec = ontreec, nsplitc=onsplitc, seed=seedr_, track=track) 
-#          print("HERE 3")
-          orf_perf2 = orf_perform(orf_model=orf_tuned_trainF$orf_tuned, dframe=df.testxsO, ofst=NULL, y__=testy__, family=family, tol=tol_)
-#          print("HERE 4")
-          xbetas0.cv.orf[(foldid==i_),2] = orf_xbhat(orf_model=orf_tuned_trainF$orf_tuned, dframe=df.testxsO, ofst=NULL, family=family, tol=tol_)
+          predm2        = orf_xbhat(orf_model=orf_tuned_trainF$orf_tuned, dframe=df.testxsO , ofst=NULL, family=family, tol=tol_) 
+          predm2.tr     = orf_xbhat(orf_model=orf_tuned_trainF$orf_tuned, dframe=df.trainxsO, ofst=NULL, family=family, tol=tol_)
+          predm2.cal    = cal_train_xbhat( predm2 , trainy_ , predm2.tr , family ) ; 
+          orf_perf2     = c( perf_gen( testy_n , predm2     , family ) , orf_tuned_trainF$orf_tuned$mtry ) 
+          orf.cal_perf2 = c( perf_gen( testy_n , predm2.cal , family ) , orf_tuned_trainF$orf_tuned$mtry ) 
+          xbetas.cv.orf[ oob ,c(2,5)] = cbind( predm2 , predm2.cal ) 
           if (track >= 2) { time_lasti = diff_time(time_start, time_lasti) } 
-        } else { orf_perf2 = c(1,1,0,0,0,0) }
+        } else { orf_perf2 = c(1,1,0,0,0,0) ; orf.cal_perf2 = c(1,1,0,0,0,0) } 
         
-#        print("HERE 5")
         if ( (sum(ensemble[c(3,4,7,8)]) >= 1) & (family %in% c("gaussian")) ) {
           trainyo = trainy_ - trainofst 
           c(var(trainyo), var(trainy__))
-          orf_tuned_trainO = orf_tune(xs=trainxs, y_=trainyo, event=NULL, family=family, mtryc=mtryc, ntreec = ntreec, seed=seedr_)
-          orf_perf3 = orf_perform(orf_model=orf_tuned_trainO$orf_tuned, dframe=df.testxs, ofst=testofst, y__=testy__, family=family, tol=tol_)
-          xbetas0.cv.orf[(foldid==i_),3] = orf_xbhat(orf_model=orf_tuned_trainO$orf_tuned, dframe=df.testxs, ofst=testofst, family=family, tol=tol_)
+          orf_tuned_trainO = orf_tune(xs=trainxs, y_=trainyo, event=NULL, family=family, mtryc=omtryc, ntreec = ontreec, seed=seedr_)
+          predm3        = orf_xbhat(orf_model=orf_tuned_trainO$orf_tuned, dframe=df.testxs , ofst=testofst , family=family, tol=tol_) 
+          predm3        = orf_xbhat(orf_model=orf_tuned_trainO$orf_tuned, dframe=df.testxs , ofst=testofst , family=family, tol=tol_) 
+          predm3.tr     = orf_xbhat(orf_model=orf_tuned_trainO$orf_tuned, dframe=df.trainxs, ofst=trainofst, family=family, tol=tol_) 
+          predm3.cal    = cal_train_xbhat( predm3 , trainy_n , predm3.tr , family ) 
+          orf_perf3     = c( perf_gen( testy_n , predm3     , family ) , orf_tuned_train$orf_tuned$mtry ) 
+          orf.cal_perf3 = c( perf_gen( testy_n , predm3.cal , family ) , orf_tuned_train$orf_tuned$mtry )                    
+          xbetas.cv.orf[ oob , c(3,6)] = cbind(predm3 , predm3.cal )
           if (track >= 2) { time_lasti = diff_time(time_start, time_lasti) } 
-        } else { orf_perf3 = c(1,1,0,0,0,0) }
+        } else { orf_perf3 = c(1,1,0,0,0,0) ; orf.cal_perf3 = c(1,1,0,0,0,0) }
         
-        orf.devian.cv[i_,]     = c( orf_perf1[1] , orf_perf2[1] , orf_perf3[1] )
-        orf.cal.devian.cv[i_,] = c( orf_perf1[2] , orf_perf2[2] , orf_perf3[2] )
-        orf.agree.cv[i_,]      = c( orf_perf1[3] , orf_perf2[3] , orf_perf3[3] )
-        orf.intcal.cv[i_,]     = c( orf_perf1[4] , orf_perf2[4] , orf_perf3[4] )
-        orf.lincal.cv[i_,]     = c( orf_perf1[5] , orf_perf2[5] , orf_perf3[5] )
-        orf.mtry.cv[i_,]       = c( orf_perf1[6] , orf_perf2[6] , orf_perf3[6] )
+        orf.devian.rep[i_,]     = c( orf_perf1[1] , orf_perf2[1] , orf_perf3[1] )
+        orf.agree.rep[i_,]      = c( orf_perf1[3] , orf_perf2[3] , orf_perf3[3] )
+        orf.intcal.rep[i_,]     = c( orf_perf1[4] , orf_perf2[4] , orf_perf3[4] )
+        orf.lincal.rep[i_,]     = c( orf_perf1[5] , orf_perf2[5] , orf_perf3[5] )
+        orf.mtry.rep[i_,]       = c( orf_perf1[6] , orf_perf2[6] , orf_perf3[6] )
+        
+        orf.cal.devian.rep[i_,]     = c( orf.cal_perf1[1] , orf.cal_perf2[1] , orf.cal_perf3[1] )
+        orf.cal.agree.rep[i_,]      = c( orf.cal_perf1[3] , orf.cal_perf2[3] , orf.cal_perf3[3] )
+        orf.cal.intcal.rep[i_,]     = c( orf.cal_perf1[4] , orf.cal_perf2[4] , orf.cal_perf3[4] )
+        orf.cal.lincal.rep[i_,]     = c( orf.cal_perf1[5] , orf.cal_perf2[5] , orf.cal_perf3[5] )
+        
+        if (bootstrap == 1) {
+          if (i_ == 1) { xbetas.boot.orf = xbetas.cv.orf[ oob ,] 
+          } else {       xbetas.boot.orf = rbind( xbetas.boot.orf, xbetas.cv.orf[ oob ,] ) }
+        }
         
         if (track >= 1) { time_last = diff_time(time_start, time_last) } 
       }
@@ -1947,9 +2204,9 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
           rp_perf1 = rpart_perform(rpart.train.00 , df.testxs, NULL, testy__, family )
           rp_perf2 = rpart_perform(rpart.train.01 , df.testxs, NULL, testy__, family )
           rp_perf3 = rpart_perform(rpart.train.02 , df.testxs, NULL, testy__, family )
-          xbetas0.cv.rpart[(foldid==i_),1] = rpart_xbhat(rpart.train.00 , df.testxs, NULL, family )
-          xbetas0.cv.rpart[(foldid==i_),2] = rpart_xbhat(rpart.train.01 , df.testxs, NULL, family )
-          xbetas0.cv.rpart[(foldid==i_),3] = rpart_xbhat(rpart.train.02 , df.testxs, NULL, family )
+          xbetas.cv.rpart[ oob ,1] = rpart_xbhat(rpart.train.00 , df.testxs, NULL, family )
+          xbetas.cv.rpart[ oob ,2] = rpart_xbhat(rpart.train.01 , df.testxs, NULL, family )
+          xbetas.cv.rpart[ oob ,3] = rpart_xbhat(rpart.train.02 , df.testxs, NULL, family )
         } else { rp_perf1 = rep(0,6) ; rp_perf2 = rep(0,6) ; rp_perf3 = rep(0,6) }
         
         if (sum(ensemble[c(2,6)]) >= 1)  { 
@@ -1960,9 +2217,9 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
           rp_perf4 = rpart_perform(rpart.trainF.00 , df.testxsO, NULL, testy__, family )
           rp_perf5 = rpart_perform(rpart.trainF.01 , df.testxsO, NULL, testy__, family )
           rp_perf6 = rpart_perform(rpart.trainF.02 , df.testxsO, NULL, testy__, family )
-          xbetas0.cv.rpart[(foldid==i_),4] = rpart_xbhat(rpart.trainF.00 , df.testxsO, NULL, family )
-          xbetas0.cv.rpart[(foldid==i_),5] = rpart_xbhat(rpart.trainF.01 , df.testxsO, NULL, family )
-          xbetas0.cv.rpart[(foldid==i_),6] = rpart_xbhat(rpart.trainF.02 , df.testxsO, NULL, family )
+          xbetas.cv.rpart[ oob ,4] = rpart_xbhat(rpart.trainF.00 , df.testxsO, NULL, family )
+          xbetas.cv.rpart[ oob ,5] = rpart_xbhat(rpart.trainF.01 , df.testxsO, NULL, family )
+          xbetas.cv.rpart[ oob ,6] = rpart_xbhat(rpart.trainF.02 , df.testxsO, NULL, family )
         } else { rp_perf4 = rep(0,6) ; rp_perf5 = rep(0,6) ; rp_perf6 = rep(0,6) }
         
         if ((sum(ensemble[c(3,4,7,8)]) >= 1) & (!(family %in% c("binomial"))))  {
@@ -1976,17 +2233,22 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
           rp_perf7 = rpart_perform(rpart.trainO.00 , df.testxsO, testofst, testy__, family )
           rp_perf8 = rpart_perform(rpart.trainO.01 , df.testxsO, testofst, testy__, family )
           rp_perf9 = rpart_perform(rpart.trainO.02 , df.testxsO, testofst, testy__, family )
-          xbetas0.cv.rpart[(foldid==i_),7] = rpart_xbhat(rpart.trainO.00 , df.testxsO, testofst, family )
-          xbetas0.cv.rpart[(foldid==i_),8] = rpart_xbhat(rpart.trainO.01 , df.testxsO, testofst, family )
-          xbetas0.cv.rpart[(foldid==i_),9] = rpart_xbhat(rpart.trainO.02 , df.testxsO, testofst, family )
+          xbetas.cv.rpart[ oob ,7] = rpart_xbhat(rpart.trainO.00 , df.testxsO, testofst, family )
+          xbetas.cv.rpart[ oob ,8] = rpart_xbhat(rpart.trainO.01 , df.testxsO, testofst, family )
+          xbetas.cv.rpart[ oob ,9] = rpart_xbhat(rpart.trainO.02 , df.testxsO, testofst, family )
         } else { rp_perf7 = rep(0,6) ; rp_perf8 = rep(0,6) ; rp_perf9 = rep(0,6) }
 
-        rpart.devian.cv[i_,]     = c( rp_perf1[1] , rp_perf2[1] , rp_perf3[1] , rp_perf4[1] , rp_perf5[1] , rp_perf6[1] , rp_perf7[1] , rp_perf8[1] , rp_perf9[1] )
-        rpart.cal.devian.cv[i_,] = c( rp_perf1[2] , rp_perf2[2] , rp_perf3[2] , rp_perf4[2] , rp_perf5[2] , rp_perf6[2] , rp_perf7[2] , rp_perf8[2] , rp_perf9[2] )
-        rpart.agree.cv[i_,]      = c( rp_perf1[3] , rp_perf2[3] , rp_perf3[3] , rp_perf4[3] , rp_perf5[3] , rp_perf6[3] , rp_perf7[3] , rp_perf8[3] , rp_perf9[3] )
-        rpart.intcal.cv[i_,]     = c( rp_perf1[4] , rp_perf2[4] , rp_perf3[4] , rp_perf4[4] , rp_perf5[4] , rp_perf6[4] , rp_perf7[4] , rp_perf8[4] , rp_perf9[4] )
-        rpart.lincal.cv[i_,]     = c( rp_perf1[5] , rp_perf2[5] , rp_perf3[5] , rp_perf4[5] , rp_perf5[5] , rp_perf6[5] , rp_perf7[5] , rp_perf8[5] , rp_perf9[5] )
-        rpart.nzero.cv[i_,]      = c( rp_perf1[6] , rp_perf2[6] , rp_perf3[6] , rp_perf4[6] , rp_perf5[6] , rp_perf6[6] , rp_perf7[6] , rp_perf8[6] , rp_perf9[6] )
+        rpart.devian.rep[i_,]     = c( rp_perf1[1] , rp_perf2[1] , rp_perf3[1] , rp_perf4[1] , rp_perf5[1] , rp_perf6[1] , rp_perf7[1] , rp_perf8[1] , rp_perf9[1] )
+        rpart.cal.devian.rep[i_,] = c( rp_perf1[2] , rp_perf2[2] , rp_perf3[2] , rp_perf4[2] , rp_perf5[2] , rp_perf6[2] , rp_perf7[2] , rp_perf8[2] , rp_perf9[2] )
+        rpart.agree.rep[i_,]      = c( rp_perf1[3] , rp_perf2[3] , rp_perf3[3] , rp_perf4[3] , rp_perf5[3] , rp_perf6[3] , rp_perf7[3] , rp_perf8[3] , rp_perf9[3] )
+        rpart.intcal.rep[i_,]     = c( rp_perf1[4] , rp_perf2[4] , rp_perf3[4] , rp_perf4[4] , rp_perf5[4] , rp_perf6[4] , rp_perf7[4] , rp_perf8[4] , rp_perf9[4] )
+        rpart.lincal.rep[i_,]     = c( rp_perf1[5] , rp_perf2[5] , rp_perf3[5] , rp_perf4[5] , rp_perf5[5] , rp_perf6[5] , rp_perf7[5] , rp_perf8[5] , rp_perf9[5] )
+        rpart.nzero.rep[i_,]      = c( rp_perf1[6] , rp_perf2[6] , rp_perf3[6] , rp_perf4[6] , rp_perf5[6] , rp_perf6[6] , rp_perf7[6] , rp_perf8[6] , rp_perf9[6] )
+        
+        if (bootstrap == 1) {
+          if (i_ == 1) { xbetas.boot.rpart = xbetas.cv.rpart[ oob ,] 
+          } else {       xbetas.boot.rpart = rbind( xbetas.boot.rpart, xbetas.cv.rpart[ oob ,] ) }
+        }
         
         if (track >= 1) { time_last = diff_time(time_start, time_last) } 
       }
@@ -2062,7 +2324,8 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
                                         drpot=drpot, wd=wd, l1=l1, scale=scale, minloss=minloss, gotoend=gotoend, bestof=bestof, 
                                         seed = c(seedr_, seedt_) ) 
             ann_perf1 = ann_perform(ann_fit_1, testxs_z0, testy_, family, teststart, testevent)
-            xbetas0.cv.ann[(foldid==i_),1] = ann_xbhat(ann_fit_1, testxs_z0, family)
+            xbetas.cv.ann[ oob ,1] = ann_xbhat(ann_fit_1, testxs_z0, family)
+#            print(" HERE 2") ; print(xbetas.cv.ann[oob,][1,])
           } else { ann_perf1 = c(1,1,0,0,0) }
           
           if (ensemble[2] == 1) { 
@@ -2073,7 +2336,7 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
                                         drpot=drpot, wd=wd, l1=l1, scale=scale, minloss=minloss, gotoend=gotoend, bestof=bestof, 
                                         seed = c(seedr_, seedt_) ) 
             ann_perf2 = ann_perform(ann_fit_2, testxs_z0L, testy_, family, teststart, testevent)
-            xbetas0.cv.ann[(foldid==i_),2] = ann_xbhat(ann_fit_2, testxs_z0L, family)
+            xbetas.cv.ann[ oob ,2] = ann_xbhat(ann_fit_2, testxs_z0L, family)
           } else { ann_perf2 = c(1,1,0,0,0) }
           
           if (ensemble[3] == 1) { 
@@ -2084,7 +2347,7 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
                                         drpot=drpot, wd=wd, l1=l1, lasso=1, lscale=lscale, scale=scale, resetlw=0, minloss=minloss, gotoend=gotoend, bestof=bestof, 
                                         seed = c(seedr_, seedt_) ) 
             ann_perf3 = ann_perform(ann_fit_3, testxs_z0L, testy_, family, teststart, testevent)
-            xbetas0.cv.ann[(foldid==i_),3] = ann_xbhat(ann_fit_3, testxs_z0L, family)
+            xbetas.cv.ann[ oob ,3] = ann_xbhat(ann_fit_3, testxs_z0L, family)
           } else { ann_perf3 = c(1,1,0,0,0) }
           
           if (ensemble[4] == 1) { 
@@ -2095,7 +2358,7 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
                                         drpot=drpot, wd=wd2, l1=l12, lasso=1, lscale=lscale, scale=scale, resetlw=1, minloss=minloss, gotoend=gotoend, bestof=bestof, 
                                         seed = c(seedr_, seedt_) ) 
             ann_perf4 = ann_perform(ann_fit_4, testxs_z0L, testy_, family, teststart, testevent)
-            xbetas0.cv.ann[(foldid==i_),4] = ann_xbhat(ann_fit_4, testxs_z0L, family)
+            xbetas.cv.ann[ oob ,4] = ann_xbhat(ann_fit_4, testxs_z0L, family)
           } else { ann_perf4 = c(1,1,0,0,0) }
           
           if (ensemble[5] == 1) { 
@@ -2105,7 +2368,7 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
                                         drpot=drpot, wd=wd, l1=l1, scale=scale, minloss=minloss, gotoend=gotoend, bestof=bestof, 
                                         seed = c(seedr_, seedt_) ) 
             ann_perf5 = ann_perform(ann_fit_5, testxs_z1, testy_, family, teststart, testevent)
-            xbetas0.cv.ann[(foldid==i_),5] = ann_xbhat(ann_fit_5, testxs_z1, family)
+            xbetas.cv.ann[ oob ,5] = ann_xbhat(ann_fit_5, testxs_z1, family)
           } else { ann_perf5 = c(1,1,0,0,0) }
           
           if (ensemble[6] == 1) { 
@@ -2116,7 +2379,7 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
                                         drpot=drpot, wd=wd, l1=l1, scale=scale, minloss=minloss, gotoend=gotoend, bestof=bestof, 
                                         seed = c(seedr_, seedt_) ) 
             ann_perf6 = ann_perform(ann_fit_6, testxs_z1L, testy_, family, teststart, testevent)
-            xbetas0.cv.ann[(foldid==i_),6] = ann_xbhat(ann_fit_6, testxs_z1L, family)
+            xbetas.cv.ann[ oob ,6] = ann_xbhat(ann_fit_6, testxs_z1L, family)
           } else { ann_perf6 = c(1,1,0,0,0) }
           
           if (ensemble[7] == 1) { 
@@ -2127,7 +2390,7 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
                                         drpot=drpot, wd=wd, l1=l1, lasso=1, lscale=lscale, scale=scale, resetlw=0, minloss=minloss, gotoend=gotoend, bestof=bestof, 
                                         seed = c(seedr_, seedt_) ) 
             ann_perf7 = ann_perform(ann_fit_7, testxs_z1L, testy_, family, teststart, testevent)
-            xbetas0.cv.ann[(foldid==i_),7] = ann_xbhat(ann_fit_7, testxs_z1L, family)
+            xbetas.cv.ann[ oob ,7] = ann_xbhat(ann_fit_7, testxs_z1L, family)
           } else { ann_perf7 = c(1,1,0,0,0) }
           
           if (ensemble[8] == 1) { 
@@ -2138,16 +2401,22 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
                                         drpot=drpot, wd=wd2, l1=l12, lasso=1, lscale=lscale, scale=scale, resetlw=1, minloss=minloss, gotoend=gotoend, bestof=bestof, 
                                         seed = c(seedr_, seedt_) ) 
             ann_perf8 = ann_perform(ann_fit_8, testxs_z1L, testy_, family, teststart, testevent)
-            xbetas0.cv.ann[(foldid==i_),8] = ann_xbhat(ann_fit_8, testxs_z1L, family)
+            xbetas.cv.ann[ oob ,8] = ann_xbhat(ann_fit_8, testxs_z1L, family)
           } else { ann_perf8 = c(1,1,0,0,0) }
           
-          ann.devian.cv[i_,]  = c( ann_perf1[1], ann_perf2[1], ann_perf3[1], ann_perf4[1], ann_perf5[1], ann_perf6[1], ann_perf7[1], ann_perf8[1] )
-          ann.cal.devian.cv[i_,]=c(ann_perf1[2], ann_perf2[2], ann_perf3[2], ann_perf4[2], ann_perf5[2], ann_perf6[2], ann_perf7[2], ann_perf8[2] )    
-          ann.agree.cv [i_,]  = c( ann_perf1[3], ann_perf2[3], ann_perf3[3], ann_perf4[3], ann_perf5[3], ann_perf6[3], ann_perf7[3], ann_perf8[3] )
-          ann.intcal.cv[i_,]  = c( ann_perf1[4], ann_perf2[4], ann_perf3[4], ann_perf4[4], ann_perf5[4], ann_perf6[4], ann_perf7[4], ann_perf8[4] )
-          ann.lincal.cv[i_,]  = c( ann_perf1[5], ann_perf2[5], ann_perf3[5], ann_perf4[5], ann_perf5[5], ann_perf6[5], ann_perf7[5], ann_perf8[5] )
-          ann.nzero.cv[i_,]   = c( rep(dim(xs)[2],4), rep(lasso.nzero.cv[i_,4], 4) )
+          ann.devian.rep[i_,]  = c( ann_perf1[1], ann_perf2[1], ann_perf3[1], ann_perf4[1], ann_perf5[1], ann_perf6[1], ann_perf7[1], ann_perf8[1] )
+          ann.cal.devian.rep[i_,]=c(ann_perf1[2], ann_perf2[2], ann_perf3[2], ann_perf4[2], ann_perf5[2], ann_perf6[2], ann_perf7[2], ann_perf8[2] )    
+          ann.agree.rep [i_,]  = c( ann_perf1[3], ann_perf2[3], ann_perf3[3], ann_perf4[3], ann_perf5[3], ann_perf6[3], ann_perf7[3], ann_perf8[3] )
+          ann.intcal.rep[i_,]  = c( ann_perf1[4], ann_perf2[4], ann_perf3[4], ann_perf4[4], ann_perf5[4], ann_perf6[4], ann_perf7[4], ann_perf8[4] )
+          ann.lincal.rep[i_,]  = c( ann_perf1[5], ann_perf2[5], ann_perf3[5], ann_perf4[5], ann_perf5[5], ann_perf6[5], ann_perf7[5], ann_perf8[5] )
+          ann.nzero.rep[i_,]   = c( rep(dim(xs)[2],4), rep(lasso.nzero.rep[i_,4], 4) )
         } 
+        
+        if (bootstrap == 1) {
+          if (i_ == 1) { xbetas.boot.ann = xbetas.cv.ann[ oob ,] 
+          } else {       xbetas.boot.ann = rbind( xbetas.boot.ann, xbetas.cv.ann[ oob ,] ) }
+        }
+        
         if (track == 1) { eppr = eppr_t ; eppr2 = eppr2_t }
         if (track >= 1) { time_last = diff_time(time_start, time_last) } 
       } 
@@ -2178,8 +2447,8 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
         if (family != "cox") {  nonzero =  nonzero - 1 }
         testxb  = predict( func.fit.df, as.data.frame( testxs) )              
         step_perf1 = c(perf_gen(testy__, testxb, family) )
-        xbetas0.cv.step[(foldid==i_),1] = testxb
-        step.nzero.cv [i_,1] = nonzero 
+        xbetas.cv.step[ oob ,1] = testxb
+        step.nzero.rep [i_,1] = nonzero 
         
         #### stepwise tuned by p (critical value) ##############################
         func.fit.p = cv.stepreg.fit$func.fit.p                                
@@ -2187,17 +2456,17 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
         if (family != "cox") {  nonzero =  nonzero - 1 }
         testxb     = predict( func.fit.p, as.data.frame( testxs) )          
         step_perf2 = c(perf_gen(testy__, testxb, family) )
-        xbetas0.cv.step[(foldid==i_),2] = testxb
-        step.nzero.cv [i_,2] = nonzero 
-        step.p.cv  [i_,1] = cv.stepreg.fit$best.p 
+        xbetas.cv.step[ oob ,2] = testxb
+        step.nzero.rep [i_,2] = nonzero 
+        step.p.rep  [i_,1] = cv.stepreg.fit$best.p 
         
         ########################################################################
         
-        step.devian.cv[i_,c(1,2)] = c(step_perf1[1] , step_perf2[1])
-        step.cal.devian.cv[i_,c(1,2)] = c(step_perf1[2] , step_perf2[2])
-        step.agree.cv[i_,c(1,2)]  = c(step_perf1[3] , step_perf2[3])
-        step.intcal.cv[i_,c(1,2)] = c(step_perf1[4] , step_perf2[4])
-        step.lincal.cv[i_,c(1,2)] = c(step_perf1[5] , step_perf2[5])
+        step.devian.rep[i_,c(1,2)] = c(step_perf1[1] , step_perf2[1])
+        step.cal.devian.rep[i_,c(1,2)] = c(step_perf1[2] , step_perf2[2])
+        step.agree.rep[i_,c(1,2)]  = c(step_perf1[3] , step_perf2[3])
+        step.intcal.rep[i_,c(1,2)] = c(step_perf1[4] , step_perf2[4])
+        step.lincal.rep[i_,c(1,2)] = c(step_perf1[5] , step_perf2[5])
         
         if (track >= 1) { time_last = diff_time(time_start, time_last) } 
       }
@@ -2237,18 +2506,25 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
         }
         
         step_perf3 = c(perf_gen(testy__, testxb, family), nzero )
-        xbetas0.cv.step[(foldid==i_),3] = testxb
-
-        step.devian.cv[i_,c(3)]     = c( step_perf3[1] )
-        step.cal.devian.cv[i_,c(3)] = c( step_perf3[2] )
-        step.agree.cv[i_,c(3)]      = c( step_perf3[3] )
-        step.intcal.cv[i_,c(3)]     = c( step_perf3[4] )
-        step.lincal.cv[i_,c(3)]     = c( step_perf3[5] )
-        step.nzero.cv [i_,3] = nzero 
+        xbetas.cv.step[ oob ,3] = testxb
+        
+        step.devian.rep[i_,c(3)]     = c( step_perf3[1] )
+        step.cal.devian.rep[i_,c(3)] = c( step_perf3[2] )
+        step.agree.rep[i_,c(3)]      = c( step_perf3[3] )
+        step.intcal.rep[i_,c(3)]     = c( step_perf3[4] )
+        step.lincal.rep[i_,c(3)]     = c( step_perf3[5] )
+        step.nzero.rep [i_,3] = nzero 
         
         if (track >= 1) { time_last = diff_time(time_start, time_last) } 
       }
       ## end within fold AIC FIT #################################################
+      
+      if ( (dostep==1) | (doaic==1) ) {
+        if (bootstrap == 1) {
+          if (i_ == 1) { xbetas.boot.step = xbetas.cv.step[ oob ,] 
+          } else {       xbetas.boot.step = rbind( xbetas.boot.step, xbetas.cv.step[ oob ,] ) }
+        }
+      }
     }
   }
   
@@ -2294,14 +2570,37 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
     if (dep_names == "NULL") { dep_names = NULL }
   }
   
-  if (dolasso  == 1) { xbetas.cv = cbind( xbetas.cv, xbetas0.cv.lasso ) } 
-  if (doxgb_   == 1) { xbetas.cv = cbind( xbetas.cv, xbetas0.cv.xgb   ) } 
-  if (dorf_    == 1) { xbetas.cv = cbind( xbetas.cv, xbetas0.cv.rf    ) } 
-  if (doorf_   == 1) { xbetas.cv = cbind( xbetas.cv, xbetas0.cv.orf    ) } 
-  if (doann_   == 1) { xbetas.cv = cbind( xbetas.cv, xbetas0.cv.ann   ) } 
-  if (dorpart  == 1) { xbetas.cv = cbind( xbetas.cv, xbetas0.cv.rpart ) } 
-  if ((dostep == 1) | (doaic==1)) { xbetas.cv = cbind( xbetas.cv, xbetas0.cv.step ) } 
-  
+  if (bootstrap == 0) {
+    if (dolasso  == 1) { xbetas.cv = cbind( xbetas.cv, xbetas.cv.lasso  ) }      
+    if (doxgb_   == 1) { xbetas.cv = cbind( xbetas.cv, xbetas.cv.xgb   [,keepxbetas.xgb  ] ) } 
+    if (dorf_    == 1) { xbetas.cv = cbind( xbetas.cv, xbetas.cv.rf    [,keepxbetas.rf   ] ) } 
+    if (doorf_   == 1) { xbetas.cv = cbind( xbetas.cv, xbetas.cv.orf   [,keepxbetas.orf  ] ) } 
+    if (doann_   == 1) { 
+      if (sum(ensemble)==1) { nm = colnames(xbetas.cv.ann)[(ensemble==1)] }
+      xbetas.cv = cbind( xbetas.cv, xbetas.cv.ann [,keepxbetas.ann] )
+      if (sum(ensemble)==1) { colnames(xbetas.cv)[dim(xbetas.cv)[2]] = nm }
+    } 
+    if (dorpart  == 1) { xbetas.cv = cbind( xbetas.cv, xbetas.cv.rpart [,keepxbetas.rpart]) } 
+    if ((dostep == 1) | (doaic==1)) { xbetas.cv = cbind( xbetas.cv, xbetas.cv.step[,keepxbetas.step]) } 
+    colnames(xbetas.cv)[1] = "null"
+  } else {
+    xbetas.boot = xbetas.boot.null
+    if (dolasso  == 1) { xbetas.boot = cbind( xbetas.boot, xbetas.boot.lasso  ) } 
+    if (doxgb_   == 1) { xbetas.boot = cbind( xbetas.boot, xbetas.boot.xgb   [,keepxbetas.xgb  ] ) } 
+    if (dorf_    == 1) { xbetas.boot = cbind( xbetas.boot, xbetas.boot.rf    [,keepxbetas.rf   ] ) } 
+    if (doorf_   == 1) { xbetas.boot = cbind( xbetas.boot, xbetas.boot.orf   [,keepxbetas.orf  ] ) } 
+    if (doann_   == 1) {
+      if (sum(ensemble)==1) { nm = colnames(xbetas.boot.ann)[(ensemble==1)] }
+      xbetas.boot = cbind( xbetas.boot, xbetas.boot.ann[,keepxbetas.ann])
+      if (sum(ensemble)==1) { colnames(xbetas.cv)[dim(xbetas.cv)[2]] = nm }
+    } 
+    if (dorpart  == 1) { xbetas.boot = cbind( xbetas.boot, xbetas.boot.rpart [,keepxbetas.rpart]) } 
+    if ((dostep == 1) | (doaic==1)) { xbetas.boot = cbind( xbetas.boot, xbetas.boot.step[,keepxbetas.step]) } 
+    colnames(xbetas.boot)[1] = "null"
+#    print("HERE boostrap")
+#    xbetas.boot[1:5,]
+  }
+
   rver = R.Version()$version.string
 
   Call <- match.call()
@@ -2312,7 +2611,7 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
                                null.dev.n=null.deviance, null.m2LogLik.n=null.m2LogLik, sat.m2LogLik.n=sat.m2LogLik ), 
                    dep_names = dep_names, 
                    xvars = colnames(xs), 
-                   tuning = c( folds_n=folds_n, stratified=stratified, limit=limit, fine=fine, ties=ties, method=method, steps_n=steps_n ),
+                   tuning = c( folds_n=folds_n, stratified=stratified, limit=limit, fine=fine, ties=ties, method=method, steps_n=steps_n, boostrap=bootstrap_, unique=unique),
                    fits   = c( dolasso=dolasso, doxgb=doxgb_, dorf=dorf_, dorpart=dorpart, doann=doann_, dostep=dostep, doaic=doaic, doorf=doorf_ ), 
                    seed   = seed, 
                    ensemble = ensemble, 
@@ -2320,17 +2619,21 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
                    dorf   = dorf, 
                    doorf  = doorf, 
                    doann  = doann, 
-                   do_ncv = do_ncv, 
+                   resample = resample, 
                    foldid = foldid, 
                    y_     = y__ , 
-                   xbetas = xbetas , 
-                   xbetas.cv = xbetas.cv , 
                    times  = c(time_start=time_start, time_stop=time_stop),  
                    hr_mn_sc = diff_time1(time_stop, time_start),
                    version = c(R=rver, glmnetr=pver) )
-#  print( keepxbetas )
+  
+  nestedcv$xbetas = xbetas
+  if (resample == 1) {
+    if (bootstrap == 0) { nestedcv$xbetas.cv = xbetas.cv 
+    } else if (bootstrap >= 1) { nestedcv$xbetas.boot = xbetas.boot }
+  }
+
   if ( keepxbetas == 0) { nestedcv$xbetas = NULL ; nestedcv$xbetas.cv = NULL ; }
-  if ( do_ncv == 0) { nestedcv$xbetas.cv = NULL }
+  if ( resample == 0) { nestedcv$xbetas.cv = NULL }
   
   if (family %in% c("cox")) { 
     names(nestedcv$sample)[c(6,7,8)] = c("null.dev/nevent","null.m2LogLik/nevent","sat.m2LogLik/nevent") 
@@ -2338,26 +2641,31 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
     names(nestedcv$sample)[c(6,7,8)] = c("null.dev/n","null.m2LogLik/n","sat.m2LogLik/n") 
   }
 
-  nestedcv$ null.m2LogLik.cv =  null.m2LogLik.cv
-  nestedcv$sat.m2LogLik.cv   = sat.m2LogLik.cv 
-  nestedcv$n.cv           = n.cv 
+  nestedcv$null.m2LogLik.rep = null.m2LogLik.rep
+  nestedcv$ sat.m2LogLik.rep =  sat.m2LogLik.rep 
+  nestedcv$n.rep             = n.rep 
+  if (family %in% c("binomial","cox")) { nestedcv$n00.rep = n00.rep } 
   
   #============================================================================#
-  
+
   if (dolasso == 1) { 
-    if (do_ncv == 1) {
-      nestedcv$lasso.devian.cv    = lasso.devian.cv
-      nestedcv$lasso.cal.devian.cv = lasso.cal.devian.cv
-      nestedcv$lasso.intcal.cv    = lasso.intcal.cv
-      nestedcv$lasso.lincal.cv    = lasso.lincal.cv
-      nestedcv$lasso.agree.cv     = lasso.agree.cv
-      nestedcv$lasso.nzero.cv     = lasso.nzero.cv 
+    if (resample == 1) {
+      nestedcv$lasso.devian.rep    = lasso.devian.rep
+      nestedcv$lasso.intcal.rep    = lasso.intcal.rep
+      nestedcv$lasso.lincal.rep    = lasso.lincal.rep
+      nestedcv$lasso.agree.rep     = lasso.agree.rep
+      nestedcv$lasso.nzero.rep     = lasso.nzero.rep 
+      nestedcv$lasso.cal.devian.rep = lasso.cal.devian.rep
+      nestedcv$lasso.cal.intcal.rep = lasso.cal.intcal.rep
+      nestedcv$lasso.cal.lincal.rep = lasso.cal.lincal.rep
+      nestedcv$lasso.cal.agree.rep  = lasso.cal.agree.rep
     }
     nestedcv$lasso.devian.naive = lasso.devian.naive 
     nestedcv$lasso.intcal.naive = lasso.intcal.naive 
     nestedcv$lasso.lincal.naive = lasso.lincal.naive 
     nestedcv$lasso.agree.naive  = lasso.agree.naive 
     nestedcv$lasso.nzero        = lasso.nzero
+    nestedcv$lasso.cal.devian.naive = lasso.cal.devian.naive 
     nestedcv$cv_glmnet_fit      = cv_glmnet_fit_f 
     if (folds_n >= 3) { nestedcv$cv_ridge_fit = cv_ridge_fit_f } 
   } 
@@ -2365,12 +2673,12 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
   #-----------------------------------------------------------------------------
   
   if (doxgb_ == 1) { 
-    if (do_ncv == 1) {
-      nestedcv$xgb.devian.cv    = xgb.devian.cv
-      nestedcv$xgb.intcal.cv    = xgb.intcal.cv 
-      nestedcv$xgb.lincal.cv    = xgb.lincal.cv
-      nestedcv$xgb.agree.cv     = xgb.agree.cv
-      nestedcv$xgb.nzero.cv     = xgb.nzero.cv 
+    if (resample == 1) {
+      nestedcv$xgb.devian.rep    = xgb.devian.rep
+      nestedcv$xgb.intcal.rep    = xgb.intcal.rep 
+      nestedcv$xgb.lincal.rep    = xgb.lincal.rep
+      nestedcv$xgb.agree.rep     = xgb.agree.rep
+      nestedcv$xgb.nzero.rep     = xgb.nzero.rep 
     }
     nestedcv$xgb.devian.naive = xgb.devian.naive
     nestedcv$xgb.intcal.naive = xgb.intcal.naive 
@@ -2419,18 +2727,23 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
   #-----------------------------------------------------------------------------
   
   if (dorf_ == 1) {
-    if (do_ncv == 1) {
-      nestedcv$rf.devian.cv   = rf.devian.cv
-      nestedcv$rf.intcal.cv   = rf.intcal.cv
-      nestedcv$rf.lincal.cv   = rf.lincal.cv
-      nestedcv$rf.agree.cv    = rf.agree.cv 
-      nestedcv$rf.mtry.cv     = rf.mtry.cv 
+    if (resample == 1) {
+      nestedcv$rf.devian.rep   = rf.devian.rep
+      nestedcv$rf.intcal.rep   = rf.intcal.rep
+      nestedcv$rf.lincal.rep   = rf.lincal.rep
+      nestedcv$rf.agree.rep    = rf.agree.rep 
+      nestedcv$rf.mtry.rep     = rf.mtry.rep 
+      nestedcv$rf.cal.devian.rep = rf.cal.devian.rep
+      nestedcv$rf.cal.intcal.rep = rf.cal.intcal.rep
+      nestedcv$rf.cal.lincal.rep = rf.cal.lincal.rep
+      nestedcv$rf.cal.agree.rep  = rf.cal.agree.rep 
     }
     nestedcv$rf.devian.naive = rf.devian.naive
     nestedcv$rf.intcal.naive = rf.intcal.naive
     nestedcv$rf.lincal.naive = rf.lincal.naive
     nestedcv$rf.agree.naive  = rf.agree.naive
-    nestedcv$rf.mtry         = rf.mtry.naive  
+    nestedcv$rf.mtry         = rf.mtry.naive 
+    nestedcv$rf.cal.devian.naive = rf.cal.devian.naive
     if (rfkeep == 1) {
       if  (sum(ensemble[c(1,5)]) >= 1) { 
         if( keepdata == 0) { 
@@ -2463,18 +2776,23 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
   #-----------------------------------------------------------------------------
   
   if (doorf_ == 1) {
-    if (do_ncv == 1) {
-      nestedcv$orf.devian.cv   = orf.devian.cv
-      nestedcv$orf.intcal.cv   = orf.intcal.cv
-      nestedcv$orf.lincal.cv   = orf.lincal.cv
-      nestedcv$orf.agree.cv    = orf.agree.cv 
-      nestedcv$orf.mtry.cv     = orf.mtry.cv 
+    if (resample == 1) {
+      nestedcv$orf.devian.rep   = orf.devian.rep
+      nestedcv$orf.intcal.rep   = orf.intcal.rep
+      nestedcv$orf.lincal.rep   = orf.lincal.rep
+      nestedcv$orf.agree.rep    = orf.agree.rep 
+      nestedcv$orf.mtry.rep     = orf.mtry.rep 
+      nestedcv$orf.cal.devian.rep = orf.cal.devian.rep
+      nestedcv$orf.cal.intcal.rep = orf.cal.intcal.rep
+      nestedcv$orf.cal.lincal.rep = orf.cal.lincal.rep
+      nestedcv$orf.cal.agree.rep  = orf.cal.agree.rep 
     }
     nestedcv$orf.devian.naive = orf.devian.naive
     nestedcv$orf.intcal.naive = orf.intcal.naive
     nestedcv$orf.lincal.naive = orf.lincal.naive
     nestedcv$orf.agree.naive  = orf.agree.naive
     nestedcv$orf.mtry         = orf.mtry.naive  
+    nestedcv$orf.cal.devian.naive = orf.cal.devian.naive
     if (orfkeep == 1) {
       if  (sum(ensemble[c(1,5)]) >= 1) { 
         if( keepdata == 0) { 
@@ -2511,12 +2829,12 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
   #-----------------------------------------------------------------------------
   
   if (doann_ == 1) {
-    if (do_ncv == 1) {
-      nestedcv$ann.devian.cv = ann.devian.cv
-      nestedcv$ann.intcal.cv = ann.intcal.cv
-      nestedcv$ann.lincal.cv = ann.lincal.cv
-      nestedcv$ann.agree.cv  = ann.agree.cv
-      nestedcv$ann.nzero.cv  = ann.nzero.cv
+    if (resample == 1) {
+      nestedcv$ann.devian.rep = ann.devian.rep
+      nestedcv$ann.intcal.rep = ann.intcal.rep
+      nestedcv$ann.lincal.rep = ann.lincal.rep
+      nestedcv$ann.agree.rep  = ann.agree.rep
+      nestedcv$ann.nzero.rep  = ann.nzero.rep
     }
     nestedcv$ann.devian.naive = ann.devian.naive
     nestedcv$ann.intcal.naive = ann.intcal.naive
@@ -2537,12 +2855,12 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
   #-----------------------------------------------------------------------------
   
   if (dorpart == 1) {
-    if (do_ncv == 1) {
-      nestedcv$rpart.devian.cv = rpart.devian.cv
-      nestedcv$rpart.intcal.cv = rpart.intcal.cv
-      nestedcv$rpart.lincal.cv = rpart.lincal.cv
-      nestedcv$rpart.agree.cv  = rpart.agree.cv 
-      nestedcv$rpart.nzero.cv  = rpart.nzero.cv 
+    if (resample == 1) {
+      nestedcv$rpart.devian.rep = rpart.devian.rep
+      nestedcv$rpart.intcal.rep = rpart.intcal.rep
+      nestedcv$rpart.lincal.rep = rpart.lincal.rep
+      nestedcv$rpart.agree.rep  = rpart.agree.rep 
+      nestedcv$rpart.nzero.rep  = rpart.nzero.rep 
     }
     nestedcv$rpart.devian.naive = rpart.devian.naive
     nestedcv$rpart.intcal.naive = rpart.intcal.naive
@@ -2558,14 +2876,14 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
   #-----------------------------------------------------------------------------
   
   if ((dostep == 1) | (doaic==1)) { 
-    if (do_ncv == 1) {
-      nestedcv$step.devian.cv = step.devian.cv 
-      nestedcv$step.cal.devian.cv = step.cal.devian.cv 
-      nestedcv$step.intcal.cv = step.intcal.cv 
-      nestedcv$step.lincal.cv = step.lincal.cv 
-      nestedcv$step.agree.cv  = step.agree.cv
-      nestedcv$step.nzero.cv  = step.nzero.cv 
-      nestedcv$step.p.cv      = step.p.cv 
+    if (resample == 1) {
+      nestedcv$step.devian.rep = step.devian.rep 
+      nestedcv$step.cal.devian.rep = step.cal.devian.rep 
+      nestedcv$step.intcal.rep = step.intcal.rep 
+      nestedcv$step.lincal.rep = step.lincal.rep 
+      nestedcv$step.agree.rep  = step.agree.rep
+      nestedcv$step.nzero.rep  = step.nzero.rep 
+      nestedcv$step.p.rep      = step.p.rep 
     }
   nestedcv$step.devian.naive = step.devian.naive 
   nestedcv$step.agree.naive  = step.agree.naive 
@@ -2595,3 +2913,4 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", do_
 
 ###############################################################################################################################################
 ###############################################################################################################################################
+
