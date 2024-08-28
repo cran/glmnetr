@@ -70,13 +70,8 @@ orf_tune = function(xs, start=NULL, y_, event=NULL, family=NULL, mtryc=NULL, ntr
     print(family) 
   }
   
-  if        (family == "binomial") { 
-#    y_ = as.factor(y_)
-    class(y_) 
-    table(y_)
-    split_rule="gini"  
-#    split_rule="variance"                                                       ## this should not be !!
-  } else if (family == "gaussian") { split_rule="variance"
+  if        (family == "binomial") { split_rule="gini" 
+  } else if (family == "gaussian") { split_rule="variance" 
   } else if (family == "cox"     ) { split_rule="logrank" } 
   
   if (track >= 2) { 

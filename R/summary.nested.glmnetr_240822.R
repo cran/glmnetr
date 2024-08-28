@@ -112,15 +112,17 @@ roundperf = function(summdf, digits=3, resample=1) {
 #' Only applies to cvfit=TRUE.
 #' @param digits digits for printing of deviances, linear calibration coefficients 
 #' and agreement (concordances and R-squares).
-#' @param Call 1 to print call used in generation of the object, 0 or NULL to not print 
+#' @param call 1 to print call used in generation of the object, 0 or NULL to not print 
 #' @param onese 0 (default) to not include summary for 1se lasso fits in tables, 1 to include 
 #' @param table 1 to print table to console, 0 to output the tabled information to a data frame
 #' @param tuning 1 to print tuning parameters, 0 (default) to not print
 #' @param width character width of the text body preceding the performance 
 #' measures which can be adjusted between 60 and 120.
-#' @param cal 1 print out performance statistics for lasso models calibrated on 
-#' training data. 0 (default) to not print.  Note, these training data calibrated
-#' estimates may not do very well for some of the other machine learning models.   
+#' @param cal 1 print performance statistics for lasso 
+#' models calibrated on training data, 2 to print performance statistics for 
+#' lasso and random forest models calibrated on training data, 0 (default) to 
+#' not print.  Note, despite any intuitive appeal these training data 
+#' calibrated models may sometimes do rather poorly.
 #' @param ... Additional arguments passed to the summary function.  
 #' 
 #' @return - a nested cross validation fit summary, or a cross validation model summary.  
@@ -142,11 +144,11 @@ roundperf = function(summdf, digits=3, resample=1) {
 #' summary(fit3)
 #' }
 #' 
-# cvfit = FALSE ; pow=2 ; printg1 = FALSE ; digits = 3 ; Call=NULL ; onese = 0 ; table = 1 ; 
+# cvfit = FALSE ; pow=2 ; printg1 = FALSE ; digits = 3 ; call=NULL ; onese = 0 ; table = 1 ; 
 
 summary.nested.glmnetr = function(object, cvfit=FALSE, pow=2, printg1=FALSE, 
-                                  digits=4, Call=NULL, onese=0, table=1, tuning=0, width=84, cal=0, ...) {
-# cvfit=FALSE ; pow=2 ; printg1=FALSE ; digits=4 ; Call=NULL ; onese=0 ; table=1 ; tuning=0 ; width=108  ; cal = 1 ; 
+                                  digits=4, call=NULL, onese=0, table=1, tuning=0, width=84, cal=0, ...) {
+# cvfit=FALSE ; pow=2 ; printg1=FALSE ; digits=4 ; call=NULL ; onese=0 ; table=1 ; tuning=0 ; width=108  ; cal = 1 ; 
   
   ## AltDevRat
 #  x = colSums ( n.rep*( null.m2LogLik.rep - devian.rep )) / sum((null.m2LogLik.rep - sat.m2LogLik.rep)*n.rep)
@@ -179,13 +181,13 @@ summary.nested.glmnetr = function(object, cvfit=FALSE, pow=2, printg1=FALSE,
     summary(cv_glmnet_fit,printg1=printg1)
   } else {
     if (!(table %in% c(0,1,2,3))) { table = 1 }
-    if (!is.null(Call)) { 
-      if (Call != 0) { 
-        Call = object$Call 
-        if ( is.null(Call) ) { Call = object$call }
-      } else { Call = NULL }
-    }
+    if (is.null(call)) { call = 0 } 
+    if (call > 0) { 
+      Call = object$call 
+      if ( is.null(Call) ) { Call = object$Call }
+    } else { Call = NULL }
     sample  = object$sample 
+    if (length(sample) >= 9) { if (sample[9] == 0) { sample = sample[-9] } } 
 #    tuning_  = object$tuning
     fits    = object$fits 
     dolasso = fits[1]
@@ -233,7 +235,7 @@ summary.nested.glmnetr = function(object, cvfit=FALSE, pow=2, printg1=FALSE,
     if (dostep==1) { cv.stepreg.fit    = object$cv.stepreg.fit }  
     if (doaic ==1) { func.fit.aic      = object$func.fit.aic   }
 
-    if (!is.null(Call)) { 
+    if (call == 1) { 
       cat(paste0("\n","function call :\n\n"))  
       print(Call) 
       cat("\n") 

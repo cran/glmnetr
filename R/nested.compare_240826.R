@@ -100,7 +100,7 @@ nested.compare0 = function(a, b, pow=1, bootstrap=0, digits=4, txt=0) {
 #' nested.compare(fit3)
 #' }
 #' 
-nested.compare = function(object, type="devrat", digits=4,  pow=1) {
+nested.compare = function(object, type="devrat", digits=4, pow=1) {
   family =  object$sample[1]
   tuning  = object$tuning
   bootstrap = tuning[8] 
@@ -495,7 +495,7 @@ nested.compare = function(object, type="devrat", digits=4,  pow=1) {
 #' A redirect to nested.compare
 #'
 #' @description 
-#' See nested.compare(), as glmnetr() is depricated  
+#' See nested.compare(), as glmnetr.compcv() is depricated  
 #'
 #' @param object A nested.glmnetr output object.
 #' @param digits digits for printing of z-scores, p-values, etc. with default of 4 
@@ -509,11 +509,14 @@ nested.compare = function(object, type="devrat", digits=4,  pow=1) {
 #'  
 #' @return A printout to the R console. 
 #' 
+#' @seealso
+#'   \code{\link{nested.compare}}
+#' 
 #' @export
 #' 
 
 glmnetr.compcv = function(object, digits=4, type="devrat", pow=1) {
-  nested.compare(object, digits, type, pow) 
+  nested.compare(object, type, digits, pow) 
 }
   
 ###############################################################################################################

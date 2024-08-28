@@ -52,7 +52,7 @@ glmnetr_seed = function(seed, folds_n=10, folds_ann_n=NULL) {
       seed$seedt[1] = round(runif(1)*1e9)  
     } else if (seed$seedt[1]==0) { 
       seed$seedt[1] = round(runif(1)*1e9)  
-    }
+    } 
     seed$seedt = ifelse((seed$seedt==0), 1, seed$seedt)
     set.seed(seed$seedt[1])
     seedt_t = round(runif(folds_ann_n)*1e9) 
@@ -65,8 +65,9 @@ glmnetr_seed = function(seed, folds_n=10, folds_ann_n=NULL) {
         seed$seedr[i_+1] = seedr_t[i_] 
       } else if (seedr_==0) { 
         seed$seedr[i_+1] = seedr_t[i_] 
-      }
+      } 
     }
+    seed$seedr = seed$seedr %% 2.147e9 
     seed$seedr = ifelse((seed$seedr==0), 1, seed$seedr)
 
     for (i_ in c(1:folds_ann_n)) {
@@ -77,8 +78,9 @@ glmnetr_seed = function(seed, folds_n=10, folds_ann_n=NULL) {
         seed$seedt[i_+1] = seedt_t[i_]  
       } else if (seedt_==0) { 
         seed$seedt[i_+1] = seedt_t[i_] 
-      }
+      } 
     }
+    seed$seedt = seed$seedt %% 2.147e9 
     seed$seedt = ifelse((seed$seedt==0), 1, seed$seedt)
     
   } else {                            ########################### seed a numeric   
@@ -255,10 +257,68 @@ get.foldid = function( y_, event, family, folds_n , stratified = 1 ) {
   }
   return( foldid )
 }
+################################################################################
+################################################################################
+#' Get foldid's when id variable is used to identify groups of dependent 
+#' sampling units. With branching for cox, binomial and gaussian models 
+#'
+#' @param y_ see help for cv.glmnetr() or nested.glmnetr() 
+#' @param event see help for cv.glmnetr() or nested.glmnetr() 
+#' @param id see help for nested.glmnetr() 
+#' @param family see help for cv.glmnetr() or nested.glmnetr() 
+#' @param folds_n see help for cv.glmnetr() or nested.glmnetr() 
+#' @param stratified see help for cv.glmnetr() or nested.glmnetr() 
+#' 
+#' @return A numeric vector with foldid's for use in a cross validation 
+#' 
+#' @importFrom stats aggregate 
+#' 
+#' @seealso
+#'   \code{\link{factor.foldid}} , \code{\link{nested.glmnetr}} 
+#'  
+#' @export
+#' 
+get.id.foldid = function(y_, event, id, family, folds_n, stratified) {
+  rder = c(1:length(y_))
+  dftmp = as.data.frame( cbind(rder, id, y_) ) 
+  if (family %in% c("cox")) { 
+    dftmp$event = event 
+    sumsby = aggregate(dftmp$event, list(dftmp$id), FUN=sum)
+    colnames(sumsby) = c("id","event")
+    sumsby$y_ = sumsby$event 
+    sumsby$event = 1*(sumsby$event > 0)
+  } else if (family %in% c("binomial")) { 
+    sumsby = aggregate(dftmp$y_, list(dftmp$id), FUN=sum)
+    colnames(sumsby) = c("id","y_")
+    sumsby$y_ = 1*(sumsby$y_>0)
+    if (length(unique(sumsby$event))==1) { stratified = 0 ; print(" stratified = 0 ")}
+    sumsby$event = NULL
+  } else {
+    sumsby = aggregate(dftmp$y_, list(dftmp$id), FUN=mean)
+    colnames(sumsby) = c("id","y_")
+    sumsby$event = NULL
+  }
+#  print( sumsby )
+#  print( sumsby$id )
+#  print( sumsby$event )
+  foldidtmp = get.foldid(sumsby$y_, sumsby$event, family, folds_n, stratified=stratified)    ##<<------------------
+  foldidkey = as.data.frame( cbind(sumsby$id, foldidtmp) )
+  names(foldidkey) = c("id","foldid")
+  dftmp[1:10,]
+  foldidkey[1:10,]
+  dfmerged = merge(dftmp, foldidkey)
+  dfmerged[1:10,]
+  if (family != "cox") {
+    dfmerged = dfmerged[order(dfmerged$rder) ,] [,c(2,1,3,4)]
+  } else {
+    dfmerged = dfmerged[order(dfmerged$rder) ,] [,c(2,1,4,5)]
+  }
+  foldid = dfmerged[,4] 
+  return(list(foldid=foldid,foldidkey=foldidkey))
+}
 
 ################################################################################
 ################################################################################
-
 
 #' Calculate the CoxPH saturated log-likelihood
 #'
@@ -391,6 +451,8 @@ diff_time = function(time_start=NULL, time_last=NULL) {
 #' @param intr either NULL for no interactions or a vector of length 3 to impose a 
 #' product effect as decribed by 
 #' intr[1]*xs[,3]*xs[,8] + intr[2]*xs[,4]*xs[,16] + intr[3]*xs[,18]*xs[,19] + intr[4]*xs[,21]*xs[,22]
+#' @param nid number of id levels where each level is associated with a random 
+#' effect, of variance 1 for normal data.  
 #'
 #' @return A list with elements xs for desing matrix, y_ for a quantitative outcome, 
 #' yt for a survival time, event for an indicator of event (1) or censoring (0), 
@@ -418,7 +480,7 @@ diff_time = function(time_start=NULL, time_last=NULL) {
 #' xs=sim.data$xs 
 #' y_=sim.data$yb
 #' 
-glmnetr.simdata = function(nrows=1000, ncols=100, beta=NULL, intr=NULL) {
+glmnetr.simdata = function(nrows=1000, ncols=100, beta=NULL, intr=NULL, nid=NULL) {
   if (nrows<100) {nrows=100}
   if (ncols<17) {ncols=17}
   if (is.null(beta)) {
@@ -469,7 +531,28 @@ glmnetr.simdata = function(nrows=1000, ncols=100, beta=NULL, intr=NULL) {
   }
   var(score)
   # normal 
-  y_ = as.vector( score ) + rnorm(nrows) 
+
+  if (!is.null(nid)) {
+    ids = rep(c(1:nid),ceiling(nrows/nid) ) [1:nrows]
+    dfids = as.data.frame(cbind(1:nrows,ids))
+    names(dfids) = c('order','id')
+#    dfids
+
+    dftmp2 = as.data.frame(cbind(c(1:nid),rnorm(nid)))
+    names(dftmp2) = c('id','rnrm')
+#    dftmp2
+    
+    dfran = merge(dfids,dftmp2)
+#    dfran[1:10,]
+    
+    dfran = dfran[order(dfran$order) ,c(2,1,3)] 
+
+    id = dfran$id
+    score = score + dfran$rnrm 
+  } else { id = NULL }
+  
+  y_ = as.vector( score ) + rnorm( nrows ) 
+  
   # survival exponential 
   ct = 2*as.vector( -log(runif(nrows)) )
   rates = exp(score)
@@ -495,7 +578,7 @@ glmnetr.simdata = function(nrows=1000, ncols=100, beta=NULL, intr=NULL) {
   #  length(event)
   #  length(yt)
   #  sum(event)
-  return(list(xs=xs,start=start,y_=y_, yt=yt, event=event,yb=yb, beta=beta))
+  return(list(xs=xs,start=start,y_=y_, yt=yt, id=id, event=event,yb=yb, beta=beta))
 }
 
 ###############################################################################################################
