@@ -190,7 +190,7 @@ xgb.simple = function(train.xgb.dat,
 #' fit.  The list can have elements $nfold, $nrounds,
 #' and $early_stopping_rounds, each numerical values of length 1, $folds, a list as 
 #' used by xgb.cv() do identify folds for cross validation, and $eta, $gamma, $max_depth, 
-#' $min_child_seight, $colsample_bytree, $lambda, $alpha and $subsample, each a numeric 
+#' $min_child_weight, $colsample_bytree, $lambda, $alpha and $subsample, each a numeric 
 #' of length 2 giving the lower and upper values for the respective tuning 
 #' parameter.  The meaning of these terms is as in 'xgboost' xgb.train().  If 
 #' not provided defaults will be used.  Defaults

@@ -1,9 +1,9 @@
 ################################################################################
-
+ 
 #  library(glmnetr)
 #  library(splines)
 #  library(survival)
-
+ 
 ################################################################################
 ################################################################################
 
@@ -17,7 +17,14 @@
 #' @param df The degrees of freedom for the spline function, default=5. 
 #' @param resample 1 to base the splines on the leave out X*Beta's ($xbetas.cv), or 0 to 
 #' use the naive X*Beta's ($xbetas).
-#' @param trim the percent of top and bottom of the data to be trimed way when 
+#' @param oob 1 (default) to construct calibration plots using the out of bag 
+#' data points, 0 to use inbag (including resampled data points) data 
+#' points. Only applies when bootstrap is used instead of k-fold cross 
+#' validation. 
+#' @param bootci Calculate bootstrap confidence ientervals for calibration 
+#' curves. This is for exploration only. The applicability of bootstrap 
+#' confidence intervals for these calibration curves is questionable. 
+#' @param trim the percent of top and bottom of the data to be trimmed away when 
 #' producing plots.
 #' @param plot 1 by default to plot the calibration
 #' @param lwd line width for plots, 1 by default
@@ -39,9 +46,9 @@
 #' on the axes, e.g. 2, exp(1), sqrt(10) or 10.  The default of 0 plots the 
 #' X*Beta.  This only applies for "cox" survival data models.   
 #' @param repn The replication or repeat number for (nested) CV or bootstrap.
-#' @param knottype 1 (default) to use OOB (out of bag) test validation data when 
-#' choosing ns() knots for gaussian and binomial families, 2 to use the larger 
-#' training data 
+#' @param knottype 1 (default) to use XBeta used for the spline fit to 
+#' choose ns() knots for gaussian and binomial families, 2 to use the XBeta
+#' from all re-samples to determine the knots.  
 #' @param ... allowance to pass terms to the invoked plot function
 #'
 #' @return Plots are returned by default, and optionally data for plots are 
@@ -57,18 +64,30 @@
 #' 
 #' @noRd
 
-calplot0 = function(object1, wbeta=NULL, df=5, resample=1, repn=NULL, knottype=1,
+calplot0 = function(object1, wbeta=NULL, df=5, resample=1, oob=1, bootci=0, repn=NULL, knottype=1,
                     trim=0, plot=1, lwd=1, title=NULL, xlim=NULL, ylim=NULL, xlab=NULL, ylab=NULL, 
                     col.term=1, col.se=2, rug=1, plothr=0, ... ) {
+#  print(c(100, oob ))  
   ## resample replaces cv 
   ## repn replaces fold 
   #  object1 = object ; wbeta = 5 ; df = 3 ; resample = 1 ; trim = 0 ; repn = 1 ; plot = 1 ; lwd = 1 ; title=NULL ; xlim=NULL ; ylim=NULL ; xlab=NULL ; ylab=NULL ; col.term=1 ; col.se=2 ; rug=1 ; plothr=0 ; knottype=0 ; 
-  #  plot=plotfold_ ; title=paste("repn",i_) ;    
+  #  plot=plotfold_ ; title=paste("repn",i_) ; 
+  
+#  object1 = object ; repn=NULL ; knottype=1 ; lwd=2 ;                           ## naive calibration plot test 
   
   family = object1$sample[1] 
   bootstrap =  as.numeric( object1$tuning[8] ) 
   folds_n = as.numeric( object1$tuning[1] )
   
+  if (!(knottype %in% c(-1,0,1,2,3))) { knottype = 1 } 
+#  if ( bootstrap == 0 ) { bootci = 0 }
+#  if ( bootstrap == 1) {
+#    if ( (bootci == 1) & (oob == 1) ) { cat("  For (bootci == 1) & (oob == 1), oob is set to 0") ; oob = 0 ; }
+#  }
+  
+#  print(c(resample,bootstrap,oob,folds_n)) 
+  
+  ## check that resampling was done in original analysis 
   if (resample == 1) {
     if (bootstrap == 0) {
       if ( is.null(object1$xbetas.cv) ) {
@@ -77,7 +96,7 @@ calplot0 = function(object1, wbeta=NULL, df=5, resample=1, repn=NULL, knottype=1
       }
     }
     if (bootstrap >= 1) {
-      if (is.null(object1$xbetas.boot) ) {
+      if (is.null(object1$xbetas.boot.oob) ) {
         resample = 0 
         cat(paste("  xbeta.boot is NULL so resample set to 0\n"))
       }
@@ -85,147 +104,153 @@ calplot0 = function(object1, wbeta=NULL, df=5, resample=1, repn=NULL, knottype=1
   }
   
   stop_ = 0 
-  #    print( data.frame(cbind( varxb, num=1:length(varxb))) )
   
-  ##  if (stop_ == 0) {
+  ##### get range of full model data ###########################################
+  minxb = min( object1$xbetas[,wbeta ] )                                        # object1$xbetas[1:10 , wbeta, drop=FALSE ] # xb.hat.p[1:10]
+  maxxb = max( object1$xbetas[,wbeta ] )
+  fully_ = object1$y_                                                           # length(fully_) # fully_[1:20] # yt[1:20] # (fully_[1:20]<0)
   
-  ##---------------------
+#    print( data.frame(cbind( varxb, num=1:length(varxb))) )
+  
+##---------------------
+  
+#  print(c(resample,bootstrap,oob)) 
   if (resample == 1) { 
     if (bootstrap == 0) {
       origxb = object1$xbetas.cv[,wbeta ]  
       xbname = colnames(object1$xbetas.cv)[wbeta] 
     } else if (bootstrap >= 1) {
-      origxb = object1$xbetas.boot[,wbeta+2 ]  
-      xbname = colnames(object1$xbetas.boot)[wbeta+2] 
+      if (oob == 1) { 
+        origxb = object1$xbetas.boot.oob[,wbeta+2 ]  
+        xbname = colnames(object1$xbetas.boot.oob)[wbeta+2] 
+      } else {
+        origxb = object1$xbetas.boot.inb[,wbeta+2 ]  
+        xbname = colnames(object1$xbetas.boot.inb)[wbeta+2] 
+#        print("Here 241010 1")
+      }
     }
-  } else { 
-    origxb = object1$xbetas[,wbeta]  
+  } else { ## if (resample == 0)
+    origxb = object1$xbetas[,wbeta]                                             ## cbind(origxb , xb.hat.p )[1:20,]
     xbname = colnames(object1$xbetas)[wbeta]  
   }
+  
   ##---------------------
 
-  maxxb = max(origxb)
-  minxb = min(origxb)
-  c( minxb , maxxb ) 
-  length(origxb) 
-  
-  origy_ = object1$y_  
-  length(origy_) 
-  
-  ##---------------------
+  ## select subset for single fold or bootstrap sample, if applicable ----------
   if ( (resample == 1) & (!is.null(repn)) ) {
     if (bootstrap == 0) {
       foldid = object1$foldid 
-      table( foldid )
-      y_oob  = origy_[ (foldid == repn) ]      
-      xb_oob = origxb[ (foldid == repn) ]
+      table( foldid ) 
+      xb_ = origxb[ (foldid == repn) ] 
+      y_  = fully_[ (foldid == repn) ] 
     } else if (bootstrap >= 1) {
-      oob = object1$xbetas.boot[object1$xbetas.boot[,1]==repn,2]
-      y_oob  = origy_[ oob ]
-      length( y_oob )
-      xb_oob = origxb[ object1$xbetas.boot[,1]==repn ]
-#      length( origxb ) / 25
-#      length( xb_oob ) 
+      if (oob == 1) { 
+        xb_ = origxb[ object1$xbetas.boot.oob[,1]==repn ]                       ## check this 
+        oob_tmp = object1$xbetas.boot.oob[object1$xbetas.boot.oob[,1]==repn,2]  ## out of bag sequence IDs 
+        y_  = fully_[ oob_tmp ]                                                 ## get correpsoing y_'s 
+      } else { 
+        xb_ = origxb[ object1$xbetas.boot.inb[,1]==repn ]                       ## check this 
+        inb_tmp = object1$xbetas.boot.inb[object1$xbetas.boot.inb[,1]==repn,2]  ## out of bag sequence IDs 
+        y_  = fully_[ inb_tmp ]                                                 ## get corresponding y_'s 
+      } 
     }
   }
   ##---------------------
   
-#  print(origy_[1:20])
-  
-  ##---------------------
+  ## data for all rows -- really only makes sense for cross validation ---------
+  ## and only for inspection, not intended for inference -----------------------
   if ( (resample == 1) & (is.null(repn)) ) {
     if (bootstrap == 0) {
-      y_oob  = origy_
-      xb_oob = origxb
+      y_  = fully_
+      xb_ = origxb
     } 
-    if (bootstrap >= 1) {
+    if (bootstrap >= 1) {                              
+      xb_ = origxb 
       for ( i_ in c(1:object1$tuning[8])) {
-        oob_tmp = object1$xbetas.boot[object1$xbetas.boot[,1]==i_,2]
-        y_oob_tmp = origy_[oob_tmp]
-        if (i_ == 1) { y_oob = y_oob_tmp 
-        } else if (i_ != 1) { y_oob = c(y_oob,y_oob_tmp) } 
-#        cat(paste(" y_oob_tmp " , length( y_oob_tmp ) , " y_oob " , length( y_oob ) , "\n" ))  
+        oob_tmp = object1$xbetas.boot.oob[object1$xbetas.boot.oob[,1]==i_,2]
+        y_tmp  = fully_[oob_tmp]
+        xb_tmp = origxb[oob_tmp]
+        if (i_ == 1) { 
+          resampno = rep(1,length(y_tmp))
+          y_ = y_tmp
+          xb_ = xb_tmp
+        } else if (i_ != 1) { 
+          resampno = rep(i_,length(y_tmp))
+          y_ = c(y_,y_tmp)
+          xb_ = c(xb_,xb_tmp)
+        } 
       }
-      xb_oob = origxb 
     }
   }
   ##---------------------
-  
-#  print(y_oob[1:10])
-#  print(xb_oob[1:10])
-#  print( length( xb_oob ) )
-#  print( length( y_oob ) )
-  
-#  cat(paste("1 var xb_oob = ", var(xb_oob), "\n"))
-  
-  ##---------------------
+ 
+  ##----- calibrate naively without resampling, i.e. using model based upon all data ---------------------
+  ##----- uses folds but more for inspection than inference ---------
+  ##                                                                            ## check, avoid for bootstrap >=1, resample = 0 and !is.null(repn)
   if ( (resample == 0) & (!is.null(repn)) ) {
     foldid = object1$foldid 
-    y_oob  = origy_[ (foldid == repn) ]      
-    xb_oob = origxb[ (foldid == repn) ]
+    y_  = fully_[ (foldid == repn) ]  
+    xb_ = origxb[ (foldid == repn) ] 
   }
   ##---------------------
   
   ##---------------------
   if ( (resample == 0) & (is.null(repn)) ) {
-    y_oob  = origy_
-    xb_oob = origxb
+    y_  = fully_                                                                # length(y_) # y_[1:20] # yt[1:20]
+    xb_ = origxb                                                                ## cbind(xb_ , xb.hat.p )[1:20,]
+#    print(xb_[1:10])
   }
   ##---------------------
   
-  length( y_oob ) 
-  length( xb_oob )
+  c( length( y_ ) , length( xb_ ) ) 
   
-#  cat(paste("2 var xb_oob = ", var(xb_oob), "\n"))
-  
-  #      y_oob  = origy_ 
-  #      xb_oob = origxb 
-  #      xb_inb = origy_
-  ####    } ## line 90
-  #    xb_oob
-  minxb_oob = min(xb_oob)
-  maxxb_oob = max(xb_oob)
-  c( minxb_oob , maxxb_oob )
-  
-  ordr = order(xb_oob)
-  xb_oob = xb_oob[ordr]
-  y_oob  = y_oob[ordr]
-#  cat(paste("3 var xb_oob = ", var(xb_oob), "\n"))
+  ## get range of actual data for plotting individual spline fits 
+  minxb_ = min(xb_) 
+  maxxb_ = max(xb_) 
+
+#  print(c(bootci,resample,repn))
+
+  ## reorder data in terms of xb_ 
+  ordr = order(xb_)                                                             ## table(table(ordr)) ; summary(xb_) ; summary(y_) ; 
+  xb_ = xb_[ordr] 
+  y_  = y_ [ordr]                                                               ## summary(xb_) ; summary(y_) ; 
+#  cat(paste("3 var xb_ = ", var(xb_), "\n"))
   
   if (family == "cox") {
-    length(table(table(xb_oob))) 
-    lxb_oob = length(unique(xb_oob))
-    if ( lxb_oob < (df+1))  { df = lxb_oob - 1 }
+ #   length(table(table(xb_))) 
+    lxb_ = length(unique(xb_))
+    if ( lxb_ < (df+1))  { df = lxb_ - 1 }
     if (df > 1) {
-      object2 = coxph(y_oob ~ pspline(xb_oob,df=df), data=as.data.frame(cbind(y_oob, xb_oob)) ) 
+      object2 = coxph(y_ ~ pspline(xb_,df=df), data=as.data.frame(cbind(y_, xb_)) )                         # termplot(object2,1) ; abline(a=0,b=1) ; title("calplot")
+#      object3 = coxph(Surv(yt,event) ~ pspline(xb_,df=df), data=as.data.frame(cbind(yt, event, xb.hat.p)) ) # termplot(object3,1) ; abline(a=0,b=1) ; title("predict()")
     } else {
-      object2 = coxph(y_oob ~ xb_oob, data=as.data.frame(cbind(y_oob, xb_oob)) ) 
+      object2 = coxph(y_ ~ xb_, data=as.data.frame(cbind(y_, xb_)) ) 
     }
   } else {
-    if (var(xb_oob)>0) { 
+    if (var(xb_)>0) { 
       #        cat( paste( "knottype = " , knottype, "\n" ) )   
-      if        (knottype == 2) { myspline = ns(origxb, df=df, intercept=FALSE ) 
-      } else if (knottype == 2) { myspline = ns(origxb, df=df, intercept=FALSE )
-      } else if (knottype == 0) { myspline = ns(xb_oob, df=df, intercept=FALSE )  
-      } else if (knottype == 1) { myspline = ns(xb_oob, df=df, intercept=FALSE ) }
-      if (knottype==0) { 
+      if        (knottype == 1) { myspline = ns(xb_, df=df, intercept=FALSE)  
+      } else if (knottype == 2) { myspline = ns(origxb, df=df, intercept=FALSE)
+      } else if (knottype == 3) { myspline = ns(object1$xbetas[,wbeta ], df=df, intercept=FALSE) 
+      } else if (knottype <= 0) { myspline = ns(xb_, df=df, intercept=FALSE) } 
+      if (knottype<=0) { 
         print("Outside spline") 
         print(attr(myspline,c("degree")))
         print(attr(myspline,c("knots")))
         print(attr(myspline,c("Boundary.knots")))
         print(attr(myspline,c("intercept")))
       }
-      if (knottype %in% c(1,2)) { 
+      if (knottype %in% c(1,2,3)) { 
         Knots = attr(myspline,"knots")
         Boundary.Knots = attr(myspline,"Boundary.knots")
-        object2 = glm(y_oob ~ ns(xb_oob,knots=Knots, Boundary.knots=Boundary.Knots) , family=family ) # data=as.data.frame(cbind(y_oob, xb))  
+        object2 = glm(y_ ~ ns(xb_,knots=Knots, Boundary.knots=Boundary.Knots) , family=family ) # data=as.data.frame(cbind(y_, xb))  
       } 
-      if (knottype == 0) { 
-        object2 = glm(y_oob ~ ns(xb_oob,df=df) , family=family ) # data=as.data.frame(cbind(y_oob, xb))  
+      if (knottype <= 0) { 
+        object2 = glm(y_ ~ ns(xb_,df=df) , family=family ) # data=as.data.frame(cbind(y_, xb))  
         if (knottype==-1) { str(object2$model) }
       } 
     } else {
-      object2 = glm(y_oob ~ 1 , family=family ) # data=as.data.frame(cbind(y_oob, xb))  
+      object2 = glm(y_ ~ 1 , family=family ) # data=as.data.frame(cbind(y_, xb))  
     }
     summary(object2)
   }
@@ -233,15 +258,17 @@ calplot0 = function(object1, wbeta=NULL, df=5, resample=1, repn=NULL, knottype=1
   plotxb = minxb + rep(0:100)*(maxxb-minxb)/100
   
   ## mean(predict(object2)) ## 9e-16
-  meancalxb =  mean(predict(object2,data.frame(xb_oob=origxb)))
+  meancalxb = mean(predict(object2,data.frame(xb_=origxb)))
   #      cat( paste(title, meancalxb, "\n" ) )  ## 9e-16
-  meanxb_oob = mean(xb_oob)
-  dfr = data.frame(xb_oob=plotxb)
+  meanxb_ = mean(xb_)
+  dfr = data.frame(xb_=plotxb)                   ## title="derived range" 
+#  dfr = data.frame(xb_=xb_)                     ## title="original data"
   est = predict(object2, newdata=dfr)   
-  predicteds = predict(object2, newdata=data.frame(xb_oob=plotxb), se=TRUE)  
+  predicteds = predict(object2, newdata=data.frame(xb_=plotxb), se=TRUE)  
   est = predicteds$fit
   se = predicteds$se.fit
   estci = cbind(plotxb, est, se, est - 2 * se, est + 2 * se)
+#  estci = cbind(plotxb, est, se, est - qnorm(0.975) * se, est + qnorm(0.975) * se)
   
   lty1 = 1 ; lty2 = 2 ;   
   if (is.null(ylab)) {
@@ -255,8 +282,8 @@ calplot0 = function(object1, wbeta=NULL, df=5, resample=1, repn=NULL, knottype=1
       ylab = "Calibrated X*Beta"
     } 
   }
-  if (is.null(xlab)) { xlab = myxlab(family, plothr, resample, xbname, bootstrap) }
-  xlims = quantile(xb_oob, (c(trim,(100-trim))/100))
+  if (is.null(xlab)) { xlab = myxlab(family, plothr, resample, oob, xbname, bootstrap, bootci) }
+  xlims = quantile(xb_, (c(trim,(100-trim))/100))
   #    print(xlims)
   summary(estci[,1])
   #    estci_ = estci[((estci[,1]>=xlims[1]) & (estci[,1]<= xlims[2])),]
@@ -264,9 +291,9 @@ calplot0 = function(object1, wbeta=NULL, df=5, resample=1, repn=NULL, knottype=1
   if (is.null(xlim)) { xlim = c(minxb, maxxb) }
   if (is.null(ylim)) { ylim = c(min(estci[,2]), max(estci[,2])) }
   if (plot %in% c(1,2)) {
-    if ((minxb < minxb_oob) | (maxxb > maxxb_oob)) { 
-      indxlo = c(1:length(estci[,1])) [ estci[,1] < minxb_oob ] 
-      indxhi = c(1:length(estci[,1])) [ estci[,1] > maxxb_oob ] 
+    if ((minxb < minxb_) | (maxxb > maxxb_)) { 
+      indxlo = c(1:length(estci[,1])) [ estci[,1] < minxb_ ] 
+      indxhi = c(1:length(estci[,1])) [ estci[,1] > maxxb_ ] 
       if ( length( c(indxlo,indxhi) ) > 0) {
         indxfold = c(1:length(estci[,1])) [-c(indxlo,indxhi) ] 
       } else {
@@ -289,7 +316,7 @@ calplot0 = function(object1, wbeta=NULL, df=5, resample=1, repn=NULL, knottype=1
     }
     
     if (family == "cox") {
-      abline(a=-meanxb_oob, b=1, lty=3)
+      abline(a=-meanxb_, b=1, lty=3)
       abline(h=0, lty=1)
       myaxis(ylim, plothr, est , side=2)
       myaxis(xlim, plothr, plotxb, side=1)
@@ -300,20 +327,20 @@ calplot0 = function(object1, wbeta=NULL, df=5, resample=1, repn=NULL, knottype=1
     }
     box() 
     
-    keep_  = ((xb_oob >= xlim[1]) & (xb_oob <= xlim[2]))
+    keep_  = ((xb_ >= xlim[1]) & (xb_ <= xlim[2]))
     if (sum(keep_==0) > 0) {
       cat(paste("  Due to user specified xlim ", sum(keep_==0) , "tick marks are not displayed repn (replicaiton number) ", repn, ")\n"))
     }
-#    print(length(xb_oob))
-    xb_oob = xb_oob[ keep_ ]
-    y_oob = y_oob[ keep_ ]
-#    print(length(xb_oob))
-    if (rug == 1) { myrug(xb_oob, y_oob, family) } 
+#    print(length(xb_))
+    xb_ = xb_[ keep_ ]
+    y_  = y_ [ keep_ ]
+#    print(length(xb_))
+    if (rug == 1) { myrug(xb_, y_, family) } 
     if (!is.null(title)) { title ( title ) }
     #        termplot(object2, terms=1,se=TRUE, xlab=xlab, ylab="Calibrated log(HR)", lwd.term=lwd, lwd.se=lwd )
   }
   if (plot %in% c(0,2)) {
-    return( list( estci=estci, meancalxb=meancalxb, meanxb_oob=meanxb_oob, minmax=c(minxb_oob,maxxb_oob), xb_oob=xb_oob, y_oob=y_oob ) )
+    return( list( estci=estci, meancalxb=meancalxb, meanxb_=meanxb_, minmax=c(minxb_,maxxb_), xb_=xb_, y_=y_ ) )
   }
 }
 
@@ -354,22 +381,34 @@ calplot0 = function(object1, wbeta=NULL, df=5, resample=1, repn=NULL, knottype=1
 #' will be directed to the console.  
 #' @param df The degrees of freedom for the spline function 
 #' @param resample 1 to base the splines on the leave out X*Beta's ($xbetas.cv 
-#' or $xbetas.boot), or 0 to use the naive X*Beta's ($xbetas).  This can be done 
+#' or $xbetas.boot.oob), or 0 to use the naive X*Beta's ($xbetas).  This can be done 
 #' to see biases associated with the naive approach. 
-#' @param usefold 1 (default) to base the calibration by first fitting splines for 
-#' each individual fold and then averaging, 0 to base the calibration on a single
-#' spline fit using all X*Beta. 
+#' @param oob 1 (default) to construct calibration plots using the out-of-bag 
+#' data points, 0 to use in bag (including resampled data points) data 
+#' points. This option only applies when bootstrap is used instead of k-fold 
+#' cross validation, and when resample is set to 1. For cross validation 
+#' evaluations out-of-bag samples (folds) are always used for evaluation. The 
+#' purpose of oob = 0 is to allow evaluation of the variability of 
+#' bootstrap calibrations ignoring bias like done in Riley et al., 2023,
+#' doi: 10.1186/s12916-023-03212-y and Austin and Steyerberg 2013, 
+#' doi: 10.1002/sim.5941
+#' @param bootci 1 to calculate bootstrap confidence intervals for calibration 
+#' curves adjusting for bias, 0 (default) to simply plot the calibration curves 
+#' based upon the inbag data. This is for exploration only, and only when 
+#' bootstrap samples were used for model performance evaluation. The 
+#' applicability of bootstrap confidence intervals for these calibration curves 
+#' is questionable. If bootci is set to 1 then oob is set to 0.   
 #' @param plot 1 by default to produce plots, 0 to output data for plots only, 
 #' 2 to plot and output data. 
 #' @param plotfold 0 by default to not plot the individual fold calibrations, 1 
 #' to overlay the k leave out spline calibration fits in a single figure and 2 
-#' to produce seperate plots for each of the k hold out calibration curves. 
+#' to produce separate plots for each of the k hold out calibration curves. 
 #' @param plothr  a power > 1 determining the spacing of the values 
 #' on the axes, e.g. 2, exp(1), sqrt(10) or 10.  The default of 0 plots the 
 #' X*Beta.  This only applies fore "cox" survival data models. 
-#' @param knottype 1 (default) to use OOB (out of bag) test validation data when 
-#' choosing ns() knots for gaussian and binomial families, 2 to use the larger 
-#' training data 
+#' @param knottype 1 (default) to use XBeta used for the spline fit to 
+#' choose knots in ns() for gaussian and binomial families, 2 to use the XBeta
+#' from all re-samples to determine the knots. 
 #' @param trim the percent of top and bottom of the data to be trimmed away when 
 #' producing plots.  The original data are still used used calcualting the curves 
 #' for plotting. 
@@ -393,8 +432,7 @@ calplot0 = function(object1, wbeta=NULL, df=5, resample=1, repn=NULL, knottype=1
 #' to be used in the rug when using bootstraping for model evaluation as sample 
 #' elements may be included multiple times as test (Out Of Bag) data.
 #' @param cv Deprecated. Use resample option instead.
-#' @param fold Deprecated.  Use instead usefold. fold is too easily confused with a 
-#' single fold for plotting.
+#' @param fold Deprecated. This term is now ignored.
 #' @param ... allowance to pass terms to the invoked plot function  
 #'
 #' @return Calibration plots are returned by default, and optionally data for plots 
@@ -407,17 +445,23 @@ calplot0 = function(object1, wbeta=NULL, df=5, resample=1, repn=NULL, knottype=1
 #'
 #' @export
 #'
-calplot = function(object, wbeta=NULL, df=3, resample=NULL, usefold=1, 
+calplot = function(object, wbeta=NULL, df=3, resample=NULL, oob=1, bootci=0, 
                    plot=1, plotfold=0, plothr=0, knottype=1, trim=0, vref=0, xlim=NULL, ylim=NULL, 
                    xlab=NULL, ylab=NULL, col.term=1, col.se=2, rug=1, seed=NULL, cv=NULL, fold=NULL, ... ) {
-  
+usefold = 1   
+# print(c(101, oob ))  
 #  cat( paste( " knottype 1 =", knottype, "\n")) 
-# wbeta=5 ; df=3 ; resample=1 ; trim=0 ; vref=0 ; usefold=1 ; plot=1 ; plotfold=0 ; xlim=NULL ; ylim=NULL ; xlab=NULL ; ylab=NULL ; col.term=1 ; col.se=2 ; rug=1 ; plothr=0 ; knottype=0 ; cv=1 ; fold=NULL
-  
+# wbeta=5 ; df=3 ; resample=1 ; oob=1 ; bootci=0 ; trim=0 ; vref=0 ; plot=1 ; plotfold=0 ; xlim=NULL ; ylim=NULL ; xlab=NULL ; ylab=NULL ; col.term=1 ; col.se=2 ; rug=1 ; seed=NULL ; plothr=0 ; knottype=0 ; resample=1 ; fold=NULL ; cv=NULL ; 
+# usefold=1 ; plot = 2 ; 
+# resample=0 ; 
+
+# object=nested.bin.boot.fit ; wbeta=16 ; bootci=0 ; oob=0 ; plotfold=1 ;
+
 # object = nested.bin.fit3B 
 # object = nested.bin.fit10Boot 
 # object=nps_csf_glo_ratcap_fit
 # object=nested_glmnetr_fit_hp_las
+# object = nested.cox.fit 
 # object1 = object ;
   
 #  object1 = object ;  lwd=2 ;  trim = 0 ; usefold=NULL ;  
@@ -425,6 +469,7 @@ calplot = function(object, wbeta=NULL, df=3, resample=NULL, usefold=1,
   
 #  cat(paste("HERE1",ylim[1],ylim[2],"\n"))
   
+  ## for random selection of subset of resamples for plotting 
   if (!is.null(seed)) { 
     seedr_ = seed
   } else { 
@@ -434,15 +479,15 @@ calplot = function(object, wbeta=NULL, df=3, resample=NULL, usefold=1,
   
   set.seed( seedr_ ) 
   
-  if ( (!is.null(fold)) & (is.null(usefold)) ) { 
-    usefold = fold
-    cat(paste("  fold is deprecated and will be dropped from future versions. Use usefold instead\n", 
-              " as its meaning is clearer, though it also applies to bootstrap resamples." ))
-  } else if ( is.null(usefold) ) { usefold = 1 } 
+##  if ( (!is.null(fold)) & (is.null(usefold)) ) { 
+##    usefold = fold
+##    cat(paste("  fold is deprecated and will be dropped from future versions. Use usefold instead\n", 
+##              " as its meaning is clearer, though it also applies to bootstrap resamples." ))
+##  } else if ( is.null(usefold) ) { usefold = 1 } 
   
   if ((!is.null(cv)) & (is.null(resample))) {
     resample = cv 
-      cat(paste("  cv is deprecated and will be dropped from future versions. Use resample instead\n", 
+    cat(paste("  cv is deprecated and will be dropped from future versions. Use resample instead\n", 
                 " as its meaning is clearer, as it also applies to bootstrap resamples." ))
   }
   if (is.null(resample)) { 
@@ -451,38 +496,40 @@ calplot = function(object, wbeta=NULL, df=3, resample=NULL, usefold=1,
   
   #----------------------------------------
   
+  if ( plothr == 1 ) { plothr = exp(1) }
+  
   family = object$sample[1] 
   tuning = object$tuning 
   bootstrap = as.numeric( tuning[8] )
   unique    = as.numeric( tuning[9] )
   nobs = object$sample[2] 
   
-#  print(c(resample, bootstrap, usefold))
-  
-  if ((resample==0) & (bootstrap >= 1) & (usefold==1)) {
-    usefold = 0 
-    cat(paste( "For ((resample==0) & (bootstrap==1)), usefold is set to 0\n"))
-  }
-  
-  if ((!is.null(fold)) & (!is.null(usefold))) {
-    if (usefold != fold) {
-      cat(paste0(" fold is depricated, please use instead usefold. fold is assinged value of usefold:" , usefold, "\n" ))
-    } 
-  } else if ((!is.null(fold)) & (is.null(usefold))) { 
-    usefold = fold
-  }
-  
-  if ( plothr == 1 ) { plothr = exp(1) }
-  
   if ((bootstrap == 0) & (is.null(object$xbetas.cv))) {
     resample = 0 
     cat(paste("  xbeta.cv is NULL so resample set to 0\n"))
   } 
-  if ((bootstrap >= 1) & (is.null(object$xbetas.boot))) {
+  if ((bootstrap >= 1) & (is.null(object$xbetas.boot.oob))) {
     resample = 0 
-    cat(paste("  xbeta.cv is NULL so resample set to 0\n"))
+    cat(paste("  xbeta.boot.oob is NULL so resample set to 0\n"))
   } 
   
+  if (!(knottype %in% c(-1,0,1,2,3))) { knottype = 1 } 
+  if ( ( bootstrap == 0 ) & ( bootci == 1) ) { bootci = 0 ; cat("  bootci does not apply for cross validation evaluation so bootci is ignored") ; }
+  if ((bootstrap >= 1) & (bootci == 1)) {
+    if (resample != 1) { cat("  For (bootci == 1) & (resample == 0), resample is set to 1\n") ; resample = 1 ; }
+    if (oob      != 0) { cat("  For (bootci == 1) & (oob == 1), oob is set to 0\n") ; oob = 0 ; }
+    if (usefold  != 1) { usefold = 1 ; cat("  For (bootci == 1) & (usefold == 0), usefold is ignored\n") }
+    if (knottype != 1) { knottype= 1 ; # cat("  For (bootci == 1) & (knottype == 0), usefold is ignored\n")
+    }
+  }
+  
+#  print(c(resample, bootstrap, usefold))
+  
+  if ( (resample == 0) & (usefold == 1) ) {
+    usefold = 0 
+#    cat(paste( "For (resample==0), usefold is set to 0\n"))
+  }
+
   stop_ = 0 
   
   if (is.null(wbeta)) {
@@ -492,10 +539,10 @@ calplot = function(object, wbeta=NULL, df=3, resample=NULL, usefold=1,
         colnames(object$xbetas.cv)[1] = "null"
         Var = diag(cov((object$xbetas.cv))) 
       } else if (bootstrap >= 1) {
-#        colnames(object$xbetas.boot)[c(1,2)] = c("rep","oobid") 
-#        object$xbetas.boot[,-1] 
-#        cov(object$xbetas.boot[,-1])
-        Var = diag(cov(object$xbetas.boot[,-c(1,2)])) 
+#        colnames(object$xbetas.boot.oob)[c(1,2)] = c("rep","oobid") 
+#        object$xbetas.boot.oob[,-1] 
+#        cov(object$xbetas.boot.oob[,-1])
+        Var = diag(cov(object$xbetas.boot.oob[,-c(1,2)])) 
       }
     } else { 
       colnames(object$xbetas)[1] = "null"
@@ -510,13 +557,23 @@ calplot = function(object, wbeta=NULL, df=3, resample=NULL, usefold=1,
     stop_ = 1 
   } 
   
-  if (!(resample %in% c(-1,0,1))) { stop_ = 1 }                                   ## -1 ?? 
+  if (!(resample %in% c(-1,0,1))) { stop_ = 1 }                                 ## -1 ?? 
+  
+  if (resample == 0) { oob = 0 }
   
   if ( (stop_ == 0) & (usefold == 0) ) {
-    estci = calplot0(object, wbeta=wbeta, df=df, resample=resample, repn=NULL, knottype=1, 
+    estci = calplot0(object, wbeta=wbeta, df=df, resample=resample, oob=oob, repn=NULL, knottype=1, 
                      trim=trim, plot=plot, lwd=2, xlim=xlim, ylim=ylim, xlab=xlab, ylab=ylab, 
+                     col.term=col.term, col.se=col.se, rug=rug, plothr=plothr , ... )$estci 
+    stop_ = 2 
+#    print( estci )
+  }
+  
+  if ( (stop_ == 0) & (bootci == 1) ) {
+    estci_orig = calplot0(object, wbeta=wbeta, df=df, resample=0, bootci=1, oob=oob, repn=NULL, knottype=knottype, 
+                     trim=trim, plot=0, lwd=2, xlim=xlim, ylim=ylim, xlab=xlab, ylab=ylab, 
                      col.term=col.term, col.se=col.se, rug=rug, plothr=plothr , ... )$estci  
-    stop_ = 1 
+#    print( estci_orig[1:5,] )
   }
   
   if ( (stop_ == 0) & (usefold == 1) ) { 
@@ -524,24 +581,31 @@ calplot = function(object, wbeta=NULL, df=3, resample=NULL, usefold=1,
       if (bootstrap == 0) {
         xbeta = object$xbetas.cv[,wbeta ]  
         xbname = colnames(object$xbetas.cv)[wbeta] 
+      } else if ((bootstrap >= 1) & (oob == 1)) {
+        xbeta = object$xbetas.boot.oob[,wbeta+2 ]  
+        xbname = colnames(object$xbetas.boot.oob)[wbeta+2] 
       } else if (bootstrap >= 1) {
-        xbeta = object$xbetas.boot[,wbeta+2 ]  
-        xbname = colnames(object$xbetas.boot)[wbeta+2] 
+        xbeta = object$xbetas.boot.inb[,wbeta+2 ]  
+        xbname = colnames(object$xbetas.boot.inb)[wbeta+2] 
       }
     } else {
       xbeta = object$xbetas[,wbeta]  
       xbname = colnames(object$xbetas)[wbeta] 
-    }
-#    print(summary(xbeta))
+    } 
+#    print(xbeta[1:10])
     y_ = object$y_ ; 
     
     if (var(xbeta) == 0) {
       warning("  There may be no varaibalbity in the model X*Beta's\n",
               "    The calibration plot may be nonsensical")
     }
-    
-    maxxb = max(xbeta)
-    minxb = min(xbeta)
+
+    minxb = min(object$xbetas[,wbeta ]) 
+    maxxb = max(object$xbetas[,wbeta ]) 
+    if (bootci == 1) {
+#      minxb = min( object$xbetas[,wbeta+2 ], object$xbetas.boot.inb[,wbeta+2 ] )
+#      maxxb = max( object$xbetas[,wbeta+2 ], object$xbetas.boot.inb[,wbeta+2 ] )
+    }
     if (is.null(xlim)) {  xlim = c( minxb, maxxb )  }
     
     if (is.null(ylab)) {
@@ -553,10 +617,7 @@ calplot = function(object, wbeta=NULL, df=3, resample=NULL, usefold=1,
       }
     }
     
-    if (is.null(xlab)) { xlab = myxlab(family, plothr, resample, xbname, bootstrap) }
-    
-#    print(xlab) 
-#    print(ylab)
+    if (is.null(xlab)) { xlab = myxlab(family, plothr, resample, oob, xbname, bootstrap, bootci) }
     
     folds_n = as.numeric( object$tuning[1] )
     if (!(plotfold %in% c(0,1,2))) { plotfold = 0 }                             ## save estimates
@@ -567,25 +628,23 @@ calplot = function(object, wbeta=NULL, df=3, resample=NULL, usefold=1,
     if (bootstrap == 0) { reps = folds_n
     } else if (bootstrap >= 1) { reps = bootstrap }
     
-#    cat(paste("HERE 2",ylim[1],ylim[2],"\n"))
-    
     if (usefold == 1) {
       est.resample = matrix(0, nrow=reps, ncol=101)
       se.resample = est.resample
       lower.resample = est.resample
       upper.resample = est.resample
       meancalxb  = rep(0,folds_n)
-      meanxb_oob = rep(0,folds_n)
+      meanxb_x = rep(0,folds_n)
       minplot = min(minxb)
       maxplot = max(maxxb)
       
       for (i_ in c(1:reps)) { 
-        calplotout = calplot0(object, wbeta=wbeta, df=df, resample=resample, repn=i_, knottype=knottype, 
+        calplotout = calplot0(object, wbeta=wbeta, df=df, resample=resample, bootci=bootci, oob=oob, repn=i_, knottype=knottype, 
                               trim=trim, plot=plotfold_, lwd=2, title=paste("fold",i_), xlim=xlim, ylim=ylim, xlab=xlab, ylab=ylab, 
                               col.term=col.term, col.se=col.se, rug=rug, plothr=plothr , ... )
         
-##      object1=object ; repn=i_ ; plot=1 ; lwd=2 ; title=paste("fold",i_) ;
-## get back the xbeta from the whole data set -- no predicteds used
+        ##      object1=object ; repn=i_ ; plot=1 ; lwd=2 ; title=paste("fold",i_) ;
+        ## get back the xbeta from the whole data set -- no predicteds used
         if (i_ == 1) { plotxb = calplotout$estci[,1] } 
         est.resample[i_,]  = calplotout$estci[,2]
         se.resample[i_,]   = calplotout$estci[,3]
@@ -593,23 +652,40 @@ calplot = function(object, wbeta=NULL, df=3, resample=NULL, usefold=1,
         upper.resample[i_,] = calplotout$estci[,5]
         
         meancalxb[i_] = calplotout$meancalxb 
-        meanxb_oob[i_] = calplotout$meanxb_oob 
+        meanxb_x[i_] = calplotout$meanxb_ 
         minplot = max( minplot, calplotout$minmax[1] ) 
         maxplot = min( maxplot, calplotout$minmax[2] ) 
         if (i_ == 1) {
-          xb_oob = calplotout$xb_oob ;
-          y_oob = calplotout$y_oob
+          xb_x = calplotout$xb_ ;
+          y_x = calplotout$y_
         } else {
-          xb_oob = c(xb_oob, calplotout$xb_oob) ;
-          y_oob  = c(y_oob , calplotout$y_oob )
+          xb_x = c(xb_x, calplotout$xb_) ;
+          y_x  = c(y_x , calplotout$y_ )
         }
       }
-
-#      sample(length(xb_oob), nobs )
-#      plotxb.resample = calplotout$estci[,1]
+      
+      #      cat( paste( "  Range of X*Beta for calibration: c( ", floor(minxb), " , ", ceiling(maxxb), " ) \n"))
+      cat(paste( "  Range of X*Beta for calibration: \n"))
+      cat(c(minxb,maxxb),"\n")
+      cat(paste( "  Range of calibrated confidence intervals: \n")) 
+      if (bootci == 1) {
+        #        cat( c( min(estci_orig[,4]), max(estci_orig[,5]) ) ,"\n") 
+      } else {
+        cat( c( min(est.resample), max(est.resample) ) ,"\n") 
+      }  
+      #      sample(length(xb_x), nobs )
+      #      plotxb.resample = calplotout$estci[,1]
       c(minplot, maxplot)
-## get average and SE from the folds_n folds 
+      ## get average and SE from the folds_n folds 
+      
+      if (bootci == 1) { 
+        #        print( estci_orig[1:20,1] )
+        #        print( plotxb )
+        est.resample = t( 2 * estci_orig[,2] - t(est.resample) )
+      }    ## check row or column subtraction 
+      
       est = colMeans(est.resample)
+      
       if (bootstrap == 0) {
         se = sqrt(apply(est.resample,2,var)/folds_n)    
       } else if (bootstrap >= 1) {
@@ -624,9 +700,6 @@ calplot = function(object, wbeta=NULL, df=3, resample=NULL, usefold=1,
         xlims = quantile(xbeta, (c(trim,(100-trim))/100))
         keep_ = ( ((plotxb >= xlims[1]) & (plotxb <= xlims[2])) & ((plotxb >= xlim[1]) & (plotxb <= xlim[2])) ) 
         if ( trim > 0) { cat("  Spline curves are trimed at x's of", xlims[1], "and", xlims[2], ", or", trim, "% hi and lo\n") } 
-#        print(summary(xbeta))
-#        print(summary(plotxb))
-#        print(table(keep_))
         
         plotxb_ = plotxb[keep_]
         est_ = est[keep_]
@@ -637,9 +710,9 @@ calplot = function(object, wbeta=NULL, df=3, resample=NULL, usefold=1,
         
         if (plotfold == 1) { lwd = 3 } else { lwd = 2 }
         
-#          plot(plotxb_, est_, type="l", lty=lty1, col=col.term, lwd=lwd, xlab=xlab, ylab=ylab, xlim=xlim, ylim=ylim, axes=0, ... )
-#          lines( plotxb_, lower_, lty=lty1, col=col.se, lwd=lwd) 
-#          lines( plotxb_, upper_, lty=lty1, col=col.se, lwd=lwd) 
+        #          plot(plotxb_, est_, type="l", lty=lty1, col=col.term, lwd=lwd, xlab=xlab, ylab=ylab, xlim=xlim, ylim=ylim, axes=0, ... )
+        #          lines( plotxb_, lower_, lty=lty1, col=col.se, lwd=lwd) 
+        #          lines( plotxb_, upper_, lty=lty1, col=col.se, lwd=lwd) 
         
         indxlo = c(1:length(plotxb_)) [ plotxb_ < minplot ] 
         indxhi = c(1:length(plotxb_)) [ plotxb_ > maxplot ] 
@@ -649,30 +722,15 @@ calplot = function(object, wbeta=NULL, df=3, resample=NULL, usefold=1,
           indxfold = c(1:length(plotxb_))
         }
         
-# print("HERE 1")
-        
         xlim0 = c(min(plotxb_), max(plotxb_)) 
         if (!is.null(xlim)) { xlim0 = xlim }
         if (is.null(ylim)) {
           ylim = c(min(est_), max(est_))
-#            print(c( lower_ )) 
-#            print(c( upper_ )) 
-#            print( min(lower_[indxfold] ) )
-#            print( max(lower_[indxfold] ) )
-#            print( indxfold ) 
-#            print( indxfold ) 
-          
-#            print( lower_[indxfold] ) 
-#            print( lower_[indxfold] ) 
-          
-#            print( ylim )
           if ( length(indxfold) > 0) { 
             if ( min(lower_[indxfold] ) < ylim[1] ) { ylim[1] = min(lower_[indxfold] ) }
             if ( max(upper_[indxfold] ) > ylim[2] ) { ylim[2] = max(upper_[indxfold] ) }
           }
         }
-        
-# print("HERE 2")
         
         plot(  plotxb_[indxlo], est_[indxlo] , type="l", 
                lty=lty2, col=col.term, lwd=lwd, xlab=xlab, ylab=ylab, xlim=xlim0, ylim=ylim, axes=0 , ... )
@@ -697,42 +755,36 @@ calplot = function(object, wbeta=NULL, df=3, resample=NULL, usefold=1,
         }
         box()
         
-        if( bootstrap > 0.5) {        
-          if (nobs < length(xb_oob)) {
-            keep_ = sample(length(xb_oob), nobs, replace=0)
-            xbeta = xb_oob[ keep_ ]
-            y_    = y_oob[ keep_ ]
-          } else {
-            xbeta = xb_oob
-            y_    = y_oob
-          }
+        if( bootstrap >= 1) {
+          xbeta_rug = object$xbetas[,wbeta]  
+        } else {
+          xbeta_rug = xbeta  
         }
-          keep_  = ((xbeta >= xlim[1]) & (xbeta <= xlim[2]))
-          #        length( xbeta ) 
-          #        length(keep_)
-          #        sum(keep_)
-          if (sum(keep_==0) > 0) {
-            cat(paste("  Due to user specified xlim ", sum(keep_==0) , "tick marks are not displayed in rug\n"))
-            cat(paste("  min:max xb = ", min(xbeta), max(xbeta) , "\n"))
-          }
-          
-          xbeta_ = xbeta[ keep_ ]
-          #          length(xbeta_)
-          y__    = y_[ keep_ ]
-
-#        c( min(xbeta), min(xbeta_) ) 
-        if (rug == 1) { myrug(xbeta_, y__, family) } 
+        
+        keep_rug  = ((xbeta_rug >= xlim[1]) & (xbeta_rug <= xlim[2]))
+        if (sum(keep_rug==0) > 0) {
+          cat(paste("  Due to user specified xlim ", sum(keep_rug==0) , "tick marks are not displayed in rug\n"))
+          cat(paste("  min:max xb = ", min(xbeta), max(xbeta) , "\n"))
+        }
+        
+        xbeta_rug = xbeta_rug[ keep_rug ]
+        y_rug     = y_[ keep_rug ]
+        
+        #        c( min(xbeta), min(xbeta_) ) 
+        if (rug == 1) { myrug(xbeta_rug, y_rug, family) } 
         if (vref > 0) { abline(v=vrefs, lty=3, col=2) }
       }
+      
       if (plotfold == 1) {
         for (i_ in c(1:reps)) {  
           lines( plotxb, est.resample[i_,], lty=i_, col=i_+1,  lwd=1) 
         }
       }
+      
     }
   }
 
-  if (stop_ == 0) {
+  if (stop_ %in% c(0,2)) {
     if (plot %in% c(0,2)) {
       if (usefold == 1) {  
         return_list = list(estimates=cbind(plotxb, est, se, lower, upper), 
@@ -828,19 +880,22 @@ myaxis = function(zlim,plothr,est=NULL,side=2, digits=2) {
 #' @param resample resample 
 #' @param xbname xbname
 #' @param bootstrap bootstrap
+#' @param bootci bootci
 #' 
 #' @return An axis label
 #'  
 #' @noRd
 
-myxlab = function(family, plothr, resample, xbname, bootstrap) {
+myxlab = function(family, plothr, resample, oob, xbname, bootstrap,bootci=0) {
   if (family %in% c("cox") ) {
     if (plothr > 1) {
       if (resample==1) { 
         if (bootstrap == 0) { 
           xlab = paste(xbname,"HR (Nested CV)") 
         } else if (bootstrap >= 1) {
-          xlab = paste(xbname,"HR (Bootstrap)") 
+          if (bootci == 1) { xlab = paste(xbname,"HR (Bootstrap In Bag, bias adjusted)")
+          } else if (oob == 1) { xlab = paste(xbname,"HR (Bootstrap Out Of Bag)") 
+          } else {  xlab = paste(xbname,"HR (Bootstrap In Bag)") }
         }
       } else { 
         xlab = paste(xbname,"HR (naive)")
@@ -850,7 +905,9 @@ myxlab = function(family, plothr, resample, xbname, bootstrap) {
         if (bootstrap == 0) { 
           xlab = paste(xbname,"log(HR) (Nested CV)") 
         } else if (bootstrap >= 1) {
-          xlab = paste(xbname,"log(HR) (Bootstrap)") 
+          if (bootci == 1) { xlab = paste(xbname,"HR (Bootstrap In Bag, bias adjusted)")
+          } else if (oob == 1) { xlab = paste(xbname,"log(HR) (Bootstrap Out Of Bag)") 
+          } else {  xlab = paste(xbname,"log(HR) (Bootstrap In Bag)") }
         }
       } else { 
         xlab = paste(xbname,"log(HR) (naive)")
@@ -861,7 +918,9 @@ myxlab = function(family, plothr, resample, xbname, bootstrap) {
       if (bootstrap == 0) { 
         xlab = paste(xbname,"X*Beta (Nested CV)") 
       } else if (bootstrap >= 1) { 
-        xlab = paste(xbname,"X*Beta (Bootstrap)") 
+        if (bootci == 1) { xlab = paste(xbname,"X*Beta (Bootstrap In Bag, bias adjusted)")
+        } else if (oob == 1) { xlab = paste(xbname,"X*Beta (Bootstrap Out Of Bag)") 
+        } else { xlab = paste(xbname,"X*Beta (Bootstrap In Bag)") }
       }
     } else { xlab = paste(xbname,"X*Beta (naive)") }
   }

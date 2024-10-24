@@ -1,10 +1,10 @@
 ---
 title: "Lasso and Ridge, Model and Coefficient stability"
 author: "Walter K. Kremers, Mayo Clinic, Rochester MN"
-date: "22 March 2024"
+date: "24 October 2024"
 output: pdf_document 
 vignette: >
-  %\VignetteIndexEntry{Using ann_tab_cv}
+  %\VignetteIndexEntry{Lasso and Ridge Stability}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
