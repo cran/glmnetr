@@ -57,7 +57,11 @@ plot_perf_glmnetr = function( x, type="devrat", pow=2, ylim=1, fold=1, xgbsimple
   
   object = x 
   
-  if (object$resample == 0) {
+  resample = object$resample 
+  if (is.null(resample)) { resample = 1
+  } else if (is.na(resample)) { resample = 1 }
+  
+  if (resample == 0) {
     warning("  Model performance plots are not generated when resample = 0")
   } else {
     if (is.null(type)) { type == "devrat" }
@@ -97,6 +101,9 @@ plot_perf_glmnetr = function( x, type="devrat", pow=2, ylim=1, fold=1, xgbsimple
     ensemble = object$ensemble 
     ensemble
     
+    if (is.null(object$null.m2LogLik.rep)) { object$null.m2LogLik.rep = object$null.m2LogLik.cv }
+    if (is.null(object$sat.m2LogLik.rep )) { object$sat.m2LogLik.rep  = object$sat.m2LogLik.cv  }
+    if (is.null(object$n.rep)) { object$n.rep = object$n.cv }
     m2.ll.null = object$null.m2LogLik.rep
     m2.ll.sat  = object$sat.m2LogLik.rep
     n__ = object$n.rep
@@ -112,7 +119,15 @@ plot_perf_glmnetr = function( x, type="devrat", pow=2, ylim=1, fold=1, xgbsimple
     frst = 1 
     i_ = 0 
     
+    ##### LASSO ################################################################
+    
     if (object$fits[1] == 1) {
+      
+      if (is.null(object$lasso.devian.rep)) { object$lasso.devian.rep = object$lasso.devian.cv }
+      if (is.null(object$lasso.intcal.rep)) { object$lasso.intcal.rep = object$lasso.intcal.cv }
+      if (is.null(object$lasso.lincal.rep)) { object$lasso.lincal.rep = object$lasso.lincal.cv }
+      if (is.null(object$lasso.agree.rep )) { object$lasso.agree.rep  = object$lasso.agree.cv  }
+      
       if         (type == "agree") {  object1 = object$lasso.agree.rep 
       } else if (type == "lincal") {  object1 = object$lasso.lincal.rep 
       } else if (type == "intcal") {  object1 = object$lasso.intcal.rep 
@@ -165,6 +180,11 @@ plot_perf_glmnetr = function( x, type="devrat", pow=2, ylim=1, fold=1, xgbsimple
     
     ##### XGB ####################################################################
     if (object$fits[2] == 1) {
+      
+      if (is.null(object$xgb.devian.rep)) { object$xgb.devian.rep = object$xgb.devian.cv }
+      if (is.null(object$xgb.intcal.rep)) { object$xgb.intcal.rep = object$xgb.intcal.cv }
+      if (is.null(object$xgb.lincal.rep)) { object$xgb.lincal.rep = object$xgb.lincal.cv }
+      if (is.null(object$xgb.agree.rep )) { object$xgb.agree.rep  = object$xgb.agree.cv  }
       
       if         (type == "agree") {  object1 = object$xgb.agree.rep 
       } else if (type == "lincal") {  object1 = object$xgb.lincal.rep 
@@ -255,6 +275,11 @@ plot_perf_glmnetr = function( x, type="devrat", pow=2, ylim=1, fold=1, xgbsimple
     ##### Random Forest ##########################################################
     if (object$fits[3] ==1) {
       
+      if (is.null(object$rf.devian.rep)) { object$rf.devian.rep = object$rf.devian.cv }
+      if (is.null(object$rf.intcal.rep)) { object$rf.intcal.rep = object$rf.intcal.cv }
+      if (is.null(object$rf.lincal.rep)) { object$rf.lincal.rep = object$rf.lincal.cv }
+      if (is.null(object$rf.agree.rep )) { object$rf.agree.rep  = object$rf.agree.cv  }
+      
       if         (type == "agree") {  object1 = object$rf.agree.rep 
       } else if (type == "lincal") {  object1 = object$rf.lincal.rep 
       } else if (type == "intcal") {  object1 = object$rf.intcal.rep 
@@ -316,6 +341,11 @@ plot_perf_glmnetr = function( x, type="devrat", pow=2, ylim=1, fold=1, xgbsimple
     if ( is.na( object$fits[8] ) ) { object$fits[8] = 0 }
     if (object$fits[8] ==1) {
       
+      if (is.null(object$orf.devian.rep)) { object$orf.devian.rep = object$orf.devian.cv }
+      if (is.null(object$orf.intcal.rep)) { object$orf.intcal.rep = object$orf.intcal.cv }
+      if (is.null(object$orf.lincal.rep)) { object$orf.lincal.rep = object$orf.lincal.cv }
+      if (is.null(object$orf.agree.rep )) { object$orf.agree.rep  = object$orf.agree.cv  }
+      
       if         (type == "agree") {  object1 = object$orf.agree.rep 
       } else if (type == "lincal") {  object1 = object$orf.lincal.rep 
       } else if (type == "intcal") {  object1 = object$orf.intcal.rep 
@@ -376,6 +406,11 @@ plot_perf_glmnetr = function( x, type="devrat", pow=2, ylim=1, fold=1, xgbsimple
     ##### Neural Network #########################################################
     if (object$fits[5] == 1) {
       
+      if (is.null(object$ann.devian.rep)) { object$ann.devian.rep = object$ann.devian.cv }
+      if (is.null(object$ann.intcal.rep)) { object$ann.intcal.rep = object$ann.intcal.cv }
+      if (is.null(object$ann.lincal.rep)) { object$ann.lincal.rep = object$ann.lincal.cv }
+      if (is.null(object$ann.agree.rep )) { object$ann.agree.rep  = object$ann.agree.cv  }
+
       if        (type == "agree" ) {  object1 = object$ann.agree.rep 
       } else if (type == "lincal") {  object1 = object$ann.lincal.rep 
       } else if (type == "intcal") {  object1 = object$ann.intcal.rep 
@@ -426,6 +461,11 @@ plot_perf_glmnetr = function( x, type="devrat", pow=2, ylim=1, fold=1, xgbsimple
     ##### RPART ##################################################################
     if (object$fits[4] == 1) {
       
+      if (is.null(object$rpart.devian.rep)) { object$rpart.devian.rep = object$rpart.devian.cv }
+      if (is.null(object$rpart.intcal.rep)) { object$rpart.intcal.rep = object$rpart.intcal.cv }
+      if (is.null(object$rpart.lincal.rep)) { object$rpart.lincal.rep = object$rpart.lincal.cv }
+      if (is.null(object$rpart.agree.rep )) { object$rpart.agree.rep  = object$rpart.agree.cv  }
+
       if        (type == "agree" ) {  object1 = object$rpart.agree.rep 
       } else if (type == "lincal") {  object1 = object$rpart.lincal.rep 
       } else if (type == "intcal") {  object1 = object$rpart.intcal.rep 
@@ -515,6 +555,11 @@ plot_perf_glmnetr = function( x, type="devrat", pow=2, ylim=1, fold=1, xgbsimple
     
     ##### Step Wise ##############################################################
     if ( (object$fits[6] == 1) | (object$fits[7] == 1) ) {
+      if (is.null(object$step.devian.rep)) { object$step.devian.rep = object$step.devian.cv }
+      if (is.null(object$step.lincal.rep)) { object$step.lincal.rep = object$step.lincal.cv }
+      if (is.null(object$step.intcal.rep)) { object$step.intcal.rep = object$step.intcal.cv }
+      if (is.null(object$step.agree.rep )) { object$step.agree.rep  = object$step.agree.cv  }
+      
       object1 = object$step.agree.rep
       object2 = object$step.agree.naive
       object3 = object$step.agree.rep
@@ -651,7 +696,7 @@ plot_perf_glmnetr = function( x, type="devrat", pow=2, ylim=1, fold=1, xgbsimple
         if (fold > 0) {
           lwd2 = 2 
           if (fold == 1 ) {
-            if ( length(unique(toplot1[,2])) >=20) { lwd2 = 3 } else { lwd2 = 2 }
+            if ( length(unique(toplot1[,2])) >=25) { lwd2 = 3 } else { lwd2 = 2 }
             interaction.plot(toplot1[,1], toplot1[,2], (toplot1[,3])^pow, col=toplot1[,2], 
                              ylab=ylab, xlab="",legend=F, ylim=ylim,
                              xaxt = "n")
@@ -666,7 +711,7 @@ plot_perf_glmnetr = function( x, type="devrat", pow=2, ylim=1, fold=1, xgbsimple
               smp = c(1:nunique) 
             }
             slct = toplot1[,2] %in% smp
-            if ( fold >=20) { lwd2 = 3 } else { lwd2 = 2 }
+            if ( fold >=25) { lwd2 = 3 } else { lwd2 = 2 }
             interaction.plot(toplot1[slct,1], toplot1[slct,2], (toplot1[slct,3])^pow, col=toplot1[,2], 
                              ylab=ylab, xlab="",legend=F, ylim=ylim,
                              xaxt = "n")

@@ -1,7 +1,8 @@
 ################################################################################
 ##### nested.glmnetr_yymmdd ####################################################
 ################################################################################
-#' Using (nested) cross validation, describe and compare some machine learning model performances
+#' Using (nested) cross validation, describe and compare some machine learning 
+#' model performances
 #' 
 #' @description Performs a nested cross validation or bootstrap validation 
 #' for cross validation informed relaxed lasso, Gradient Boosting Machine (GBM), 
@@ -167,18 +168,29 @@
 #' @param gamma   gamma vector for the relaxed lasso fit, default is c(0,0.25,0.5,0.75,1)
 #' @param relax   fit the relaxed lasso model when fitting a lasso model  
 #' @param steps_n number of steps done in stepwise regression fitting 
-#' @param seed optional, either NULL, or a numerical/integer vector of length 2, for R and torch 
-#' random generators, or a list with two two vectors, each of length folds_n+1, for 
-#' generation of random folds of the outer cross validation loop, and the remaining 
-#' folds_n terms for the random generation of the folds or the bootstrap samples for the 
-#' model fits of the inner loops.  This can be used to replicate model fits.  Whether 
-#' specified or NULL, the seed is stored 
-#' in the output object for future reference.  The stored seed is a list with two
+#' @param seed optional, either NULL, or a numerical/integer vector of length 
+#' 2, for R and torch random generators, or a list with two vectors, each of 
+#' length folds_n+1, for generation of random folds for the full data model as 
+#' well as the the outer cross validation loop, 
+#' and the remaining folds_n terms for the random generation 
+#' of the folds or the bootstrap samples for the model fits of the inner 
+#' loops. This can be used to replicate model fits. Whether specified or 
+#' NULL, the seed is stored in the output object for future 
+#'  reference. The stored seed is a list with two
 #' vectors seedr for the seeds used in generating the random fold splits, and seedt
 #' for generating the random initial weights and biases in the torch neural network 
 #' models.  The first element in each of these vectors is for the all data fits and
 #' remaining elements for the folds of the inner cross validation.  The integers assigned to 
-#' seed should be positive and not more than 2147483647.   
+#' seed should be positive (>= 1) and not more than 2147483647. Beginning in version 
+#' 0.5-5 the values from $seedr and $seedt the first last element in each vector
+#' was used when fitting each model on the whole data set and the other values 
+#' were used for the outer cross validation or the bootstrap sample 
+#' generation. For version 0.4-2 through 0.5-4 the last element from each 
+#' vector was used when fitting each model on the whole dataset. This change 
+#' was made so that the set of full models numerical fits do not 
+#' depend on whether or not resampling is performed (resample is set to 0 or 1 
+#' 2) or the number of bootstrap resamples. The seeds are generated with 
+#' the glmnetr_seed() function.
 #' @param foldid  a vector of integers to associate each record to a fold.  Should 
 #' be integers from 1 and folds_n.  These will only be used in the outer folds. 
 #' @param limit limit the small values for lambda after the initial fit.  This 
@@ -214,6 +226,12 @@
 #' @param track 1 (default) to track progress by printing to console elapsed and 
 #' split times, 0 to not track
 #' @param do_ncv   Deprecated, and replaced by resample
+#' @param int_file  A file name at which to save the intermediate results at the 
+#' end of each outer loop of the resampling. This may be useful when fitting 
+#' one of the machine learning models crashes or hangs in one of the 
+#' iterations of the outer loop (resampling of the nested cross validation 
+#' or the bootstrap). The value for int_file must be a valid file name for your 
+#' operating system and installation. 
 #' @param ... additional arguments that can be passed to glmnet() 
 #'  
 #' @return - Model fit performance for LASSO, GBM, Random Forest, Oblique 
@@ -226,7 +244,8 @@
 #'   \code{\link{glmnetr.simdata}} , \code{\link{summary.nested.glmnetr}} , \code{\link{nested.compare}} , 
 #'   \code{\link{plot.nested.glmnetr}} , \code{\link{predict.nested.glmnetr}} ,
 #'   \code{\link{predict_ann_tab}}, \code{\link{cv.glmnetr}} , 
-#'   \code{\link{xgb.tuned}} , \code{\link{rf_tune}} , \code{\link{orf_tune}} , \code{\link{ann_tab_cv}} , \code{\link{cv.stepreg}} 
+#'   \code{\link{xgb.tuned}} , \code{\link{rf_tune}} , \code{\link{orf_tune}} , \code{\link{ann_tab_cv}} , \code{\link{cv.stepreg}} ,
+#'   \code{\link{glmnetr_seed}}
 #   \code{\link{predict_nested_xgb}} ,  \code{\link{predict_nested_rf}} , 
 #' 
 #' @author Walter Kremers (kremers.walter@mayo.edu)
@@ -263,7 +282,17 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", res
                           dolasso=1, doxgb=0, dorf=0, doorf=0, doann=0, dorpart=0, dostep=0, doaic=0, 
                           ensemble=0, method="loglik", lambda=NULL, gamma=NULL, relax=TRUE, steps_n=0,
                           seed=NULL, foldid=NULL, limit=1, fine=0, ties="efron", keepdata=0, keepxbetas=1,  
-                          bootstrap=0, unique=0, id=NULL, track=0, do_ncv=NULL, ...  ) {
+                          bootstrap=0, unique=0, id=NULL, track=0, do_ncv=NULL, int_file=NULL, ...  ) {
+  
+  if (track >= 1) {
+    cat(paste0("\n", " ##############################################################################################" , "\n"))
+    time_start = diff_time()
+  } else {
+    time_start = Sys.time()  
+  }
+  time_last = NULL 
+  
+  Call <- match.call()
   
 #  cat(paste("\n  (1) bootstrap=",bootstrap, "  unique=", unique, "  stratified=", stratified, "\n\n")) 
   
@@ -295,8 +324,7 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", res
     cat(paste0("  With family = ", family, ", stratified is set to 0\n"))
   } 
   
-  pver = "glmnetr version 0.5-4 (2024-10-24) BETA" 
-  pver = "glmnetr version 0.5-4 (2024-10-24)" 
+  pver = "glmnetr version 0.5-5 (2024-12-28)" 
   
   if ( (!is.null(do_ncv)) & (is.null(resample)) ) { 
     resample = do_ncv
@@ -531,10 +559,6 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", res
   
   if (track <= 0) { if (is.null(eppr)) { eppr = -3 } ;  if (is.null(eppr)) { eppr2 = -3 } }
   if (track <= 0) { eppr = min(eppr, -2) ;  eppr2 = min(eppr2,-2) }
-  if (track >= 1) { cat(paste0("\n", " ##############################################################################################" , "\n")) }
-  time_start = Sys.time()
-  time_last = NULL 
-  if (track >= 1) { time_start = diff_time() }
 
   ## general input check #######################################################
 
@@ -580,12 +604,32 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", res
   
   #####  SEEDS  ################################################################
 
+  old_seed_ = 0                                                    ## pver 0.5-5  
+  if (!is.null(seed)) {                                            ## pver 0.5-5  
+    if (is.list(seed)) {
+      if (!is.null(seed$seedr[1]) ) {
+        if ( seed$seedr[1] < 0 ) { 
+          seed$seedr[1] = abs( seed$seedr[1] )
+          old_seed_ = 1 
+          }
+      }
+    } else if ( !is.na(seed[1]) ) { 
+      if (seed[1] < 0) {
+        seed[1] = abs(seed[1]) 
+        old_seed_ = 1 
+      }
+    } 
+  }
   seed = glmnetr_seed(seed, reps) 
-  cat( paste( " seed$seedr[1] = ", seed$seedr[1], "\n\n" ) )
-#  cat( paste( " reps  = ", reps, "\n\n" ) ) 
-#  print(seed)
-  seedr_ = seed$seedr[reps+1]
-  seedt_ = seed$seedt[reps+1]
+  cat( paste( "\n seed$seedr[1] = ", seed$seedr[1], "\n" ) )
+  if (track == 0) { (cat("\n")) } 
+  if ( old_seed_ ) {                                               ## pver 0.5-5
+    seedr_ = seed$seedr[reps+1] 
+    seedt_ = seed$seedt[reps+1]    
+  } else { 
+    seedr_ = seed$seedr[1]  
+    seedt_ = seed$seedt[1]  
+  }
 
   #####  FOLDID  ###############################################################
   
@@ -843,6 +887,11 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", res
   colnames(xbetas)[1]    = "null"  
   colnames(xbetas.cv)[1] = "null"  
   
+  if (track >= 2) {
+    cat("\n Initial Setup ... ")
+    time_last = diff_time(time_start, time_last) 
+  }
+  
   #########################################################################################################
   ##### LASSO fit #########################################################################################
   lasso.nzero = rep(0,7) 
@@ -852,29 +901,29 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", res
     xbetas.lasso    = matrix(rep(xbnull,14*nobs), nrow=nobs, ncol=14)  
     xbetas.cv.lasso = xbetas.lasso 
     
-    if (track >= 1) { cat(paste0("\n", " ########## Initial (CV) lasso fit of all data ########################################" , "\n")) }
+    if (track >= 1) { cat(paste0("\n ########## Initial (CV) lasso fit of all data ########################################" , "\n")) }
     if (relax==1) { 
       if (is.null(gamma)) { gamma = c(0, 0.25, 0.5, 0.75, 1) }
       
       cv_glmnet_fit_f = cv.glmnetr( xs, start, y_, event, family=family, 
-                                    lambda=lambda, gamma=gamma, folds_n=folds_n, foldid=foldid, limit=limit, fine=fine, track=track, ties=ties , ... )
+                                    lambda=lambda, gamma=gamma, folds_n=folds_n, foldid=foldid, limit=limit, fine=fine, track=track, ties=ties , ... ) 
     } else {
       if (family=="cox") {
-        if ( is.null(start) ) { cv_glmnet_fit_f = cv.glmnet( xs, Surv(y_, event)       , family="cox", lambda=lambda, foldid=foldid, relax=FALSE , ... )
-        } else                { cv_glmnet_fit_f = cv.glmnet( xs, Surv(start, y_, event), family="cox", lambda=lambda, foldid=foldid, relax=FALSE , ... )
+        if ( is.null(start) ) { cv_glmnet_fit_f = cv.glmnet( xs, Surv(y_, event)       , family="cox", lambda=lambda, foldid=foldid, relax=FALSE , ... ) 
+        } else                { cv_glmnet_fit_f = cv.glmnet( xs, Surv(start, y_, event), family="cox", lambda=lambda, foldid=foldid, relax=FALSE , ... ) 
         } 
       } else {
-        cv_glmnet_fit_f = cv.glmnet( xs, y_, family=family, lambda=lambda, foldid=foldid, relax=FALSE , ... )
+        cv_glmnet_fit_f = cv.glmnet( xs, y_, family=family, lambda=lambda, foldid=foldid, relax=FALSE , ... ) 
       }
     }
     
     if (folds_n >= 3) {
       if ((family == "cox") & (is.null(start))) {
-        cv_ridge_fit_f = cv.glmnet( xs, Surv(y_, event), family=family, alpha=0, nfolds=folds_n, foldid=foldid , ... )
+        cv_ridge_fit_f = cv.glmnet( xs, Surv(y_, event), family=family, alpha=0, nfolds=folds_n, foldid=foldid , ... ) 
       } else if ((family == "cox") & (!is.null(start))) {
-        cv_ridge_fit_f = cv.glmnet( xs, Surv(start, y_, event), family=family, alpha=0, nfolds=folds_n, foldid=foldid , ... )
+        cv_ridge_fit_f = cv.glmnet( xs, Surv(start, y_, event), family=family, alpha=0, nfolds=folds_n, foldid=foldid , ... ) 
       } else {
-        cv_ridge_fit_f = cv.glmnet( xs, y_, family=family, alpha=0, nfolds=folds_n, foldid=foldid , ... )
+        cv_ridge_fit_f = cv.glmnet( xs, y_, family=family, alpha=0, nfolds=folds_n, foldid=foldid , ... ) 
       }
     } else {
       warning(" cv.glmnet is not set up to run ridge regression with folds_n < 3\ ridge regression will not be evaluated", immideiate.=TRUE )
@@ -997,49 +1046,58 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", res
       colnames(xbetas.xgb) = xgb_xb_nms
       colnames(xbetas.cv.xgb) = xgb_xb_nms
 
+      time_last_i = time_last 
+      
+      doxgb_simpleF = NULL ; doxgb_simpleO = NULL ;  ## CHECK
       ## SIMPLE XGB model full data ################################################
       if (sum(ensemble[c(1,5)]) >= 1) {
-        if (track >= 2) { cat("  XGB Simple  ") }
+        if (track >= 2) { cat("  XGB Simple  --  ") }
         xgb.simple.fit = xgb.simple(full.xgb.dat, objective = objective, seed=seedr_, folds=foldid_xgb, doxgb=doxgb, track=track )
         xgbperf1 = xgb_perform(xgb_model=xgb.simple.fit, xs_=full.xgb.dat, y=y__, family=family )
         doxgb_simple = xgb.simple.fit$doxgb
         xbetas.xgb[,1] = xgb_xbhat(xgb.simple.fit, full.xgb.dat, family)
+        if (track >= 2) { time_last_i = diff_time(time_start, time_last_i) }
       } else { xgbperf1 = c(1,1,0,0,0) }
       if (sum(ensemble[c(2,6)]) >= 1) {
-        if (track >= 2) { cat("\n  XGB Simple Feature  ") } 
+        if (track >= 2) { cat("  XGB Simple Feature  --  ") } 
         xgb.simple.fitF = xgb.simple(full.xgb.datF, objective = objective, seed=seedr_, folds=foldid_xgb, doxgb=doxgb, track=track )
         xgbperf2 = xgb_perform(xgb.simple.fitF, full.xgb.datF, y=y__, family=family )
         doxgb_simpleF = xgb.simple.fitF$doxgb
         xbetas.xgb[,2] = xgb_xbhat(xgb.simple.fitF, full.xgb.datF, family)
+        if (track >= 2) { time_last_i = diff_time(time_start, time_last_i) }
       } else { xgbperf2 = c(1,1,0,0,0) }
       if (sum(ensemble[c(3,4,7,8)]) >= 1) {
-        if (track >= 2) { cat("\n  XGB Simple Offset  ") }
+        if (track >= 2) { cat("  XGB Simple Offset  --  ") }
         xgb.simple.fitO = xgb.simple(full.xgb.datO, objective = objective, seed=seedr_, folds=foldid_xgb, doxgb=doxgb, track=track )
         xgbperf3 = xgb_perform(xgb.simple.fitO, full.xgb.datO, y=y__, family=family )
         doxgb_simpleO = xgb.simple.fitO$doxgb
         xbetas.xgb[,3] = xgb_xbhat(xgb.simple.fitO, full.xgb.datO, family)
+        if (track >= 2) { time_last_i = diff_time(time_start, time_last_i) }
       }  else { xgbperf3 = c(1,1,0,0,0) }
-      if (track >= 2) { cat("\n") } 
+      if (track >= 4) { cat("\n") } 
       ## TUNED XGB fit full data ###################################################
       if (sum(ensemble[c(1,5)]) >= 1) {
-        if (track >= 2) { cat("\n  XGB Tuned  ") }
+        if (track >= 2) { cat("  XGB Tuned  ") }
         xgb.tuned.fit = xgb.tuned(full.xgb.dat, objective = objective, seed=seedr_, folds=foldid_xgb, doxgb=doxgb, track=track )
         xgbperf4   = xgb_perform(xgb.tuned.fit, full.xgb.dat, y=y__, family=family )
         xbetas.xgb[,4] = xgb_xbhat(xgb.tuned.fit, full.xgb.dat, family)
+        if (track >= 2) { cat("  --  ") ; time_last_i = diff_time(time_start, time_last_i) }
       }  else { xgbperf4 = c(1,1,0,0,0) }
       if (sum(ensemble[c(2,6)]) >= 1) {
-        if (track >= 2) { cat("\n  XGB Tuned Feature  ") }
+        if (track >= 2) { cat("  XGB Tuned Feature  ") }
         xgb.tuned.fitF = xgb.tuned(full.xgb.datF, objective = objective, seed=seedr_, folds=foldid_xgb, doxgb=doxgb, track=track )
         xgbperf5 = xgb_perform(xgb.tuned.fitF, full.xgb.datF, y=y__, family=family )
         xbetas.xgb[,5] = xgb_xbhat(xgb.tuned.fitF, full.xgb.datF, family)
+        if (track >= 2) { cat("  --  ") ; time_last_i = diff_time(time_start, time_last_i) }
       }  else { xgbperf5 = c(1,1,0,0,0) }
       if (sum(ensemble[c(3,4,7,8)]) >= 1) {
-        if (track >= 2) { cat("\n  XGB Tuned Offset  ") }
+        if (track >= 2) { cat("  XGB Tuned Offset  ") }
         xgb.tuned.fitO = xgb.tuned(full.xgb.datO, objective = objective, seed=seedr_, folds=foldid_xgb, doxgb=doxgb, track=track )
         xgbperf6 = xgb_perform(xgb.tuned.fitO, full.xgb.datO, y=y__, family=family )
         xbetas.xgb[,6] = xgb_xbhat(xgb.tuned.fitO, full.xgb.datO, family)
+        if (track >= 2) { cat("  --  ") ; time_last_i = diff_time(time_start, time_last_i) }
       }  else { xgbperf6 = c(1,1,0,0,0) }
-      if (track >= 2) { cat("\n") } 
+      if (track >= 3) { cat("\n") } 
       xgb.devian.naive     = c( xgbperf1[1] , xgbperf2[1] , xgbperf3[1] , xgbperf4[1] , xgbperf5[1] , xgbperf6[1] )
       xgb.cal.devian.naive = c( xgbperf1[2] , xgbperf2[2] , xgbperf3[2] , xgbperf4[2] , xgbperf5[2] , xgbperf6[2] )
       xgb.agree.naive      = c( xgbperf1[3] , xgbperf2[3] , xgbperf3[3] , xgbperf4[3] , xgbperf5[3] , xgbperf6[3] )
@@ -1091,11 +1149,16 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", res
     if (sum(ensemble[c(2,6)])     >= 1) { keepxbetas.rf[c(2,5)] = c(2,5) }
     if (sum(ensemble[c(3,4,7,8)]) >= 1) { keepxbetas.rf[c(3,6)] = c(3,6) }
     xbetas.rf = matrix(rep(xbnull,6*nobs), nrow=nobs, ncol=6)
-    xbetas.cv.rf = matrix(rep(xbnull,6*nobs), nrow=nobs, ncol=6)
+    xbetas.cv.rf = matrix(rep(xbnull,6*nobs), nrow=nobs, ncol=6)                ## print( xbetas.cv.rf )    
     colnames(xbetas.rf) = rf_xb_nms
     colnames(xbetas.cv.rf) = rf_xb_nms 
     
+    time_last_i = time_last 
+    
+    rfmods = 0 
+    
     if (sum(ensemble[c(1,5)]) >= 1) {
+      rfmods = rfmods + 1 
       if (track >= 2) { cat( "     No lasso info\n") } 
       rf_tuned   = rf_tune(xs=xs, y_=y_, event=event, family=family, mtryc=mtryc, ntreec = ntreec, nsplitc=nsplitc, seed=seedr_) 
       predm1     = rf_xbhat(rf_model=rf_tuned$rf_tuned, dframe=as.data.frame(xs), ofst=NULL, family=family, tol=tol_) 
@@ -1104,20 +1167,22 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", res
       rf_perf1_   = rf_perform(rf_model=rf_tuned$rf_tuned, dframe=as.data.frame(xs), ofst=NULL, y__=y__, family=family, tol=tol_)
 #      print( rbind( rf_perf1, rf_perf1_ ))
       xbetas.rf[ , c(1,4) ] = c( predm1 , predm1.cal )
-      if (track >= 2) { time_lasti = diff_time(time_start, time_last) } 
+      if (track >= 2) { time_last_i = diff_time(time_start, time_last_i) } 
     }  else { rf_perf1 = c(1,1,0,0,0,0) }
     
     if (sum(ensemble[c(2,6)]) >= 1) { 
+      rfmods = rfmods + 1 
       if (track >= 2) { cat( "     Relaxed lasso predicteds as feature\n") }
       rf_tunedF = rf_tune(xs=cbind(xs, ofst), y_=y_, event=event, family=family, mtryc=mtryc, ntreec = ntreec, nsplitc=nsplitc, seed=seedr_)
       predm2       = rf_xbhat(rf_model=rf_tunedF$rf_tuned, as.data.frame(cbind(xs,ofst)) , ofst=NULL, family=family, tol=tol_) 
       predm2.cal   = cal_train_xbhat( predm2 , y__ , predm2 , family ) 
       rf_perf2     = c( perf_gen( y__ , predm2 , family ) , rf_tunedF$rf_tuned$mtry )
       xbetas.rf[ , c(2,5) ] = cbind( predm2 , predm2.cal )  
-      if (track >= 2) { time_lasti = diff_time(time_start, time_lasti) } 
+      if (track >= 2) { time_last_i = diff_time(time_start, time_last_i) } 
     } else { rf_perf2 = c(1,1,0,0,0,0) }
     
     if ( (sum(ensemble[c(3,4,7,8)]) >= 1) & (family == "gaussian") ) { 
+      rfmods = rfmods + 1 
       if (track >= 2) { cat( "     Relaxed lasso predicteds as offset\n") }
       yo = y_ - ofst                                                            ## 231228 
       rf_tunedO     = rf_tune(xs=xs, y_=yo, event=event, family=family, mtryc=mtryc, ntreec = ntreec, nsplitc=nsplitc, seed=seedr_)
@@ -1125,9 +1190,9 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", res
       predm3.cal   = cal_train_xbhat( predm3 , y__ , predm3 , family )  
       rf_perf3     = c( perf_gen( y__ , predm3 , family ) , rf_tunedO$rf_tuned$mtry ) 
       xbetas.rf[ , c(3,6)] = cbind(predm3 , predm3.cal )
-      if (track >= 2) { time_lasti = diff_time(time_start, time_lasti) } 
+      if (track >= 2) { time_last_i = diff_time(time_start, time_last_i) } 
     } else { rf_perf3 = c(1,1,0,0,0,0) }
-    if (track >= 2) { cat("\n") }
+#    if (track >= 2) { cat("\n") }
     
     rf.devian.naive     = c( rf_perf1[1] , rf_perf2[1] , rf_perf3[1] ) 
     rf.cal.devian.naive = c( rf_perf1[2] , rf_perf2[2] , rf_perf3[2] ) 
@@ -1157,7 +1222,8 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", res
     
     xbetas = cbind(xbetas, xbetas.rf[,keepxbetas.rf])
 
-    if (track >= 1) { time_last = diff_time(time_start, time_last) } 
+    if ((track == 1) | ((track > 1) & (rfmods > 1))) { time_last = diff_time(time_start, time_last) 
+    } else if ((track > 1) & (rfmods == 1)) { time_last = time_last_i } 
   }
   
   ###############################################################################################################
@@ -1192,7 +1258,12 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", res
     colnames(xbetas.orf) = xbnames.orf
     colnames(xbetas.cv.orf) = xbnames.orf
     
+    time_last_i = time_last 
+    
+    orfmods = 0 
+    
     if (sum(ensemble[c(1,5)]) >= 1) {
+      orfmods = orfmods + 1 
       if (track >= 2) { cat( "     No lasso info\n") } 
       orf_tuned = orf_tune(xs=xs, y_=y_, event=event, family=family, mtryc=omtryc, ntreec = ontreec, nsplitc=onsplitc, seed=seedr_, track=track) 
       predm1     = orf_xbhat(orf_model=orf_tuned$orf_tuned, dframe=as.data.frame(xs), ofst=NULL, family=family, tol=tol_) 
@@ -1201,30 +1272,32 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", res
       orf_perf1_   = orf_perform(orf_model=orf_tuned$orf_tuned, dframe=as.data.frame(xs), ofst=NULL, y__=y__, family=family, tol=tol_)
       #      print( rbind( rf_perf1, rf_perf1_ ))
       xbetas.orf[ , c(1,4) ] = c( predm1 , predm1.cal )
-      if (track >= 2) { time_lasti = diff_time(time_start, time_last) } 
+      if (track >= 2) { time_last_i = diff_time(time_start, time_last_i) } 
     }  else { orf_perf1 = c(1,1,0,0,0,0) }
     
     if (sum(ensemble[c(2,6)]) >= 1) { 
+      orfmods = orfmods + 1 
       if (track >= 2) { cat( "     Relaxed lasso predicteds as feature\n") }
       orf_tunedF = orf_tune(xs=cbind(xs, ofst), y_=y_, event=event, family=family, mtryc=omtryc, ntreec = ontreec, nsplitc=onsplitc, seed=seedr_, track=track)
       predm2       = orf_xbhat(orf_model=orf_tunedF$orf_tuned, as.data.frame(cbind(xs,ofst)) , ofst=NULL, family=family, tol=tol_) 
       predm2.cal   = cal_train_xbhat( predm2 , y__ , predm2 , family ) 
       orf_perf2     = c( perf_gen( y__ , predm2 , family ) , orf_tunedF$orf_tuned$mtry )
       xbetas.orf[ , c(2,5) ] = cbind( predm2 , predm2.cal )  
-      if (track >= 2) { time_lasti = diff_time(time_start, time_lasti) } 
+      if (track >= 2) { time_last_i = diff_time(time_start, time_last_i) } 
     } else { orf_perf2 = c(1,1,0,0,0,0) }
     
     if ( (sum(ensemble[c(3,4,7,8)]) >= 1) & (family == "gaussian") ) { 
+      orfmods = orfmods + 1 
       if (track >= 2) { cat( "     Relaxed lasso predicteds as offset\n") }
       yo = y_ - ofst  
-      orf_tunedO  = orf_tune(xs=xs, y_=yo, event=event, family=family, mtryc=omtryc, ntreec=ontreec, nsplitc=onsplitc, seed=seedr_, track=track)
+      orf_tunedO = orf_tune(xs=xs, y_=yo, event=event, family=family, mtryc=omtryc, ntreec=ontreec, nsplitc=onsplitc, seed=seedr_, track=track)
       predm3     = orf_xbhat(orf_model=orf_tunedO$orf_tuned, dframe=as.data.frame(xs) , ofst=ofst , family=family, tol=tol_) 
       predm3.cal = cal_train_xbhat( predm3 , y__ , predm3 , family )  
       orf_perf3  = c( perf_gen( y__ , predm3 , family ) , orf_tunedO$orf_tuned$mtry ) 
       xbetas.orf[ , c(3,6)] = cbind(predm3 , predm3.cal )
-      if (track >= 2) { time_lasti = diff_time(time_start, time_lasti) } 
+      if (track >= 2) { time_last_i = diff_time(time_start, time_last_i) } 
     } else { orf_perf3 = c(1,1,0,0,0,0) }
-    if (track >= 2) { cat("\n") }
+#    if (track >= 2) { cat("\n") }
     
     orf.devian.naive     = c( orf_perf1[1] , orf_perf2[1] , orf_perf3[1] ) 
     orf.cal.devian.naive = c( orf_perf1[2] , orf_perf2[2] , orf_perf3[2] ) 
@@ -1254,7 +1327,8 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", res
     
     xbetas = cbind(xbetas, xbetas.orf[,keepxbetas.orf])
     
-    if (track >= 1) { time_last = diff_time(time_start, time_last) } 
+    if ((track == 1) | ((track > 1) & (orfmods > 1))) { time_last = diff_time(time_start, time_last) 
+    }  else if ((track > 1) & (orfmods == 1)) { time_last = time_last_i }  
   }
   
   ###############################################################################################################
@@ -1623,8 +1697,78 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", res
   
   ##### track time before outer nested loop ###############################################################
   if (track >= 2) { 
-    cat(paste0("\n", " ########## full data set analysis completed #####################################" , "\n")) 
+    cat(paste0("\n", " ########## full data set analysis complete ######################################" , "\n")) 
   } 
+  
+  if (bootstrap >= 1) {
+    xbetas.boot.oob.null  = NULL ; xbetas.boot.inb.null  = NULL  ;
+    xbetas.boot.oob.lasso = NULL ; xbetas.boot.inb.lasso = NULL ; 
+    xbetas.boot.oob.xgb   = NULL ; xbetas.boot.inb.xgb   = NULL ; 
+    xbetas.boot.oob.rf    = NULL ; xbetas.boot.inb.rf    = NULL ; 
+    xbetas.boot.oob.orf   = NULL ; xbetas.boot.inb.orf   = NULL ; 
+    xbetas.boot.oob.ann   = NULL ; xbetas.boot.inb.ann   = NULL ; 
+    xbetas.boot.oob.rpart = NULL ; xbetas.boot.inb.rpart = NULL ; 
+    xbetas.boot.oob.step  = NULL ; xbetas.boot.inb.step  = NULL ;
+  }
+  
+  if (!is.null(int_file)) { 
+    nestedcv = savetoobject(Call, family, xs, start, y_, y__, event, ties, id, start_name, y_name, event_name,  
+                            seed, foldid, ensemble, folds_n, stratified, limit, fine, method, steps_n, 
+                            bootstrap, bootstrap_, unique, resample, keepdata, keepxbetas, track, 
+                            dolasso, doxgb, doxgb_, dorf, dorf_, doorf, doorf_, dorpart, doann, doann_, dostep, doaic,   
+                            xbetas, xbetas.cv, xbetas.boot.oob.null, xbetas.boot.inb.null, 
+                            xbetas.cv.lasso, xbetas.boot.oob.lasso, xbetas.boot.inb.lasso,  
+                            xbetas.cv.xgb  , xbetas.boot.oob.xgb  , xbetas.boot.inb.xgb  , keepxbetas.xgb  ,  
+                            xbetas.cv.rf   , xbetas.boot.oob.rf   , xbetas.boot.inb.rf   , keepxbetas.rf   ,  
+                            xbetas.cv.orf  , xbetas.boot.oob.orf  , xbetas.boot.inb.orf  , keepxbetas.orf  , 
+                            xbetas.cv.ann  , xbetas.boot.oob.ann  , xbetas.boot.inb.ann  , keepxbetas.ann  , 
+                            xbetas.cv.rpart, xbetas.boot.oob.rpart, xbetas.boot.inb.rpart, keepxbetas.rpart, 
+                            xbetas.cv.step , xbetas.boot.oob.step , xbetas.boot.inb.step , keepxbetas.step , 
+                            null.m2LogLik.rep , sat.m2LogLik.rep  , n.rep , n00.rep , 
+                            
+                            lasso.devian.rep, lasso.intcal.rep, lasso.lincal.rep, lasso.agree.rep, lasso.nzero.rep,  
+                            lasso.cal.devian.rep, lasso.cal.intcal.rep, lasso.cal.lincal.rep, lasso.cal.agree.rep, 
+                            lasso.devian.naive, lasso.intcal.naive, lasso.lincal.naive, lasso.agree.naive, 
+                            lasso.nzero, lasso.cal.devian.naive, cv_glmnet_fit, cv_ridge_fit, 
+                            cv_glmnet_fit_f, cv_ridge_fit_f, 
+                            
+                            xgbkeep, doxgb_simple, doxgb_simpleF, doxgb_simpleO,   
+                            xgb.devian.rep, xgb.intcal.rep, xgb.lincal.rep, xgb.agree.rep, xgb.nzero.rep, 
+                            xgb.devian.naive, xgb.intcal.naive, xgb.lincal.naive, xgb.agree.naive, xgb.nzero,  
+                            xgb.simple.fit, xgb.tuned.fit, xgb.simple.fitF, xgb.tuned.fitF, xgb.simple.fitO, xgb.tuned.fitO,
+                            
+                            rfkeep , 
+                            rf.devian.rep   , rf.intcal.rep , rf.lincal.rep , rf.agree.rep , rf.mtry.rep , 
+                            rf.cal.devian.rep , rf.cal.intcal.rep , rf.cal.lincal.rep , rf.cal.agree.rep ,  
+                            rf.devian.naive , rf.intcal.naive , rf.lincal.naive , rf.agree.naive , 
+                            rf.mtry.naive , rf.cal.devian.naive , 
+                            rf_tuned , rf_tunedF , rf_tunedO , 
+                            dorf_base , dorf_feat , dorf_offs , 
+                            
+                            orfkeep , 
+                            orf.devian.rep , orf.intcal.rep , orf.lincal.rep , orf.agree.rep , orf.mtry.rep , 
+                            orf.cal.devian.rep , orf.cal.intcal.rep , orf.cal.lincal.rep , orf.cal.agree.rep ,  
+                            orf.devian.naive , orf.intcal.naive , orf.lincal.naive , orf.agree.naive , 
+                            orf.mtry.naive, orf.cal.devian.naive , 
+                            orf_tuned , orf_tunedF , orf_tunedO , 
+                            doorf_base , doorf_feat , doorf_offs , 
+                            
+                            ann.devian.rep , ann.intcal.rep , ann.lincal.rep , ann.agree.rep , ann.nzero.rep , 
+                            ann.devian.naive , ann.intcal.naive , ann.lincal.naive , ann.agree.naive , ann.nzero , ann_zb ,  
+                            ann_fit_1_f , ann_fit_2_f , ann_fit_3_f , ann_fit_4_f , ann_fit_5_f , ann_fit_6_f , ann_fit_7_f , ann_fit_8_f , 
+                            
+                            rpart.devian.rep , rpart.intcal.rep , rpart.lincal.rep , rpart.agree.rep , rpart.nzero.rep ,  
+                            rpart.devian.naive , rpart.intcal.naive , rpart.lincal.naive , rpart.agree.naive , rpart.nzero , 
+                            rpart.fit.00 , rpart.fitF.00 , rpart.fitO.00 , 
+                            
+                            step.devian.rep , step.cal.devian.rep ,  
+                            step.intcal.rep ,  step.lincal.rep , step.agree.rep , step.nzero.rep , step.p.rep ,
+                            step.devian.naive , step.agree.naive , step.nzero , step.p , 
+                            cv.stepreg.fit.all, cv.stepreg.fit , func.fit.aic , 
+                            
+                            foldidkey , time_start , pver )
+    save( nestedcv , file=int_file ) 
+  }
 
   #########################################################################################################
   ##### FOLDS #############################################################################################
@@ -1632,13 +1776,21 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", res
   
   ## i_ = 1 
   if (resample != 0) {
-    for (i_ in 1:reps) {  
+    for (i_ in 1:reps) { 
       
-      seedr_ = seed$seedr[i_]
-      seedt_ = seed$seedt[i_]
-
+      if ( old_seed_ ) {                                                        ## pver 0.5-5
+        seedr_ = seed$seedr[i_] 
+        seedt_ = seed$seedt[i_]    
+      } else { 
+        seedr_ = seed$seedr[i_+1]  
+        seedt_ = seed$seedt[i_+1]  
+      }
+      
       ##=== begin folds ==========================================================
-      if (track >= 1) { cat(paste0("\n", " ########## Entering Nested Cross Validation outer fold  ", i_, "  of  " , reps , "  ############################" , "\n")) }
+      if (track >= 1) { 
+        if (bootstrap >= 1) { cat(paste0("\n", " ########## Entering Bootstrap Validation outer loop  ", i_, "  of  " , reps , "  ############################" , "\n"))
+        } else { cat(paste0("\n", " ########## Entering Nested Cross Validation outer fold  ", i_, "  of  " , reps , "  ############################" , "\n")) } 
+      }
       
       ##### set up train and test data sets in matrix form for glmnet & stepreg #####
 
@@ -1852,26 +2004,26 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", res
           #  xs=trainxs; start=trainstart; y_=trainy_; event=trainevent; lambda=lambda; gamma=gamma; folds_n=folds_n; limit=limit; fine=fine; track=1; family=family ;         
           cv_glmnet_fit = cv.glmnetr( trainxs, trainstart, trainy_, trainevent, family=family, 
                                       lambda=lambda, gamma=gamma, folds_n=folds_n, foldid=foldidcv, limit=limit, fine=fine, 
-                                      track=0, ties=ties , ... )
+                                      track=0, ties=ties , ... ) 
         } else {
           if (family=="cox") {   
             if ( is.null(start) ) { 
-              cv_glmnet_fit = cv.glmnet( trainxs, Surv(trainy_, trainevent)            , nfolds=folds_n, foldid=foldidcv, family="cox", lambda=lambda, relax=FALSE , ... )
+              cv_glmnet_fit = cv.glmnet( trainxs, Surv(trainy_, trainevent)            , nfolds=folds_n, foldid=foldidcv, family="cox", lambda=lambda, relax=FALSE , ... ) 
             } else                { 
-              cv_glmnet_fit = cv.glmnet( trainxs, Surv(trainstart, trainy_, trainevent), nfolds=folds_n, foldid=foldidcv, family="cox", lambda=lambda, relax=FALSE , ... )
+              cv_glmnet_fit = cv.glmnet( trainxs, Surv(trainstart, trainy_, trainevent), nfolds=folds_n, foldid=foldidcv, family="cox", lambda=lambda, relax=FALSE , ... ) 
             }
           } else {
-            cv_glmnet_fit = cv.glmnet( trainxs, trainy_, family=family, lambda=lambda, nfolds=folds_n, foldid=foldidcv, relax=FALSE , ... )
+            cv_glmnet_fit = cv.glmnet( trainxs, trainy_, family=family, lambda=lambda, nfolds=folds_n, foldid=foldidcv, relax=FALSE , ... ) 
           }
         }
         
         if (folds_n >= 3) {
           if ((family == "cox") & (is.null(trainstart))) {
-            cv_ridge_fit = cv.glmnet( trainxs, Surv(trainy_, trainevent), family=family, alpha=0, nfolds=folds_n, foldid=foldidcv , ... )
+            cv_ridge_fit = cv.glmnet( trainxs, Surv(trainy_, trainevent), family=family, alpha=0, nfolds=folds_n, foldid=foldidcv , ... ) 
           } else if ((family == "cox") & (!is.null(trainstart))) {
-            cv_ridge_fit = cv.glmnet( trainxs, Surv(trainstart, trainy_, trainevent), family=family, alpha=0, nfolds=folds_n, foldid=foldidcv , ... )
+            cv_ridge_fit = cv.glmnet( trainxs, Surv(trainstart, trainy_, trainevent), family=family, alpha=0, nfolds=folds_n, foldid=foldidcv , ... ) 
           } else {
-            cv_ridge_fit = cv.glmnet( trainxs, trainy_, family=family, alpha=0, nfolds=folds_n, foldid=foldidcv , ... )
+            cv_ridge_fit = cv.glmnet( trainxs, trainy_, family=family, alpha=0, nfolds=folds_n, foldid=foldidcv , ... ) 
           }
         }
         
@@ -2051,17 +2203,20 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", res
           } else if (family == "binomial") { objective = "binary:logistic" 
           } else                           { objective = "reg:squarederror" }
           
+          time_last_i = time_last
+                                  
           ## SIMPLE model fit train ######################################################
           if (sum(ensemble[c(1,5)]) >= 1) {
-            if (track >= 2) { cat("  XGB Simple, i_=", i_,"\n") }
+            if (track >= 2) { cat("  XGB Simple, i_=", i_, " : ") }
             ## xgb_perform(xgb_model, xs_, y=y__, family, tol=tol_) 
             xgb.simple.train = xgb.simple(train.xgb.dat, objective = objective, seed=seedr_, folds=foldidcv_xgb, doxgb=doxgb, track=track )
             xgbperf1 = xgb_perform(xgb_model=xgb.simple.train, xs_=test.xgb.dat, y=testy__, family=family ) 
             xbetas.cv.xgb[ oob ,1] = xgb_xbhat(xgb.simple.train, test.xgb.dat, family)
             if (bootstrap >= 1) { xbetas.inb.xgb[ ,1] = xgb_xbhat(xgb.simple.train, train.xgb.dat, family) } 
+            if (track >= 2) { cat("  --  ") ; time_last_i = diff_time(time_start, time_last_i) }
           } else { xgbperf1 = c(1,1,0,0,0) }
           if (sum(ensemble[c(2,6)]) >= 1)  {
-            if (track >= 2) { cat("  XGB Simple Feature, i_=", i_,"\n") 
+            if (track >= 2) { cat("  XGB Simple Feature, i_=", i_, " : ") 
               if (track >= 4) { 
                 print( summary(trainofst) ) 
                 print( summary(testofst ) ) }
@@ -2070,35 +2225,40 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", res
             xgbperf2 = xgb_perform(xgb.simple.trainF, test.xgb.datF, y=testy__, family=family) 
             xbetas.cv.xgb[ oob ,2] = xgb_xbhat(xgb.simple.trainF, test.xgb.datF, family)
             if (bootstrap >= 1) { xbetas.inb.xgb[ ,2] = xgb_xbhat(xgb.simple.trainF, train.xgb.datF, family) }
+            if (track >= 2) { cat("  --  ") ; time_last_i = diff_time(time_start, time_last_i) }
           } else { xgbperf2 = c(1,1,0,0,0) }
           if (sum(ensemble[c(3,4,7,8)]) >= 1) {
-            if (track >= 2) { cat("  XGB simple offset, i_=", i_,"\n") }
+            if (track >= 2) { cat("  XGB simple offset, i_=", i_, i_, " : ") }
             xgb.simple.trainO = xgb.simple(train.xgb.datO, objective = objective, seed=seedr_, folds=foldidcv_xgb, doxgb=doxgb, track=track )
             xgbperf3 = xgb_perform(xgb.simple.trainO, test.xgb.datO, y=testy__, family=family) 
             xbetas.cv.xgb[ oob ,3] = xgb_xbhat(xgb.simple.trainO, test.xgb.datO, family)
             if (bootstrap >= 1) { xbetas.inb.xgb[ ,3] = xgb_xbhat(xgb.simple.trainO, train.xgb.datO, family) } 
+            if (track >= 2) { cat("  --  ") ; time_last_i = diff_time(time_start, time_last_i) }
           } else { xgbperf3 = c(1,1,0,0,0) }
           ## TUNED model fit train #######################################################
           if (sum(ensemble[c(1,5)]) >= 1) {
-            if (track >= 2) { cat("\n  XGB tuned, i_=", i_) }
+            if (track >= 2) { cat("  XGB tuned, i_=", i_, ": ") }
             xgb.tuned.train = xgb.tuned(train.xgb.dat, objective = objective, seed=seedr_, folds=foldidcv_xgb, doxgb=doxgb, track=track )
             xgbperf4 = xgb_perform(xgb.tuned.train, test.xgb.dat, y=testy__, family=family) 
             xbetas.cv.xgb[ oob ,4] = xgb_xbhat(xgb.tuned.train, test.xgb.dat, family)
             if (bootstrap >= 1) { xbetas.inb.xgb[ ,4] = xgb_xbhat(xgb.tuned.train, train.xgb.dat, family) } 
+            if (track >= 2) { cat("  --  ") ; time_last_i = diff_time(time_start, time_last_i) }
           } else { xgbperf4 = c(1,1,0,0,0) }
           if (sum(ensemble[c(2,6)]) >= 1) {
-            if (track >= 2) { cat("\n  XGB tuned Feature, i_=", i_,"\n") }
+            if (track >= 2) { cat("  XGB tuned Feature, i_=", i_, ": ") }
             xgb.tuned.trainF = xgb.tuned(train.xgb.datF, objective = objective, seed=seedr_, folds=foldidcv_xgb, doxgb=doxgb, track=track )
             xgbperf5 = xgb_perform(xgb.tuned.trainF, test.xgb.datF, y=testy__, family=family) 
             xbetas.cv.xgb[ oob ,5] = xgb_xbhat(xgb.tuned.trainF, test.xgb.datF, family)
             if (bootstrap >= 1) { xbetas.inb.xgb[ ,5] = xgb_xbhat(xgb.tuned.trainF, train.xgb.datF, family) }
+            if (track >= 2) { cat("  --  ") ; time_last_i = diff_time(time_start, time_last_i) }
           } else { xgbperf5 = c(1,1,0,0,0) }
           if (sum(ensemble[c(3,4,7,8)]) >= 1) {
-            if (track >= 2) { cat("\n  XGB tuned offset, i_=", i_,"\n") }
+            if (track >= 2) { cat("  XGB tuned offset, i_=", i_, ": ") }
             xgb.tuned.trainO = xgb.tuned(train.xgb.datO, objective = objective, seed=seedr_, folds=foldidcv_xgb, doxgb=doxgb, track=track )
             xgbperf6 = xgb_perform(xgb.tuned.trainO, test.xgb.datO, y=testy__, family=family) 
             xbetas.cv.xgb[ oob ,6] = xgb_xbhat(xgb.tuned.trainO, test.xgb.datO, family)
             if (bootstrap >= 1) { xbetas.inb.xgb[ ,6] = xgb_xbhat(xgb.tuned.trainO, train.xgb.datO, family) }
+            if (track >= 2) { cat("  --  ") ; time_last_i = diff_time(time_start, time_last_i) }
           } else { xgbperf6 = c(1,1,0,0,0) }
           ################################################################################
           xgb.devian.rep[i_,]     = c( xgbperf1[1] , xgbperf2[1] , xgbperf3[1] , xgbperf4[1] , xgbperf5[1] , xgbperf6[1] )
@@ -2134,7 +2294,11 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", res
           colnames(xbetas.inb.rf) = rf_xb_nms
         } 
         
+        time_last_i = time_last
+        rfmods = 0 
+        
         if (sum(ensemble[c(1,5)]) >= 1) {
+          rfmods = rfmods + 1 
           rf_tuned_train = rf_tune(xs=trainxs, y_=trainy_, event=trainevent, family=family, mtryc=mtryc, ntreec = ntreec, seed=seedr_)
           predm1        = rf_xbhat(rf_model=rf_tuned_train$rf_tuned, dframe=df.testxs , ofst=NULL, family=family, tol=tol_) 
           predm1.tr     = rf_xbhat(rf_model=rf_tuned_train$rf_tuned, dframe=df.trainxs, ofst=NULL, family=family, tol=tol_) 
@@ -2148,10 +2312,11 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", res
           if (bootstrap >= 1) { xbetas.inb.rf[   , c(1,4) ] = cbind(predm1.tr, predm1.cal.tr) }
 #          rf_perf1_old = rf_perform(rf_model=rf_tuned_train$rf_tuned, dframe=as.data.frame(testxs), ofst=NULL, y__=testy__, family=family, tol=tol_)
 #          print( rbind( rf_perf1, rf_perf1_old ) ) 
-          if (track >= 2) { time_lasti = diff_time(time_start, time_last) } 
+          if (track >= 2) { time_last_i = diff_time(time_start, time_last_i) } 
         } else { rf_perf1 = c(1,1,0,0,0,0) ; rf.cal_perf1 = c(1,1,0,0,0,0) }
         
         if (sum(ensemble[c(2,6)]) >= 1) { 
+          rfmods = rfmods + 1 
           rf_tuned_trainF = rf_tune(xs=trainxsO, y_=trainy_, event=trainevent, family=family, mtryc=mtryc, ntreec = ntreec, seed=seedr_)
           predm2        = rf_xbhat(rf_model=rf_tuned_trainF$rf_tuned, dframe=df.testxsO , ofst=NULL, family=family, tol=tol_) 
           predm2.tr     = rf_xbhat(rf_model=rf_tuned_trainF$rf_tuned, dframe=df.trainxsO, ofst=NULL, family=family, tol=tol_) 
@@ -2161,10 +2326,11 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", res
           rf.cal_perf2  = c( perf_gen( testy__ , predm2.cal , family ) , rf_tuned_trainF$rf_tuned$mtry )                    
           xbetas.cv.rf[ oob, c(2,5) ] = cbind( predm2 , predm2.cal )  
           if (bootstrap >= 1) { xbetas.inb.rf[   , c(2,5) ] = cbind(predm2.tr, predm2.cal.tr) }
-          if (track >= 2) { time_lasti = diff_time(time_start, time_lasti) } 
+          if (track >= 2) { time_last_i = diff_time(time_start, time_last_i) } 
         } else { rf_perf2 = c(1,1,0,0,0,0) ; rf.cal_perf2 = c(1,1,0,0,0,0) }
         
         if ( (sum(ensemble[c(3,4,7,8)]) >= 1) & (family %in% c("gaussian")) ) {
+          rfmods = rfmods + 1 
           trainyo = trainy_ - trainofst 
           rf_tuned_trainO = rf_tune(xs=trainxs, y_=trainyo, event=NULL, family=family, mtryc=mtryc, ntreec = ntreec, seed=seedr_)
           predm3       = rf_xbhat(rf_model=rf_tuned_trainO$rf_tuned, dframe=df.testxs , ofst=testofst , family=family, tol=tol_) 
@@ -2175,7 +2341,7 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", res
           rf.cal_perf3 = c( perf_gen( testy__ , predm3.cal , family ) , rf_tuned_train$rf_tuned$mtry )                    
           xbetas.cv.rf[ oob, c(3,6) ] = cbind(predm3   , predm3.cal )
           if (bootstrap >= 1) { xbetas.inb.rf[   , c(3,6) ] = cbind(predm3.tr, predm3.cal.tr) }
-          if (track >= 2) { time_lasti = diff_time(time_start, time_lasti) } 
+          if (track >= 2) { time_last_i = diff_time(time_start, time_last_i) } 
         } else { rf_perf3 = c(1,1,0,0,0,0) ; rf.cal_perf3 = c(1,1,0,0,0,0) }
         
         rf.devian.rep[i_,]     = c( rf_perf1[1] , rf_perf2[1] , rf_perf3[1] )
@@ -2200,7 +2366,8 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", res
           }
         }
         
-        if (track >= 1) { time_last = diff_time(time_start, time_last) } 
+        if ((track == 1) | ((track > 1) & (rfmods > 1))) { time_last = diff_time(time_start, time_last)
+        }   else if ((track > 1) & (rfmods == 1)) { time_last = time_last_i }   
       }
 
       ##### Oblique Random Forest ##########################################################################################
@@ -2212,7 +2379,12 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", res
           colnames(xbetas.inb.orf) = xbnames.orf
         } 
         
+        time_last_i = time_last
+        
+        orfmods = 0 
+        
         if (sum(ensemble[c(1,5)]) >= 1) {
+          orfmods = orfmods + 1 
           orf_tuned_train = orf_tune(xs=trainxs, y_=trainy_, event=trainevent, family=family, mtryc=omtryc, ntreec = ontreec, nsplitc=onsplitc, seed=seedr_, track=track) 
           predm1        = orf_xbhat(orf_model=orf_tuned_train$orf_tuned, dframe=df.testxs , ofst=NULL, family=family, tol=tol_) 
           predm1.tr     = orf_xbhat(orf_model=orf_tuned_train$orf_tuned, dframe=df.trainxs, ofst=NULL, family=family, tol=tol_) 
@@ -2225,10 +2397,11 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", res
 #          orf.cal_perf1_= c( perf_gen_cal_train( testy_ , predm1  , trainy_, predm1.tr , family ) , orf_tuned_train$orf_tuned$mtry ) 
 #          orf_perf1_old = orf_perform(orf_model=orf_tuned_train$orf_tuned, dframe=as.data.frame(testxs), ofst=NULL, y__=testy__, family=family, tol=tol_)
 #          print( rbind( orf_perf1, orf_perf1_old, orf.cal_perf1 , orf.cal_perf1_ ) )
-          if (track >= 2) { time_lasti = diff_time(time_start, time_last) } 
+          if (track >= 2) { time_last_i = diff_time(time_start, time_last_i) } 
         } else { orf_perf1 = c(1,1,0,0,0,0) ; orf.cal_perf1 = c(1,1,0,0,0,0) }
         
         if (sum(ensemble[c(2,6)]) >= 1) { 
+          orfmods = orfmods + 1 
           orf_tuned_trainF = orf_tune(xs=trainxsO, y_=trainy_, event=trainevent, family=family, mtryc=omtryc, ntreec = ontreec, nsplitc=onsplitc, seed=seedr_, track=track)
           predm2        = orf_xbhat(orf_model=orf_tuned_trainF$orf_tuned, dframe=df.testxsO , ofst=NULL, family=family, tol=tol_) 
           predm2.tr     = orf_xbhat(orf_model=orf_tuned_trainF$orf_tuned, dframe=df.trainxsO, ofst=NULL, family=family, tol=tol_)
@@ -2238,10 +2411,11 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", res
           orf.cal_perf2 = c( perf_gen( testy__ , predm2.cal , family ) , orf_tuned_trainF$orf_tuned$mtry ) 
           xbetas.cv.orf[ oob, c(2,5) ] = cbind( predm2   , predm2.cal ) 
           if (bootstrap >= 1) { xbetas.inb.orf[   , c(2,5) ] = cbind( predm2.tr, predm2.cal.tr) }
-          if (track >= 2) { time_lasti = diff_time(time_start, time_lasti) } 
+          if (track >= 2) { time_last_i = diff_time(time_start, time_last_i) } 
         } else { orf_perf2 = c(1,1,0,0,0,0) ; orf.cal_perf2 = c(1,1,0,0,0,0) } 
         
         if ( (sum(ensemble[c(3,4,7,8)]) >= 1) & (family %in% c("gaussian")) ) {
+          orfmods = orfmods + 1 
           trainyo = trainy_ - trainofst 
           c(var(trainyo), var(trainy__))
           orf_tuned_trainO = orf_tune(xs=trainxs, y_=trainyo, event=NULL, family=family, mtryc=omtryc, ntreec = ontreec, seed=seedr_)
@@ -2254,7 +2428,7 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", res
           orf.cal_perf3 = c( perf_gen( testy__ , predm3.cal , family ) , orf_tuned_train$orf_tuned$mtry )                    
           xbetas.cv.orf[ oob, c(3,6) ] = cbind( predm3   , predm3.cal )
           if (bootstrap >= 1) { xbetas.inb.orf[   , c(3,6) ] = cbind( predm3.tr, predm3.cal.tr) }
-          if (track >= 2) { time_lasti = diff_time(time_start, time_lasti) } 
+          if (track >= 2) { time_last_i = diff_time(time_start, time_last_i) } 
         } else { orf_perf3 = c(1,1,0,0,0,0) ; orf.cal_perf3 = c(1,1,0,0,0,0) }
         
         orf.devian.rep[i_,]     = c( orf_perf1[1] , orf_perf2[1] , orf_perf3[1] )
@@ -2278,7 +2452,8 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", res
           }
         }
         
-        if (track >= 1) { time_last = diff_time(time_start, time_last) } 
+        if ((track == 1) | ((track > 1) & (orfmods > 1))) { time_last = diff_time(time_start, time_last) 
+        }   else if ((track > 1) & (orfmods == 1)) { time_last = time_last_i }  
       }
       
       ##### RPART fit ##########################################################################################
@@ -2692,6 +2867,65 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", res
           }
         }
       }
+
+      if (!is.null(int_file)) { 
+        nestedcv = savetoobject(Call, family, xs, start, y_, y__, event, ties, id, start_name, y_name, event_name,  
+                                seed, foldid, ensemble, folds_n, stratified, limit, fine, method, steps_n, 
+                                bootstrap, bootstrap_, unique, resample, keepdata, keepxbetas, track, 
+                                dolasso, doxgb, doxgb_, dorf, dorf_, doorf, doorf_, dorpart, doann, doann_, dostep, doaic,   
+                                xbetas, xbetas.cv, xbetas.boot.oob.null, xbetas.boot.inb.null, 
+                                xbetas.cv.lasso, xbetas.boot.oob.lasso, xbetas.boot.inb.lasso,  
+                                xbetas.cv.xgb  , xbetas.boot.oob.xgb  , xbetas.boot.inb.xgb  , keepxbetas.xgb  ,  
+                                xbetas.cv.rf   , xbetas.boot.oob.rf   , xbetas.boot.inb.rf   , keepxbetas.rf   ,  
+                                xbetas.cv.orf  , xbetas.boot.oob.orf  , xbetas.boot.inb.orf  , keepxbetas.orf  , 
+                                xbetas.cv.ann  , xbetas.boot.oob.ann  , xbetas.boot.inb.ann  , keepxbetas.ann  , 
+                                xbetas.cv.rpart, xbetas.boot.oob.rpart, xbetas.boot.inb.rpart, keepxbetas.rpart, 
+                                xbetas.cv.step , xbetas.boot.oob.step , xbetas.boot.inb.step , keepxbetas.step , 
+                                null.m2LogLik.rep , sat.m2LogLik.rep  , n.rep , n00.rep , 
+                                
+                                lasso.devian.rep, lasso.intcal.rep, lasso.lincal.rep, lasso.agree.rep, lasso.nzero.rep,  
+                                lasso.cal.devian.rep, lasso.cal.intcal.rep, lasso.cal.lincal.rep, lasso.cal.agree.rep, 
+                                lasso.devian.naive, lasso.intcal.naive, lasso.lincal.naive, lasso.agree.naive, 
+                                lasso.nzero, lasso.cal.devian.naive, cv_glmnet_fit, cv_ridge_fit, 
+                                cv_glmnet_fit_f, cv_ridge_fit_f, 
+                                
+                                xgbkeep, doxgb_simple, doxgb_simpleF, doxgb_simpleO,   
+                                xgb.devian.rep, xgb.intcal.rep, xgb.lincal.rep, xgb.agree.rep, xgb.nzero.rep, 
+                                xgb.devian.naive, xgb.intcal.naive, xgb.lincal.naive, xgb.agree.naive, xgb.nzero,  
+                                xgb.simple.fit, xgb.tuned.fit, xgb.simple.fitF, xgb.tuned.fitF, xgb.simple.fitO, xgb.tuned.fitO,
+                                
+                                rfkeep , 
+                                rf.devian.rep   , rf.intcal.rep , rf.lincal.rep , rf.agree.rep , rf.mtry.rep , 
+                                rf.cal.devian.rep , rf.cal.intcal.rep , rf.cal.lincal.rep , rf.cal.agree.rep ,  
+                                rf.devian.naive , rf.intcal.naive , rf.lincal.naive , rf.agree.naive , 
+                                rf.mtry.naive , rf.cal.devian.naive , 
+                                rf_tuned , rf_tunedF , rf_tunedO , 
+                                dorf_base , dorf_feat , dorf_offs , 
+                                
+                                orfkeep , 
+                                orf.devian.rep , orf.intcal.rep , orf.lincal.rep , orf.agree.rep , orf.mtry.rep , 
+                                orf.cal.devian.rep , orf.cal.intcal.rep , orf.cal.lincal.rep , orf.cal.agree.rep ,  
+                                orf.devian.naive , orf.intcal.naive , orf.lincal.naive , orf.agree.naive , 
+                                orf.mtry.naive, orf.cal.devian.naive , 
+                                orf_tuned , orf_tunedF , orf_tunedO , 
+                                doorf_base , doorf_feat , doorf_offs , 
+                                
+                                ann.devian.rep , ann.intcal.rep , ann.lincal.rep , ann.agree.rep , ann.nzero.rep , 
+                                ann.devian.naive , ann.intcal.naive , ann.lincal.naive , ann.agree.naive , ann.nzero , ann_zb ,  
+                                ann_fit_1_f , ann_fit_2_f , ann_fit_3_f , ann_fit_4_f , ann_fit_5_f , ann_fit_6_f , ann_fit_7_f , ann_fit_8_f , 
+                                
+                                rpart.devian.rep , rpart.intcal.rep , rpart.lincal.rep , rpart.agree.rep , rpart.nzero.rep ,  
+                                rpart.devian.naive , rpart.intcal.naive , rpart.lincal.naive , rpart.agree.naive , rpart.nzero , 
+                                rpart.fit.00 , rpart.fitF.00 , rpart.fitO.00 , 
+                                
+                                step.devian.rep , step.cal.devian.rep ,  
+                                step.intcal.rep ,  step.lincal.rep , step.agree.rep , step.nzero.rep , step.p.rep ,
+                                step.devian.naive , step.agree.naive , step.nzero , step.p , 
+                                cv.stepreg.fit.all, cv.stepreg.fit , func.fit.aic , 
+                                
+                                foldidkey , time_start , pver )
+        save( nestedcv, file=int_file ) 
+      }
     }
   }
   
@@ -2700,6 +2934,130 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", res
   ##########################################################################################################
   
   if (track >= 1) { cat(paste0("\n", " ################################################################################################" , "\n")) } 
+  
+  nestedcv = savetoobject(Call, family, xs, start, y_, y__, event, ties, id, start_name, y_name, event_name,  
+                          seed, foldid, ensemble, folds_n, stratified, limit, fine, method, steps_n, 
+                          bootstrap, bootstrap_, unique, resample, keepdata, keepxbetas, track, 
+                          dolasso, doxgb, doxgb_, dorf, dorf_, doorf, doorf_, dorpart, doann, doann_, dostep, doaic,   
+                          xbetas, xbetas.cv, xbetas.boot.oob.null, xbetas.boot.inb.null, 
+                          xbetas.cv.lasso, xbetas.boot.oob.lasso, xbetas.boot.inb.lasso,  
+                          xbetas.cv.xgb  , xbetas.boot.oob.xgb  , xbetas.boot.inb.xgb  , keepxbetas.xgb  ,  
+                          xbetas.cv.rf   , xbetas.boot.oob.rf   , xbetas.boot.inb.rf   , keepxbetas.rf   ,  
+                          xbetas.cv.orf  , xbetas.boot.oob.orf  , xbetas.boot.inb.orf  , keepxbetas.orf  , 
+                          xbetas.cv.ann  , xbetas.boot.oob.ann  , xbetas.boot.inb.ann  , keepxbetas.ann  , 
+                          xbetas.cv.rpart, xbetas.boot.oob.rpart, xbetas.boot.inb.rpart, keepxbetas.rpart, 
+                          xbetas.cv.step , xbetas.boot.oob.step , xbetas.boot.inb.step , keepxbetas.step , 
+                          null.m2LogLik.rep , sat.m2LogLik.rep  , n.rep , n00.rep , 
+                          
+                          lasso.devian.rep, lasso.intcal.rep, lasso.lincal.rep, lasso.agree.rep, lasso.nzero.rep,  
+                          lasso.cal.devian.rep, lasso.cal.intcal.rep, lasso.cal.lincal.rep, lasso.cal.agree.rep, 
+                          lasso.devian.naive, lasso.intcal.naive, lasso.lincal.naive, lasso.agree.naive, 
+                          lasso.nzero, lasso.cal.devian.naive, cv_glmnet_fit, cv_ridge_fit, 
+                          cv_glmnet_fit_f, cv_ridge_fit_f, 
+                          
+                          xgbkeep, doxgb_simple, doxgb_simpleF, doxgb_simpleO,   
+                          xgb.devian.rep, xgb.intcal.rep, xgb.lincal.rep, xgb.agree.rep, xgb.nzero.rep, 
+                          xgb.devian.naive, xgb.intcal.naive, xgb.lincal.naive, xgb.agree.naive, xgb.nzero,  
+                          xgb.simple.fit, xgb.tuned.fit, xgb.simple.fitF, xgb.tuned.fitF, xgb.simple.fitO, xgb.tuned.fitO,
+                          
+                          rfkeep , 
+                          rf.devian.rep   , rf.intcal.rep , rf.lincal.rep , rf.agree.rep , rf.mtry.rep , 
+                          rf.cal.devian.rep , rf.cal.intcal.rep , rf.cal.lincal.rep , rf.cal.agree.rep ,  
+                          rf.devian.naive , rf.intcal.naive , rf.lincal.naive , rf.agree.naive , 
+                          rf.mtry.naive , rf.cal.devian.naive , 
+                          rf_tuned , rf_tunedF , rf_tunedO , 
+                          dorf_base , dorf_feat , dorf_offs , 
+                          
+                          orfkeep , 
+                          orf.devian.rep , orf.intcal.rep , orf.lincal.rep , orf.agree.rep , orf.mtry.rep , 
+                          orf.cal.devian.rep , orf.cal.intcal.rep , orf.cal.lincal.rep , orf.cal.agree.rep ,  
+                          orf.devian.naive , orf.intcal.naive , orf.lincal.naive , orf.agree.naive , 
+                          orf.mtry.naive, orf.cal.devian.naive , 
+                          orf_tuned , orf_tunedF , orf_tunedO , 
+                          doorf_base , doorf_feat , doorf_offs , 
+                          
+                          ann.devian.rep , ann.intcal.rep , ann.lincal.rep , ann.agree.rep , ann.nzero.rep , 
+                          ann.devian.naive , ann.intcal.naive , ann.lincal.naive , ann.agree.naive , ann.nzero , ann_zb ,  
+                          ann_fit_1_f , ann_fit_2_f , ann_fit_3_f , ann_fit_4_f , ann_fit_5_f , ann_fit_6_f , ann_fit_7_f , ann_fit_8_f , 
+                          
+                          rpart.devian.rep , rpart.intcal.rep , rpart.lincal.rep , rpart.agree.rep , rpart.nzero.rep ,  
+                          rpart.devian.naive , rpart.intcal.naive , rpart.lincal.naive , rpart.agree.naive , rpart.nzero , 
+                          rpart.fit.00 , rpart.fitF.00 , rpart.fitO.00 , 
+                          
+                          step.devian.rep , step.cal.devian.rep ,  
+                          step.intcal.rep ,  step.lincal.rep , step.agree.rep , step.nzero.rep , step.p.rep ,
+                          step.devian.naive , step.agree.naive , step.nzero , step.p , 
+                          cv.stepreg.fit.all, cv.stepreg.fit , func.fit.aic , 
+                          
+                          foldidkey , time_start , pver )
+  
+  return( nestedcv )
+  
+  if (track >= 1) { cat("\n Program End \n") }
+  if (track >= 2) { time_last = diff_time(time_start, time_last) } 
+  
+}
+
+###############################################################################################################################################
+###############################################################################################################################################
+
+# null.deviance=null.deviance, null.m2LogLik=null.m2LogLik, sat.m2LogLik=sat.m2LogLik, 
+
+savetoobject = function(Call, family, xs, start, y_, y__, event, ties, id, start_name, y_name, event_name,  
+                        seed, foldid, ensemble, folds_n, stratified, limit, fine, method, steps_n, 
+                        bootstrap, bootstrap_, unique, resample, keepdata, keepxbetas, track, 
+                        dolasso, doxgb, doxgb_, dorf, dorf_, doorf, doorf_, dorpart, doann, doann_, dostep, doaic,   
+                        xbetas, xbetas.cv, xbetas.boot.oob.null, xbetas.boot.inb.null, 
+                        xbetas.cv.lasso, xbetas.boot.oob.lasso, xbetas.boot.inb.lasso,  
+                        xbetas.cv.xgb  , xbetas.boot.oob.xgb  , xbetas.boot.inb.xgb  , keepxbetas.xgb  ,  
+                        xbetas.cv.rf   , xbetas.boot.oob.rf   , xbetas.boot.inb.rf   , keepxbetas.rf   ,  
+                        xbetas.cv.orf  , xbetas.boot.oob.orf  , xbetas.boot.inb.orf  , keepxbetas.orf  , 
+                        xbetas.cv.ann  , xbetas.boot.oob.ann  , xbetas.boot.inb.ann  , keepxbetas.ann  , 
+                        xbetas.cv.rpart, xbetas.boot.oob.rpart, xbetas.boot.inb.rpart, keepxbetas.rpart, 
+                        xbetas.cv.step , xbetas.boot.oob.step , xbetas.boot.inb.step , keepxbetas.step , 
+                        null.m2LogLik.rep , sat.m2LogLik.rep  , n.rep , n00.rep , 
+
+                        lasso.devian.rep, lasso.intcal.rep, lasso.lincal.rep, lasso.agree.rep, lasso.nzero.rep,  
+                        lasso.cal.devian.rep, lasso.cal.intcal.rep, lasso.cal.lincal.rep, lasso.cal.agree.rep, 
+                        lasso.devian.naive, lasso.intcal.naive, lasso.lincal.naive, lasso.agree.naive, 
+                        lasso.nzero, lasso.cal.devian.naive, cv_glmnet_fit, cv_ridge_fit, 
+                        cv_glmnet_fit_f, cv_ridge_fit_f, 
+                        
+                        xgbkeep, doxgb_simple, doxgb_simpleF, doxgb_simpleO,   
+                        xgb.devian.rep, xgb.intcal.rep, xgb.lincal.rep, xgb.agree.rep, xgb.nzero.rep, 
+                        xgb.devian.naive, xgb.intcal.naive, xgb.lincal.naive, xgb.agree.naive, xgb.nzero,  
+                        xgb.simple.fit, xgb.tuned.fit, xgb.simple.fitF, xgb.tuned.fitF, xgb.simple.fitO, xgb.tuned.fitO,
+                        
+                        rfkeep , 
+                        rf.devian.rep   , rf.intcal.rep , rf.lincal.rep , rf.agree.rep , rf.mtry.rep , 
+                        rf.cal.devian.rep , rf.cal.intcal.rep , rf.cal.lincal.rep , rf.cal.agree.rep ,  
+                        rf.devian.naive , rf.intcal.naive , rf.lincal.naive , rf.agree.naive , 
+                        rf.mtry.naive , rf.cal.devian.naive , 
+                        rf_tuned , rf_tunedF , rf_tunedO , 
+                        dorf_base , dorf_feat , dorf_offs , 
+
+                        orfkeep , 
+                        orf.devian.rep , orf.intcal.rep , orf.lincal.rep , orf.agree.rep , orf.mtry.rep , 
+                        orf.cal.devian.rep , orf.cal.intcal.rep , orf.cal.lincal.rep , orf.cal.agree.rep ,  
+                        orf.devian.naive , orf.intcal.naive , orf.lincal.naive , orf.agree.naive , 
+                        orf.mtry.naive, orf.cal.devian.naive , 
+                        orf_tuned , orf_tunedF , orf_tunedO , 
+                        doorf_base , doorf_feat , doorf_offs , 
+                        
+                        ann.devian.rep , ann.intcal.rep , ann.lincal.rep , ann.agree.rep , ann.nzero.rep , 
+                        ann.devian.naive , ann.intcal.naive , ann.lincal.naive , ann.agree.naive , ann.nzero , ann_zb ,  
+                        ann_fit_1_f , ann_fit_2_f , ann_fit_3_f , ann_fit_4_f , ann_fit_5_f , ann_fit_6_f , ann_fit_7_f , ann_fit_8_f , 
+                        
+                        rpart.devian.rep , rpart.intcal.rep , rpart.lincal.rep , rpart.agree.rep , rpart.nzero.rep ,  
+                        rpart.devian.naive , rpart.intcal.naive , rpart.lincal.naive , rpart.agree.naive , rpart.nzero , 
+                        rpart.fit.00 , rpart.fitF.00 , rpart.fitO.00 , 
+                        
+                        step.devian.rep , step.cal.devian.rep ,  
+                        step.intcal.rep ,  step.lincal.rep , step.agree.rep , step.nzero.rep , step.p.rep ,
+                        step.devian.naive , step.agree.naive , step.nzero , step.p , 
+                        cv.stepreg.fit.all, cv.stepreg.fit , func.fit.aic , 
+
+                        foldidkey , time_start , pver ) {
   
   if ( family=="cox" ) { 
     nevents = sum( event )
@@ -2724,8 +3082,6 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", res
     sat.m2LogLik  = 0 
     null.deviance = null.m2LogLik
   } 
-
-  time_stop=Sys.time()
   
   if (family == "cox") { 
     dep_names = c(start_name, y_name, event_name) 
@@ -2774,23 +3130,23 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", res
     if ((dostep == 1) | (doaic==1)) { 
       xbetas.boot.oob = cbind( xbetas.boot.oob, xbetas.boot.oob.step[,keepxbetas.step, drop=FALSE]) 
       xbetas.boot.inb = cbind( xbetas.boot.inb, xbetas.boot.inb.step[,keepxbetas.step, drop=FALSE]) } 
-    colnames(xbetas.boot.oob)[1] = "rep"
-    colnames(xbetas.boot.inb)[1] = "rep"
-#    print("HERE boostrap")
-#    xbetas.boot.oob[1:5,]
+    if (!is.null(xbetas.boot.oob)) {
+      colnames(xbetas.boot.oob)[1] = "rep" 
+      colnames(xbetas.boot.inb)[1] = "rep" 
+    }
   }
-
+  
+  time_stop=Sys.time()
   rver = R.Version()$version.string
-
-  Call <- match.call()
-#  indx <- match(c("xs","start","y_","event","family"), names(Call), nomatch=0)
+  
+  #  indx <- match(c("xs","start","y_","event","family"), names(Call), nomatch=0)
   
   nestedcv = list( call = Call, 
                    sample = c (family=family, n=dim(xs)[1], nevent=nevents, xs.columns=dim(xs)[2], xs.df=rankMatrix(xs)[1], 
                                null.dev.n=null.deviance, null.m2LogLik.n=null.m2LogLik, sat.m2LogLik.n=sat.m2LogLik, nlevels=length(unique(id)) ), 
                    dep_names = dep_names, 
                    xvars = colnames(xs), 
-                   tuning = c( folds_n=folds_n, stratified=stratified, limit=limit, fine=fine, ties=ties, method=method, steps_n=steps_n, boostrap=bootstrap_, unique=unique),
+                   tuning = c( folds_n=folds_n, stratified=stratified, limit=limit, fine=fine, ties=ties, method=method, steps_n=steps_n, bootstrap=bootstrap_, unique=unique),
                    fits   = c( dolasso=dolasso, doxgb=doxgb_, dorf=dorf_, dorpart=dorpart, doann=doann_, dostep=dostep, doaic=doaic, doorf=doorf_ ), 
                    seed   = seed, 
                    ensemble = ensemble, 
@@ -2804,7 +3160,7 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", res
                    times  = c(time_start=time_start, time_stop=time_stop),  
                    hr_mn_sc = diff_time1(time_stop, time_start),
                    version = c(R=rver, glmnetr=pver) )
-  
+
   nestedcv$xbetas = xbetas
   if (resample == 1) {
     if (bootstrap == 0) { 
@@ -2814,7 +3170,7 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", res
       nestedcv$xbetas.boot.inb = xbetas.boot.inb 
     }
   }
-
+  
   if ( keepxbetas == 0) { nestedcv$xbetas = NULL ; nestedcv$xbetas.cv = NULL ; }
   if ( resample == 0) { nestedcv$xbetas.cv = NULL }
   
@@ -2823,14 +3179,14 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", res
   } else { 
     names(nestedcv$sample)[c(6,7,8,9)] = c("null.dev/n","null.m2LogLik/n","sat.m2LogLik/n", "id levels") 
   }
-
+  
   nestedcv$null.m2LogLik.rep = null.m2LogLik.rep
   nestedcv$ sat.m2LogLik.rep =  sat.m2LogLik.rep 
   nestedcv$n.rep             = n.rep 
   if (family %in% c("binomial","cox")) { nestedcv$n00.rep = n00.rep } 
   
   #============================================================================#
-
+  
   if (dolasso == 1) { 
     if (resample == 1) {
       nestedcv$lasso.devian.rep    = lasso.devian.rep
@@ -2872,9 +3228,6 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", res
       if (sum(ensemble[c(1,5)])     >= 1) { 
         nestedcv$xgb.simple.fit  = xgb.simple.fit
         nestedcv$xgb.tuned.fit   = xgb.tuned.fit
-##        xgb.tuned.fit$param.final
-##        xgb.tuned.fit$doxgb$nrounds.final
-##        xgb.tuned.fit2 = xgb.train(params = xgb.tuned.fit$param.final, data = full.xgb.dat, nrounds = xgb.tuned.fit$doxgb$nrounds.final)        
       } 
       if (sum(ensemble[c(2,6)])     >= 1) {
         nestedcv$xgb.simple.fitF = xgb.simple.fitF
@@ -2890,7 +3243,6 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", res
         nestedcv$xgb.simple.param.final = xgb.simple.fit$param.final
         nestedcv$doxgb_tuned            = xgb.tuned.fit$doxgb
         nestedcv$xgb.tuned.param.final  = xgb.tuned.fit$param.final
-#        nestedcv$xgb.nrounds.final = xgb.tuned.fit$doxgb$nrounds.final         
       }
       if (sum(ensemble[c(2,6)])     >= 1) {
         nestedcv$doxgb_simpleF           = doxgb_simpleF
@@ -2979,7 +3331,7 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", res
     if (orfkeep == 1) {
       if  (sum(ensemble[c(1,5)]) >= 1) { 
         if( keepdata == 0) { 
-          orf_tuned$orf_tuned$data = rep(0,dim(orf_tuned$orf_tuned$data)[1])                                       ## how to remove data element ??
+          orf_tuned$orf_tuned$data = rep(0,length(y_))                         ## how to remove data element ??
           orf_tuned$orf_tuned$data = NULL 
           if (track >= 2) {
             cat("  orf_tuned_fit$orf_tuned$data assianged value ")
@@ -2990,14 +3342,14 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", res
       } 
       if  (sum(ensemble[c(2,6)]) >= 1) { 
         if ( keepdata == 0) { 
-          orf_tunedF$orf_tuned$data = rep(0,dim(orf_tunedF$orf_tuned$data)[1])
+          orf_tunedF$orf_tuned$data = rep(0, length(y_))
           orf_tunedF$orf_tuned$data = NULL 
         }
         nestedcv$orf_tuned_fitF = orf_tunedF 
       }
       if ((sum(ensemble[c(3,4,7,8)]) >= 1) & (family == "gaussian")) {
         if( keepdata == 0) { 
-          orf_tunedO$orf_tuned$data = rep(0, dim(orf_tunedO$orf_tuned$data)[1]) 
+          orf_tunedO$orf_tuned$data = rep(0, length(y_)) 
           orf_tunedO$orf_tuned$data = NULL 
         }
         nestedcv$orf_tuned_fitO = orf_tunedO
@@ -3068,10 +3420,10 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", res
       nestedcv$step.nzero.rep  = step.nzero.rep 
       nestedcv$step.p.rep      = step.p.rep 
     }
-  nestedcv$step.devian.naive = step.devian.naive 
-  nestedcv$step.agree.naive  = step.agree.naive 
-  nestedcv$step.nzero        = step.nzero 
-  if (dostep == 1) { nestedcv$step.p = step.p }
+    nestedcv$step.devian.naive = step.devian.naive 
+    nestedcv$step.agree.naive  = step.agree.naive 
+    nestedcv$step.nzero        = step.nzero 
+    if (dostep == 1) { nestedcv$step.p = step.p }
   }
   
   if (dostep  == 1) { nestedcv$cv.stepreg.fit = cv.stepreg.fit.all }
@@ -3084,18 +3436,10 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", res
   if( keepdata == 1) { nestedcv$foldidkey = foldidkey }
   
   #============================================================================#
-  
+
   class(nestedcv) <- c("nested.glmnetr")
   
-  names (nestedcv)
-  
-  return( nestedcv )
-  
-  if (track >= 1) { cat("\n Program End \n") }
-  if (track >= 2) { time_last = diff_time(time_start, time_last) } 
+  return(nestedcv)
   
 }
-
-###############################################################################################################################################
-###############################################################################################################################################
 

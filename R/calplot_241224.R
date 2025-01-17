@@ -77,6 +77,7 @@ calplot0 = function(object1, wbeta=NULL, df=5, resample=1, oob=1, bootci=0, repn
   
   family = object1$sample[1] 
   bootstrap =  as.numeric( object1$tuning[8] ) 
+  if (is.na(bootstrap)) { bootstrap = 0 }
   folds_n = as.numeric( object1$tuning[1] )
   
   if (!(knottype %in% c(-1,0,1,2,3))) { knottype = 1 } 
@@ -176,8 +177,8 @@ calplot0 = function(object1, wbeta=NULL, df=5, resample=1, oob=1, bootci=0, repn
           xb_ = xb_tmp
         } else if (i_ != 1) { 
           resampno = rep(i_,length(y_tmp))
-          y_ = c(y_,y_tmp)
-          xb_ = c(xb_,xb_tmp)
+          y_  = c(y_ ,y_tmp) 
+          xb_ = c(xb_,xb_tmp) 
         } 
       }
     }
@@ -217,12 +218,12 @@ calplot0 = function(object1, wbeta=NULL, df=5, resample=1, oob=1, bootci=0, repn
 #  cat(paste("3 var xb_ = ", var(xb_), "\n"))
   
   if (family == "cox") {
- #   length(table(table(xb_))) 
+    #   length(table(table(xb_))) 
     lxb_ = length(unique(xb_))
     if ( lxb_ < (df+1))  { df = lxb_ - 1 }
     if (df > 1) {
       object2 = coxph(y_ ~ pspline(xb_,df=df), data=as.data.frame(cbind(y_, xb_)) )                         # termplot(object2,1) ; abline(a=0,b=1) ; title("calplot")
-#      object3 = coxph(Surv(yt,event) ~ pspline(xb_,df=df), data=as.data.frame(cbind(yt, event, xb.hat.p)) ) # termplot(object3,1) ; abline(a=0,b=1) ; title("predict()")
+      #      object3 = coxph(Surv(yt,event) ~ pspline(xb_,df=df), data=as.data.frame(cbind(yt, event, xb.hat.p)) ) # termplot(object3,1) ; abline(a=0,b=1) ; title("predict()")
     } else {
       object2 = coxph(y_ ~ xb_, data=as.data.frame(cbind(y_, xb_)) ) 
     }
@@ -255,16 +256,38 @@ calplot0 = function(object1, wbeta=NULL, df=5, resample=1, oob=1, bootci=0, repn
     summary(object2)
   }
   
+  if ( (resample == 1) & (bootstrap >= 1) & (family == "cox") ) {
+    xbetas = object1$xbetas[,wbeta]                                        
+
+    mean_xb_full = mean( xbetas ) 
+    mean_xb_sub  = mean( xb_    ) 
+
+    mean_xb_full_middle = mean( xbetas[ ( (xbetas > quantile(xbetas,0.30)) & (xbetas < quantile(xbetas,1-0.3)) ) ] )   
+    if        (oob == 1) { sub_ids = object1$xbetas.boot.oob[object1$xbetas.boot.oob[,1]==repn,2]     ## out of bag sequence IDs 
+    } else if (oob == 0) { sub_ids = object1$xbetas.boot.inb[object1$xbetas.boot.inb[,1]==repn,2] }   ## in bag sequence IDs 
+    xb_full_sub = xbetas[ sub_ids ]
+    mean_xb_sub_middle  = mean( xb_full_sub[ ( (xb_full_sub > quantile(xb_full_sub,0.30)) & (xb_full_sub < quantile(xb_full_sub,1-0.3)) ) ] ) 
+
+    ADJ = ( mean_xb_full - mean_xb_sub) + ( mean_xb_full_middle - mean_xb_sub_middle )
+    ADJA = ( mean_xb_full - mean_xb_sub) 
+#    cat(paste("  repn = ", repn, "  ADJ = ", ADJ, "  ADJA = ", ADJA, "  mean_xb_full = ", mean_xb_full, "\n"))
+#    ADJA = ( mean_xb_sub) ## bad 
+#    ADJA = ( mean_xb_full ) ##  
+#    ADJA = 0
+    ADJ = ADJA 
+  } else { ADJ = 0 } 
+
+  
   plotxb = minxb + rep(0:100)*(maxxb-minxb)/100
   
   ## mean(predict(object2)) ## 9e-16
-  meancalxb = mean(predict(object2,data.frame(xb_=origxb)))
+  meancalxb = mean(predict(object2, data.frame(xb_=origxb - ADJ)))               ## of any use? 
   #      cat( paste(title, meancalxb, "\n" ) )  ## 9e-16
   meanxb_ = mean(xb_)
-  dfr = data.frame(xb_=plotxb)                   ## title="derived range" 
+#  dfr = data.frame(xb_=plotxb)                   ## title="derived range" 
 #  dfr = data.frame(xb_=xb_)                     ## title="original data"
-  est = predict(object2, newdata=dfr)   
-  predicteds = predict(object2, newdata=data.frame(xb_=plotxb), se=TRUE)  
+#  est = predict(object2, newdata=dfr)   
+  predicteds = predict(object2, newdata=data.frame(xb_=plotxb-ADJ), se=TRUE)  
   est = predicteds$fit
   se = predicteds$se.fit
   estci = cbind(plotxb, est, se, est - 2 * se, est + 2 * se)
@@ -357,13 +380,17 @@ calplot0 = function(object1, wbeta=NULL, df=5, resample=1, oob=1, bootci=0, repn
 #' averaged to provide an overall model calibration.  Standard deviations of 
 #' the k spline fits are also calculated as a function of the predicted X*beta, 
 #' and these are used to derive and plot approximate 95% confidence intervals 
-#' (mean +/- 2 * SD/sqrt(k)).  Because regression equations can be unreliable 
-#' when extrapolating beyond the data range used in model derivation, we 
-#' display this overall calibration fit and CIs with solid lines only for the 
-#' region which lies within the ranges of the predicted x*betas for  
+#' (mean +/- 2 * SD/sqrt(k)). Note, standard errors calculated in this manner 
+#' may underestimate (or overestimate?) the true standard error, the 
+#' displayed confidence intervals might be too narrow for a 95% coverage 
+#' probability and should be interpreted with caution. See the package vignettes 
+#' for discussion and references. Further, because regression equations can be 
+#' unreliable when extrapolating beyond the data range used in model derivation, 
+#' we display this overall calibration fit and CIs with solid lines only for 
+#' the region which lies within the ranges of the predicted x*betas for  
 #' all the k leave out sets.  The spline fits are made using the same framework 
 #' as in the original machine learning model fits, i.e. one of "cox", "binomial" 
-#' or "gaussian"family. For the "cox" famework the pspline() funciton is used, 
+#' or "gaussian"family. For the "cox" framework the pspline() funciton is used, 
 #' and for the "binomial" and "gaussian" frameworks the ns() function is 
 #' used.  Predicted X*betas beyond the range of any of the hold 
 #' out sets are displayed by dashed lines to reflect the lessor certainty when 
@@ -403,6 +430,7 @@ calplot0 = function(object1, wbeta=NULL, df=5, resample=1, oob=1, bootci=0, repn
 #' @param plotfold 0 by default to not plot the individual fold calibrations, 1 
 #' to overlay the k leave out spline calibration fits in a single figure and 2 
 #' to produce separate plots for each of the k hold out calibration curves. 
+#' @param plot_full plot full data 
 #' @param plothr  a power > 1 determining the spacing of the values 
 #' on the axes, e.g. 2, exp(1), sqrt(10) or 10.  The default of 0 plots the 
 #' X*Beta.  This only applies fore "cox" survival data models. 
@@ -446,7 +474,7 @@ calplot0 = function(object1, wbeta=NULL, df=5, resample=1, oob=1, bootci=0, repn
 #' @export
 #'
 calplot = function(object, wbeta=NULL, df=3, resample=NULL, oob=1, bootci=0, 
-                   plot=1, plotfold=0, plothr=0, knottype=1, trim=0, vref=0, xlim=NULL, ylim=NULL, 
+                   plot=1, plotfold=0, plot_full=0, plothr=0, knottype=1, trim=0, vref=0, xlim=NULL, ylim=NULL, 
                    xlab=NULL, ylab=NULL, col.term=1, col.se=2, rug=1, seed=NULL, cv=NULL, fold=NULL, ... ) {
 usefold = 1   
 # print(c(101, oob ))  
@@ -501,6 +529,7 @@ usefold = 1
   family = object$sample[1] 
   tuning = object$tuning 
   bootstrap = as.numeric( tuning[8] )
+  if (is.na(bootstrap)) { bootstrap = 0 }
   unique    = as.numeric( tuning[9] )
   nobs = object$sample[2] 
   
@@ -569,11 +598,11 @@ usefold = 1
 #    print( estci )
   }
   
-  if ( (stop_ == 0) & (bootci == 1) ) {
-    estci_orig = calplot0(object, wbeta=wbeta, df=df, resample=0, bootci=1, oob=oob, repn=NULL, knottype=knottype, 
+  if ( (stop_ == 0) & (resample == 1) & (bootstrap >= 1) ) {
+    estci_full = calplot0(object, wbeta=wbeta, df=df, resample=0, bootci=1, oob=oob, repn=NULL, knottype=knottype, 
                      trim=trim, plot=0, lwd=2, xlim=xlim, ylim=ylim, xlab=xlab, ylab=ylab, 
                      col.term=col.term, col.se=col.se, rug=rug, plothr=plothr , ... )$estci  
-#    print( estci_orig[1:5,] )
+#    print( estci_full[1:5,] )
   }
   
   if ( (stop_ == 0) & (usefold == 1) ) { 
@@ -669,7 +698,7 @@ usefold = 1
       cat(c(minxb,maxxb),"\n")
       cat(paste( "  Range of calibrated confidence intervals: \n")) 
       if (bootci == 1) {
-        #        cat( c( min(estci_orig[,4]), max(estci_orig[,5]) ) ,"\n") 
+      #        cat( c( min(estci_full[,4]), max(estci_full[,5]) ) ,"\n") 
       } else {
         cat( c( min(est.resample), max(est.resample) ) ,"\n") 
       }  
@@ -679,9 +708,9 @@ usefold = 1
       ## get average and SE from the folds_n folds 
       
       if (bootci == 1) { 
-        #        print( estci_orig[1:20,1] )
+        #        print( estci_full[1:20,1:5] )
         #        print( plotxb )
-        est.resample = t( 2 * estci_orig[,2] - t(est.resample) )
+        est.resample = t( 2 * estci_full[,2] - t(est.resample) )                ## t for transpose 
       }    ## check row or column subtraction 
       
       est = colMeans(est.resample)
@@ -744,7 +773,9 @@ usefold = 1
         lines( plotxb_[indxhi]  , upper_[indxhi  ], lty=lty2, lwd=lwd, col=col.se ) 
         
         if (family == "cox") { 
-          abline(a=-mean(xbeta), b=1, lty=3)
+#          cat(paste(" mean xbeta = ", mean(object$xbetas[,wbeta]), "  ", mean(xbeta) , "  wbeta = " , wbeta, " \n"  ))
+          if (bootstrap >= 1) { abline(a=-mean(object$xbetas[,wbeta]), b=1, lty=3) 
+          } else { abline(a=-mean(xbeta), b=1, lty=3) }
           abline(h=0, lty=1)
           myaxis(ylim, plothr, est)
           myaxis(xlim, plothr, NULL, side=1)
@@ -775,6 +806,11 @@ usefold = 1
         if (vref > 0) { abline(v=vrefs, lty=3, col=2) }
       }
       
+      if (plot_full != 0) { plot_full = 1 } 
+      if ((resample == 1) & (bootstrap >= 1) & (plot_full == 1)) {
+        lines( plotxb, estci_full[,2], lty=3, col=1,  lwd=4) 
+      }
+      
       if (plotfold == 1) {
         for (i_ in c(1:reps)) {  
           lines( plotxb, est.resample[i_,], lty=i_, col=i_+1,  lwd=1) 
@@ -801,7 +837,7 @@ usefold = 1
 # x_ = rnorm(100)^2
 # y_ = rbinnom(100,1,(1/(1+exp(x_)))) 
 
-#' A customized rug 
+#' A customized rug, for Cox events on top, censors on bottom 
 #'
 #' @param x_ the x variable to be included in the rug
 #' @param y_ an event variable for placing the x_ values top for events and bottom
@@ -836,7 +872,7 @@ myrug = function(x_, y_=NULL, family="gaussian") {
 }
 
 #===============================================================================
-#' Un-log the log(HR)'s for plotting
+#' Un-log, or not, the log(HR)'s for plotting
 #'
 #' @param zlim the y limits on the log(HR) scale A nested.glmnetr() output object for calibration
 #' @param plothr  a power of determining the placement of y axis 
@@ -872,7 +908,7 @@ myaxis = function(zlim,plothr,est=NULL,side=2, digits=2) {
 }
 
 #===============================================================================
-#' Set up default lable for xaxis 
+#' Set up default label for x-axis 
 #'
 #' @param family family
 #' @param plothr  a power of determining the placement of y axis 

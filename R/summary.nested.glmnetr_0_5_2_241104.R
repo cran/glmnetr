@@ -1,100 +1,5 @@
-################################################################################
-##### summary.nested.glmnetr_yymmdd.R ##########################################
-################################################################################
-#' A redirect to the summary() function for nested.glmnetr() output objects 
-#'
-#' @param x a nested.glmnetr() output object.  
-#' @param ... additional pass through inputs for the print function.
-#' 
-#' @return - a nested cross validation fit summary, or a cross validation model summary.  
-#' 
-#' @seealso
-#'    \code{\link{summary.nested.glmnetr}} , \code{\link{nested.glmnetr}}
-#'    
-#' @export
-#'
-#' @examples
-#' \donttest{
-#' sim.data=glmnetr.simdata(nrows=1000, ncols=100, beta=NULL)
-#' xs=sim.data$xs 
-#' y_=sim.data$yt
-#' event=sim.data$event
-#' # for this example we use a small number for folds_n to shorten run time 
-#' fit3 = nested.glmnetr(xs, NULL, y_, event, family="cox", folds_n=3)  
-#' print(fit3)
-#' }
-#' 
-print.nested.glmnetr = function(x, ...) {
-  summary(x) 
-}
-#
-################################################################################
-#' round elements of a summary.glmnetr() output
-#'
-#' @param summdf a summary data frame from summary.nested.glmnetr() obtained using 
-#' the option table=0 
-#' @param digits the minimum number of decimals to display the elements of the data
-#' frame 
-#' @param resample 1 (default) if the summdf object is a summary for an analysis including
-#' nested cross validation, 0 if only the full data models were fit.
-#'
-#' @return a data frame with same form as the input but with rounding for easier 
-#' display
-#' 
-#' @seealso
-#'   \code{\link{summary.nested.glmnetr}} , \code{\link{nested.glmnetr}} 
-#' 
-#' @export 
-#'
-roundperf = function(summdf, digits=3, resample=1) {
-  if (resample == 1) {
-    set1 = c(1,2,5,6,8) 
-    set2 = c(3) 
-    set3 = c(4:7)
-  } else {
-    set1 = c(1,3) 
-    set2 = NULL 
-    set3 = c(2)
-  }
-  for ( j_ in set1 ) {
-    digitst = digits 
-    for (i_ in c(0:3)) {
-      if (sum(!is.na(summdf[j_])) == 0 )  {
-        conditin = (min(abs(summdf[j_]), rm.na=TRUE) < 2*10^(-digits-i_)) 
-        if (is.na(conditin)) { conditin = 0 } 
-        if ( conditin ) { digitst = digits + i_ + 1 }
-      }
-    }
-    #        print(c(j_,digitst))
-    summdf[j_] = round(summdf[j_], digits=digitst)
-  }
-  for ( j_ in set2 ) {
-    digitst = digits 
-    for (i_ in c(0:3)) {
-      #          print( summdf[j_] )
-      #          print( summdf[j_] - 1)
-      conditin = (min(abs(summdf[j_][!is.na(summdf[j_])]-1)) < 2*10^(-digits-i_)) 
-      if (is.na(conditin)) { conditin = 0 }
-      if (conditin) { digitst = digits + i_ + 1 }
-      #          print(c(i_,digitst))
-    }
-    
-    summdf[j_] = round(summdf[j_], digits=digitst)
-  }
-  for ( j_ in set3 ) {
-    digitst = digits 
-    for (i_ in c(0:3)) {
-      conditin = (max(abs(summdf[j_])) > (1 -2*10^(-digits-i_)))
-      if (is.na(conditin)) { conditin = 0 }
-      if (conditin) { digitst = digits + i_ + 1 }
-    }
-    summdf[j_] = round(summdf[j_], digits=digitst)
-  }
-  return( summdf )
-}
-
 ################################################################################  
-#' Summarize a nested.glmnetr() output object
+#' Summarize a nested.glmnetr() output objects version 0.5-2
 #'
 #' @description 
 #' Summarize the model fit from a nested.glmnetr() output object, i.e. the fit of 
@@ -112,17 +17,15 @@ roundperf = function(summdf, digits=3, resample=1) {
 #' Only applies to cvfit=TRUE.
 #' @param digits digits for printing of deviances, linear calibration coefficients 
 #' and agreement (concordances and R-squares).
-#' @param call 1 to print call used in generation of the object, 0 or NULL to not print 
+#' @param Call 1 to print call used in generation of the object, 0 or NULL to not print 
 #' @param onese 0 (default) to not include summary for 1se lasso fits in tables, 1 to include 
 #' @param table 1 to print table to console, 0 to output the tabled information to a data frame
 #' @param tuning 1 to print tuning parameters, 0 (default) to not print
 #' @param width character width of the text body preceding the performance 
 #' measures which can be adjusted between 60 and 120.
-#' @param cal 1 print performance statistics for lasso 
-#' models calibrated on training data, 2 to print performance statistics for 
-#' lasso and random forest models calibrated on training data, 0 (default) to 
-#' not print.  Note, despite any intuitive appeal these training data 
-#' calibrated models may sometimes do rather poorly.
+#' @param cal 1 print out performance statistics for lasso models calibrated on 
+#' training data. 0 (default) to not print.  Note, these training data calibrated
+#' estimates may not do very well for some of the other machine learning models.   
 #' @param ... Additional arguments passed to the summary function.  
 #' 
 #' @return - a nested cross validation fit summary, or a cross validation model summary.  
@@ -133,22 +36,13 @@ roundperf = function(summdf, digits=3, resample=1) {
 #' 
 #' @export
 #'
-#' @examples
-#' \donttest{
-#' sim.data=glmnetr.simdata(nrows=1000, ncols=100, beta=NULL)
-#' xs=sim.data$xs 
-#' y_=sim.data$yt
-#' event=sim.data$event
-#' # for this example we use a small number for folds_n to shorten run time 
-#' fit3 = nested.glmnetr(xs, NULL, y_, event, family="cox", folds_n=3)  
-#' summary(fit3)
-#' }
-#' 
-# cvfit = FALSE ; pow=2 ; printg1 = FALSE ; digits = 3 ; call=NULL ; onese = 0 ; table = 1 ; 
+#' @noRd
+#'
+# cvfit = FALSE ; pow=2 ; printg1 = FALSE ; digits = 3 ; Call=NULL ; onese = 0 ; table = 1 ; 
 
-summary.nested.glmnetr = function(object, cvfit=FALSE, pow=2, printg1=FALSE, 
-                                  digits=4, call=NULL, onese=0, table=1, tuning=0, width=84, cal=0, ...) {
-# cvfit=FALSE ; pow=2 ; printg1=FALSE ; digits=4 ; call=NULL ; onese=0 ; table=1 ; tuning=0 ; width=108  ; cal = 1 ; 
+summary.nested.glmnetr_0_5_2 = function(object, cvfit=FALSE, pow=2, printg1=FALSE, 
+                                  digits=4, Call=NULL, onese=0, table=1, tuning=0, width=84, cal=0, ...) {
+# cvfit=FALSE ; pow=2 ; printg1=FALSE ; digits=4 ; Call=NULL ; onese=0 ; table=1 ; tuning=0 ; width=108  ; cal = 1 ; 
   
   ## AltDevRat
 #  x = colSums ( n.rep*( null.m2LogLik.rep - devian.rep )) / sum((null.m2LogLik.rep - sat.m2LogLik.rep)*n.rep)
@@ -181,13 +75,13 @@ summary.nested.glmnetr = function(object, cvfit=FALSE, pow=2, printg1=FALSE,
     summary(cv_glmnet_fit,printg1=printg1)
   } else {
     if (!(table %in% c(0,1,2,3))) { table = 1 }
-    if (is.null(call)) { call = 0 } 
-    if (call > 0) { 
-      Call = object$call 
-      if ( is.null(Call) ) { Call = object$Call }
-    } else { Call = NULL }
+    if (!is.null(Call)) { 
+      if (Call != 0) { 
+        Call = object$Call 
+        if ( is.null(Call) ) { Call = object$call }
+      } else { Call = NULL }
+    }
     sample  = object$sample 
-    if (length(sample) >= 9) { if (sample[9] == 0) { sample = sample[-9] } } 
 #    tuning_  = object$tuning
     fits    = object$fits 
     dolasso = fits[1]
@@ -235,8 +129,8 @@ summary.nested.glmnetr = function(object, cvfit=FALSE, pow=2, printg1=FALSE,
     if (dostep==1) { cv.stepreg.fit    = object$cv.stepreg.fit }  
     if (doaic ==1) { func.fit.aic      = object$func.fit.aic   }
 
-    if (call == 1) { 
-      cat(paste0("\n","function call :\n\n"))  
+    if (!is.null(Call)) { 
+      cat(paste0("\n","    function call :\n\n"))  
       print(Call) 
       cat("\n") 
     }

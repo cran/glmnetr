@@ -4,7 +4,7 @@
 #' Fit a Random Forest model on data provided in matrix and vector formats.
 #' 
 #' @description Fit an Random Forest model using the orsf() function of the 
-#' randomForestSRC package.  
+#' aorsf package.  
 #'
 #' @param xs     predictor input - an n by p matrix, where n (rows) is sample size, and p (columns) 
 #' the number of predictors.  Must be in matrix form for complete data, no NA's, no Inf's, etc.,
@@ -31,7 +31,7 @@
 #' for the default this randomly generated seed depends on the seed in memory at that 
 #' time so will depend on any calls of set.seed prior to the call of this function. 
 #' @param tol a small number, a lower bound to avoid division by 0  
-#' @param track 1 to output a brief summary of the final selected model, 2 to 
+#' @param track 1 to output a brief summary of the final selected model, 3 to 
 #' output a brief summary on each model fit in search of a better model or 0 
 #' (default) to not output this information.
 #'
@@ -74,7 +74,7 @@ orf_tune = function(xs, start=NULL, y_, event=NULL, family=NULL, mtryc=NULL, ntr
   } else if (family == "gaussian") { split_rule="variance" 
   } else if (family == "cox"     ) { split_rule="logrank" } 
   
-  if (track >= 2) { 
+  if (track >= 3) { 
     time_start = diff_time()
     time_split = time_start
   } 
@@ -163,7 +163,7 @@ orf_tune = function(xs, start=NULL, y_, event=NULL, family=NULL, mtryc=NULL, ntr
       
       if (k_ > 1) { oobag_funv[k_] = orf$eval_oobag$stat_values } 
       
-      if (track >= 2) { 
+      if (track >= 3) { 
         print( c(k_, mtryc[k_], mtry_best, orf$eval_oobag$stat_values ) )
         time_split = diff_time(time_start, time_split)
       }
@@ -182,7 +182,7 @@ orf_tune = function(xs, start=NULL, y_, event=NULL, family=NULL, mtryc=NULL, ntr
       orf_tuned = orf_best
     }
     
-    if (track >= 2) {
+    if (track >= 3) {
       print( c(mtry_best, orf_tuned$eval_oobag$stat_values ) )
       time_split = diff_time(time_start, time_split)
     }

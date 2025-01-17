@@ -3,8 +3,8 @@
 ################################################################################
 #' Get seeds to store, facilitating replicable results 
 #'
-#' @param seed The intput seed as a start, NULL, a vector of lenght 1 or 2, or 
-#' a list with vectors of lenght 1 or the number of folds, $seedr for most models 
+#' @param seed The input seed as a start, NULL, a vector of length 1 or 2, or 
+#' a list with vectors of length 1 or the number of folds, $seedr for most models 
 #' and $seedt for the ANN fits 
 #' @param folds_n The number of folds in general
 #' @param folds_ann_n The number of folds for the ANN fits 

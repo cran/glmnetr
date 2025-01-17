@@ -1,7 +1,7 @@
 ---
 title: "An Overview of glmnetr" 
 author: "Walter K. Kremers, Mayo Clinic, Rochester MN" 
-date: "24 October 2024" 
+date: "28 December 2024" 
 output: pdf_document 
 vignette: >
   %\VignetteIndexEntry{An Overview of glmnetr}
@@ -13,7 +13,7 @@ vignette: >
 #  evalload = FALSE ; evalmodel = TRUE
 knitr::opts_chunk$set(echo=TRUE)
 # library( glmnetr )
-source("~/Documents/Rpackages/glmnetr_supl/_load_glmnetr_vig_241024.R" , echo=TRUE)
+source("~/Documents/Rpackages/glmnetr_supl/_load_glmnetr_vig_241228.R" , echo=TRUE)
 ```
 ```{r dummy , echo=FALSE, results='hide', message=FALSE, warning=FALSE, fig.show='hide', include=FALSE, eval=FALSE}
 # dummy to show rmd options 
@@ -81,9 +81,9 @@ Matrix::rankMatrix(xs)[[1]]
 print(xs[1:10,c(1:12,18:20)])
 ```
 # Performance of cross validation (CV) informed relaxed lasso model
-Because the values for lambda and gamma informed by CV are specifically chosen to give a best fit, model fit statistics for the CV informed model, when based upon the same train data used to derive the model, will be biased. (Using the common terminology of machine learning, both the "training" and "validation" data inform the model fit.) To address this one can perform a CV on the CV derived estimates, that is a nested cross validation as argued for in SRDM ( Simon R, Radmacher MD, Dobbin K, McShane LM. Pitfalls in the Use of DNA Microarray Data for Diagnostic and Prognostic Classification. J Natl Cancer Inst (2003) 95 (1): 14-18. https://academic.oup.com/jnci/article/95/1/14/2520188 ). For this second layer of CV, there is no usage of information from the hold out data back to the model fit. (Using the common terminology of machine learning, each of the hold-out subsets of this outer layer of CV is treated as a "test" data set for calculation of model performance, and the results combined across these multiple hold out "test" sets.) We demonstrate the model performance evaluation by nested cross validation first for the lasso models with the evaluation of other machine learning models being similar. For this performance evaluation we use the nested.glmnetr() function which first fits all models based upon all data and then performs the cross validation for calculation of concordances or R-squares, deviance ratios and linear calibration summaries.
+Because the values for lambda and gamma informed by CV are specifically chosen to give a best fit, model fit statistics for the CV informed model, when based upon the same train data used to derive the model, will be biased. (Using the common terminology of machine learning, both the "training" and "validation" data inform the model fit.) To address this one can perform a CV on the CV derived estimates, that is a nested cross validation as argued for in Simon et al.. For this second layer of CV, there is no usage of information from the hold out data back to the model fit. (Using the common terminology of machine learning, each of the hold-out subsets of this outer layer of CV is treated as a "test" data set for calculation of model performance, and the results combined across these multiple hold out "test" sets.) We demonstrate the model performance evaluation by nested cross validation first for the lasso models with the evaluation of other machine learning models being similar. For this performance evaluation we use the nested.glmnetr() function which first fits all models based upon all data and then performs the cross validation for calculation of concordances or R-squares, deviance ratios and linear calibration summaries.
 ```{r load, include=FALSE, eval=evalload} 
-load( file="~/Documents/Rpackages/glmnetr_supl/using_glmnetr_outputs_241024.RLIST" ) 
+load( file="~/Documents/Rpackages/glmnetr_supl/using_glmnetr_outputs_241228.RLIST" ) 
 ```
 ```{r Fit a relaxed lasso model informed by cross validation 1, include=FALSE, eval=evalmodel}
 set.seed(465783345) 
@@ -98,11 +98,11 @@ nested.cox.fit = nested.glmnetr(xs, NULL, yt, event, family="cox",
 ```
 ```{r save1, include=FALSE, eval=evalmodel}
 save( nested.cox.fit , 
-      file="~/Documents/Rpackages/glmnetr_supl/using_glmnetr_outputs_241024.RLIST" ) 
+      file="~/Documents/Rpackages/glmnetr_supl/using_glmnetr_outputs_241228.RLIST" ) 
 ```
 Note, in the derivation of the relaxed lasso model fits, individual coefficients may be unstable even when the model may be stable which elicits warning messages. We suppress these warnings here. The first term in the call to nested.glmnetr(), xs, is the design matrix for predictors. The second input term, here given the value NULL, is for the start time in case the (start, stop) time data setup is used in a Cox survival model fit. The third term, here yt, is the outcome variable for the linear regression or logistic regression model and the time of event or censoring in case of the Cox model, and finally the forth term is the event indicator variable for the Cox model taking the value 1 in case of an event or 0 in case of censoring at time yt. The forth term would be NULL for either linear or logistic regression. If one sets track=1 the program will update progress in the R console, else for track=0 it will not. We recommend setting track=1 when running the program interactively. Depending on the size of the data set and the different machine learning models fit, run time can be long and it can be helpful to view the progress in calculations. 
 
-As usual with R functions and packages we use the summary function to describe output. Here the summary function displays a brief summary of the input data before proceeding to describe model performances. The data summary includes sample size, number of events, number of candidate model predictors, degress of freedom in these predictors as well as average deviance and some average minus 2 log likelihoods. Model performances are displayed for the different lasso models, e.g. standard, relaxed, fully relaxed as well as the ridge regression and stepwise regression models. Hyperparamters considered for stepwise regression are degress of freedom (df) and p, the p-value for entry into the regression equation, as discussed by JWHT (James, Witten, Hastie and Tibshirani, An Introduction to Statistical Learning with applications in R, 2nd ed., Springer, New York, 2021). Performance measures include deviance ratio, linear calibration coefficients and measures of agreement, here for the Cox model framework concordance. Additionally there are the deviance ratio and agreement values naively calculated on the whole data set.
+As usual with R functions and packages we use the summary function to describe output. Here the summary function displays a brief summary of the input data before proceeding to describe model performances. The data summary includes sample size, number of events, number of candidate model predictors, degress of freedom in these predictors as well as average deviance and some average minus 2 log likelihoods. Model performances are displayed for the different lasso models, e.g. standard, relaxed, fully relaxed as well as the ridge regression and stepwise regression models. Hyperparamters considered for stepwise regression are degress of freedom (df) and p, the p-value for entry into the regression equation, as discussed by James et al.. Performance measures include deviance ratio, linear calibration coefficients and measures of agreement, here for the Cox model framework concordance. Additionally there are the deviance ratio and agreement values naively calculated on the whole data set.
 ```{r Summarize relaxed lasso model perfromance informed by cross validation 1 pre, include=FALSE, eval=TRUE}
 #print( nested.cox.fit$fits )
 nested.cox.fit$fits[c(2:5,7,8)] = 0 
@@ -197,7 +197,7 @@ nested.gau.fit = nested.glmnetr(xs,NULL,y_,NULL,family="gaussian",
 ```
 ```{r save2, include=FALSE, eval=evalmodel}
 save( nested.cox.fit , nested.gau.fit , 
-      file="~/Documents/Rpackages/glmnetr_supl/using_glmnetr_outputs_241024.RLIST" ) 
+      file="~/Documents/Rpackages/glmnetr_supl/using_glmnetr_outputs_241228.RLIST" ) 
 ```
 ```{r Mock Nested cross-validation evaluation for multiple machine learning models, eval=FALSE}
 # Nested cross validation evaluating a machine learning model suite with guassian errors
@@ -231,7 +231,7 @@ nested.bin.fit = nested.glmnetr(xs,NULL,yb,NULL,family="binomial",
 ```
 ```{r save3, include=FALSE, eval=evalmodel}
 save( nested.cox.fit , nested.gau.fit , nested.bin.fit ,  
-      file="~/Documents/Rpackages/glmnetr_supl/using_glmnetr_outputs_241024.RLIST" ) 
+      file="~/Documents/Rpackages/glmnetr_supl/using_glmnetr_outputs_241228.RLIST" ) 
 ```
 ```{r Bootstrap evaluation for multiple machine learning models - binomial - boot, include=FALSE, eval=evalmodel}
 nested.bin.boot.fit = nested.glmnetr(xs,NULL,yb,NULL,family="binomial",
@@ -241,7 +241,7 @@ nested.bin.boot.fit = nested.glmnetr(xs,NULL,yb,NULL,family="binomial",
 ```
 ```{r save4, include=FALSE, eval=evalmodel}
 save( nested.cox.fit , nested.gau.fit , nested.bin.fit , nested.bin.boot.fit, 
-      file="~/Documents/Rpackages/glmnetr_supl/using_glmnetr_outputs_241024.RLIST" ) 
+      file="~/Documents/Rpackages/glmnetr_supl/using_glmnetr_outputs_241228.RLIST" ) 
 ```
 ```{r Nested cross-validation evaluation for cox with (start,stop) data , include=FALSE, eval=evalmodel}
 strt = 0.32 * yt 
@@ -252,7 +252,7 @@ nested.cox.fit2
 ```
 ```{r save5, include=FALSE, eval=evalmodel}
 save( nested.cox.fit , nested.gau.fit , nested.bin.fit , nested.bin.boot.fit , nested.cox.fit2 , 
-      file="~/Documents/Rpackages/glmnetr_supl/using_glmnetr_outputs_241024.RLIST" ) 
+      file="~/Documents/Rpackages/glmnetr_supl/using_glmnetr_outputs_241228.RLIST" ) 
 ```
 
 One can save the tabled information from a summary to a data frame using the _table_ option as in
@@ -328,7 +328,7 @@ The calplot() function generates calibration plots using spline fits for each of
 ```{r calplot 1}
 calplot(nested.cox.fit,wbeta=5)
 ```
-Here the "overall" calibration and confidence interval is based upon the average and +/- 2 standard error of the spline fits. One can also include the individual calibration curves from the outer cross validation loop with the option plotfold=1 as in 
+Here the "overall" calibration and confidence interval is based upon the average and +/- 2 standard error calculated using the usual formula for the mean and the values from the different folds. The folds though are not independent and so these formula may be off. One can also include the individual calibration curves from the outer cross validation loop with the option plotfold=1 as in 
 
 \newpage
 ```{r calplot 2}
@@ -336,13 +336,16 @@ calplot(nested.cox.fit, wbeta=5, plotfold=1 )
 ```
 Calibration is discussed in more detail in the "Calibration of Machine Learning Models" vignette. 
 
+## Some limitations of cross validation
+Bengio et al. showed that the standard deviations from cross validation might not be accurate for estimation of the actual standard errors. Bates et al. have shown that the cross validation (CV) estimates and standard errors may be biased, and should thus be viewed with caution. These considerations regard the cross valitiona for evalation of model performance, here the outer loop, and are agnostic to whether or not the models use any cross validation fore the derivation of the models, here the inner loop. In particular the CV estimates model performance may more closely estimate the expection over multiple samples than the performance of the model based upon the observed data. In this manner the CV estimates may be reasonable estimates for the model fitting process, but may be biased for a particular model fit. Further, with their bias the CV standard errors might be associated with mis-coverage three times the nominal mis-coverage. A resolution of these biases in estimation and standard error proposed by Bates at al. involves two more iteration loops lengthening computation time by a factor of about 10 when using 10-fold cross validation and possibly by a factor of 100 if one is to replicate the whole process multiple times to get more accurate estimates. This may be practical for machine learning models that run more quickly like possibly lasso and random forests but impractical for models that can take much longer like tuned gradient boosting machines. This is not (yet?) implemented here.
+
 # Model comparisons with simulated and observed data
 The examples above compare models using simulated data. Simulated data can often be constructed to show one or the other model to do perform the best. For the examples above the lasso models and those informed by the relaxed lasso performed better. When comparing model using observed medical data we have generally seen the lasso models to be consistently among the better performing models, but the differences in performances not as large and consistent as in these examples. Notably, when using observed data, the oblique random forest (ORF) often performed slightly (but not statistically significantly) better than the other models. By its construction we would expect the ORF to fit better when there are stronger correlations or interactions between predictors/features. In our test runs on observed data we often did have meaningful correlations between the predictors/features. Because different models may perform better with different types of data it may be informative to compare model performances for multiple data sets of a particular data type, when available, not only a single data set of immediate interest. 
 
 # Model replicability and model comparisons
 To facilitate reproducible results the nested.glmnetr() function stores the seeds used to generate the pseudo random samples used for assigning observations to folds in the outer loop, as well as the fold ids themselves, for all models. Additionally, the program stores the seeds when generating the folds in the inner loop for lasso, XGB, neural network and stepwise regressions as well as the seeds used when generating the bootstrap samples for the random forest models. Using the seeds from a prior call to nested.glmnetr(), one can reproduce the results from this earlier call. Because the seeds are saved for sample partitioning in both the outer cross validation or the bootstrap method along with the folds for inner loop model derivations, results can be reproduced even when rerunning an analysis for a single model. If we did not save and manage the seeds the user might have to run all models included in an earlier run to verify or inspect a single model fit. If the seed option is unspecified in the call to nested.glmnetr(), one should be cautious when using set.seed() in one's own code as this too will effect the pseudo randomness used in the ML calculations, which could unwittingly yield identical results when pseudo independent runs are intended.
 
-Using the same folds, i.e. data splits, for the different models controls for some of the variability in the model performance estimates due to the randomness in the choice of folds, which should reduce variability in the differences in performance estimates between different models. nested.glmnetr() stores the model performance measures from each iteration of the outer loop allowing calculation of means and standard deviations (SD) for each model performance measure, as well as differences paired on each data split in the outer loop. Because of dependencies between the different model fits from a CV loop, there are concerns about the accuracy of the SDs (Bengio Y & Grandvalet Y, "No Unbiased Estimator of the Variance of K-Fold Cross-Validation", Journal of Machine Learning Research 5 (2004) 1089–1105). Still, people use these SDs routinely as a rough approximation, being cautious of making strong inferences. We expect any dependencies at least between the paired differences should be minimal and reasonable in approximation. This intuition is supported by informal simulations. The reader is invited to perform similar studies using the type of data they encounter.
+Using the same folds, i.e. data splits, for the different models controls for some of the variability in the model performance estimates due to the randomness in the choice of folds, which should reduce variability in the differences in performance estimates between different models. nested.glmnetr() stores the model performance measures from each iteration of the outer loop allowing calculation of means and standard deviations (SD) for each model performance measure, as well as differences paired on each data split in the outer loop. Because of dependencies between the different model fits from a CV loop, there are concerns about the accuracy of the SDs (Bengio et al. and Bates et al.). Still, people use these SDs routinely as a rough approximation, being cautious of making strong inferences. We expect any dependencies at least between the paired differences should be smaller and may be reasonable in approximation. The reader is invited to perform similar studies using the type of data they encounter, or to program up the methods described by Bates et al..
 
 A simple comparison of model performances based upon deviance ratio can be done as in the example
 ```{r compare agreement}
@@ -352,7 +355,7 @@ nested.compare(nested.gau.fit, type="devrat")
 As the outer CV loop performance calculations are saved in the nested.glmntr() output object (with names like lasso.agree.rep, lasso.lincal.rep, xgb.agree.rep, xgb.lincal.rep, etc.) comparisons not provided by nested.compare() can be calculated from these stored CV data.
 
 # Bootstrap assessment of model performance 
-If one is uncertain about using cross validation for assessing model performance, one can implement a bootstrap assessment, where the properties may be better understood. Bootstrap resampling should better mimic the randomness of model selection in the original model than the (outer loop of nested) cross-validation resampling and provide more accurate performance estimates. While we have not systematically evaluated this our impression is that for the numerical assessments of model performance the differences between the bootstrap and cross-validation results were not especially large. However, the out-of-bag calibration plots can noticeably, if only sightly, differ between the bootstrap and cross validation approaches. Depending on the models being fit and the data analyzed the run times can be very long for the bootstrap approach. For some analyses evaluating lasso, gradient boosting machines, artificial neural networks and stepwise models we have had runs for 10-fold nested cross-validation taking days. A bootstrap study with 50 or 100 resamplings could then take weeks. One approach might be to first evaluate performances using the cross-validation and then re-evaluate any unclear model performances using the bootstrap. Another approach would be to evaluate initially using the bootstrap with a small number of resamplings, e.g. 10 like sometimes used for cross-validation, trading stability for accuracy. Again one could selectively re-evaluate models of interest with a larger number of bootstrap resamplings. Bootstrap sampling can be implemented by specifying the bootstrap option for the number of bootstrap samples to be used, e.g. as in
+If one is uncertain about using cross validation for assessing model performance, one can implement bootstrap resampling, where the properties may be better understood. Bootstrap resampling should better mimic the randomness of model selection in the original model than the (outer loop of nested) cross-validation resampling and might provide more accurate performance estimates. When taking bootstrap resamples for machine learning refits we will here continue to evaluate performance on the hold-out data and not the bootstrap (train) resample (itself), though this approach is not universal (Riley et al.). While we have not systematically evaluated this our impression is that for the numerical assessments of model performance the differences between the bootstrap and cross-validation results were not especially large. However, the out-of-bag calibration plots can noticeably differ between the bootstrap and cross validation approaches. Depending on the models being fit and the data analyzed the run times can be very long for the bootstrap approach. For some analyses evaluating lasso, gradient boosting machines, artificial neural networks and stepwise models we have had runs for 10-fold nested cross-validation taking days. A bootstrap study with 50 or 100 resamplings could then take weeks. One approach might be to first evaluate performances using the cross-validation and then re-evaluate any unclear model performances using the bootstrap. Another approach would be to evaluate initially using the bootstrap with a small number of resamplings, e.g. 10 like sometimes used for cross-validation, trading stability for accuracy. Again one could selectively re-evaluate models of interest with a larger number of bootstrap resamplings. Bootstrap sampling can be implemented by specifying the bootstrap option for the number of bootstrap samples to be used, e.g. as in
 ```{r bootstrap, include=TRUE, eval=FALSE}
 nested.bin.boot.fit = nested.glmnetr(xs,NULL,yb,NULL,family="binomial",
       dolasso=1, dorf=1,   
@@ -372,7 +375,19 @@ Calibration curves can be generated like with the cross validation model evaluat
 ```{r bootstrap plot pre, include=TRUE, eval=TRUE}
 calplot(nested.bin.boot.fit, wbeta=5, plotfold=1)  
 ```
-Here, similar to the cross-validation calibration plots, calibration curves are fit using splines for each bootstrap sample based upon the upon the XBeta's (predicteds) for the out-of-bag sample based upon the re-sample fitted model. These curves are then averaged to get an overall calibration curve. 95% confidence intervals are described based upon the overall curve and the standard deviation of the individual curves at each value of XBeta. See the calibration vignette for more on calibration curves based upon bootstrap samples. 
+Here, similar to the cross-validation calibration plots, calibration curves are fit using splines for each bootstrap sample based upon the upon the XBeta's (predicteds) for the out-of-bag sample based upon the re-sample fitted model. These curves are then averaged to get an overall calibration curve. Nominal 95% confidence intervals are described based upon the overall curve and the standard deviation of the individual curves at each value of XBeta, though again the coverage of these nominal confidence intervals is in question. See the calibration vignette for more on calibration curves based upon bootstrap samples.
+
+# References
+Bates S, Hastie T, Tibshirani R, "Cross-validation: what does it estimate and how well does it do it?", 2022, https://arxiv.org/abs/2104.00673 .
+
+Bengio Y & Grandvalet Y, "No Unbiased Estimator of the Variance of K-Fold Cross-Validation", Journal of Machine Learning Research 5, 2004, 1089–1105, https://www.jmlr.org/papers/volume5/grandvalet04a/grandvalet04a.pdf .
+
+James G, Witten D, Hastie T, Tibshirani R, "An Introduction to Statistical Learning with applications in R, 2nd ed.", Springer, New York, 2021.
+
+Riley RD, Pate A, Dhiman P, Archer L, Martin GP, Collins GS, "Clinical prediction models and the multiverse of madness", BMC Med 21, 502 (2023). https://doi.org/10.1186/s12916-023-03212-y 
+
+Simon R, Radmacher MD, Dobbin K, McShane LM. "Pitfalls in the Use of DNA Microarray Data for Diagnostic and Prognostic Classification." J Natl Cancer Inst, 2003, 95 (1): 14-18. https://academic.oup.com/jnci/article/95/1/14/2520188 
+
 ```{r cross validation bin calplot, include=FALSE, eval=FALSE}
 # for inclusion in calibration vignette 
 #calplot(nested.bin.fit, wbeta=5, plotfold=1) 
@@ -380,5 +395,5 @@ Here, similar to the cross-validation calibration plots, calibration curves are 
 ```{r save, include=FALSE, eval=evalmodel}
 # duplicate of {r save5, ... }
 #save( nested.cox.fit , nested.cox.fit2, nested.gau.fit , nested.bin.fit , nested.bin.boot.fit, 
-#      file="~/Documents/Rpackages/glmnetr_supl/using_glmnetr_outputs_241024.RLIST" ) 
+#      file="~/Documents/Rpackages/glmnetr_supl/using_glmnetr_outputs_241228.RLIST" ) 
 ```

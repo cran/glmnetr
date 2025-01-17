@@ -1,6 +1,5 @@
 ###############################################################################################################
 ###############################################################################################################
-
 #' Calculate performance differences with CI and p
 #' 
 #' @description 
@@ -19,8 +18,8 @@
 #' @importFrom stats t.test qt pt var 
 #'
 #' @noRd
-
-nested.compare0 = function(a, b, pow=1, bootstrap=0, digits=4, txt=0) { 
+#' 
+nested.compare0_0_5_3 = function( a, b, pow=1, bootstrap=0, digits=4, txt=0 ) { 
   if ( pow != 2) { pow = 1 } 
   if (pow == 1) {
     dff = (a-b)[!is.na(a-b)]
@@ -68,7 +67,11 @@ nested.compare0 = function(a, b, pow=1, bootstrap=0, digits=4, txt=0) {
 #'
 #' @description 
 #' Compare cross-validation model fits in terms of average performances from the 
-#' nested cross validation fits.  
+#' nested cross validation fits. In general the standard deviations for the
+#' performance measures evaluated on the leave-out samples may be biased. While 
+#' the standard deviations of the paired within fold differences of 
+#' performances intuitively might be less biased this has not been shown. See 
+#' the package vignettes for more discussion.    
 #'
 #' @param object A nested.glmnetr output object.
 #' @param digits digits for printing of z-scores, p-values, etc. with default of 4 
@@ -84,23 +87,9 @@ nested.compare0 = function(a, b, pow=1, bootstrap=0, digits=4, txt=0) {
 #'  
 #' @return A printout to the R console. 
 #' 
-#' @seealso
-#'   \code{\link{nested.cis}} , \code{\link{summary.nested.glmnetr}} , \code{\link{nested.glmnetr}} 
+#' @noRd
 #' 
-#' @export
-#'
-#' @examples
-#' \donttest{
-#' sim.data=glmnetr.simdata(nrows=1000, ncols=100, beta=NULL)
-#' xs=sim.data$xs 
-#' y_=sim.data$yt
-#' event=sim.data$event
-#' # for this example we use a small number for folds_n to shorten run time 
-#' fit3 = nested.glmnetr(xs, NULL, y_, event, family="cox", folds_n=3) 
-#' nested.compare(fit3)
-#' }
-#' 
-nested.compare = function(object, type="devrat", digits=4, pow=1) {
+nested.compare_0_5_3 = function( object, type="devrat", digits=4, pow=1 ) {
   family =  object$sample[1]
   tuning  = object$tuning
   bootstrap = tuning[8] 
@@ -271,21 +260,21 @@ nested.compare = function(object, type="devrat", digits=4, pow=1) {
   cat ("  Comparison                                estimate   (95% CI)         p\n") 
   
   if (dolasso == 1) {
-    cat ("\n lasso.minR  - lasso.min                     ") ;  nested.compare0(lasso.perf.rep[,4] , lasso.perf.rep[,2], pow, bootstrap, digits) 
-    cat ("\n lasso.minR  - lasso.minR0                   ") ;  nested.compare0(lasso.perf.rep[,4] , lasso.perf.rep[,6], pow, bootstrap, digits)   
-    cat ("\n lasso.min   - lasso.minR0                   ") ;  nested.compare0(lasso.perf.rep[,2] , lasso.perf.rep[,6], pow, bootstrap, digits)   
+    cat ("\n lasso.minR  - lasso.min                     ") ;  nested.compare0_0_5_3(lasso.perf.rep[,4] , lasso.perf.rep[,2], pow, bootstrap, digits) 
+    cat ("\n lasso.minR  - lasso.minR0                   ") ;  nested.compare0_0_5_3(lasso.perf.rep[,4] , lasso.perf.rep[,6], pow, bootstrap, digits)   
+    cat ("\n lasso.min   - lasso.minR0                   ") ;  nested.compare0_0_5_3(lasso.perf.rep[,2] , lasso.perf.rep[,6], pow, bootstrap, digits)   
     cat("\n")
   }
   
   #  print(xgb.perf.rep)
   
   if (doxgb == 1) {
-    cat ("\n XGBoost (tuned) - XGBoost (simple)          ") ;  nested.compare0(xgb.perf.rep[,4] , xgb.perf.rep[,1], pow, bootstrap, digits)  
+    cat ("\n XGBoost (tuned) - XGBoost (simple)          ") ;  nested.compare0_0_5_3(xgb.perf.rep[,4] , xgb.perf.rep[,1], pow, bootstrap, digits)  
     if (sum(ensemble[c(2,6)])> 0) {
-      cat ("\n XGBoost (tuned) lasso feature - no feature  ") ;  nested.compare0(xgb.perf.rep[,5] , xgb.perf.rep[,4], pow, bootstrap, digits)   
+      cat ("\n XGBoost (tuned) lasso feature - no feature  ") ;  nested.compare0_0_5_3(xgb.perf.rep[,5] , xgb.perf.rep[,4], pow, bootstrap, digits)   
     }
     if (sum(ensemble[c(3,4,7,8)])> 0) {
-      cat ("\n XGBoost (tuned) lasso offset - no offset    ") ;  nested.compare0(xgb.perf.rep[,6] , xgb.perf.rep[,4], pow, bootstrap, digits)   
+      cat ("\n XGBoost (tuned) lasso offset - no offset    ") ;  nested.compare0_0_5_3(xgb.perf.rep[,6] , xgb.perf.rep[,4], pow, bootstrap, digits)   
     }
     cat("\n")
   }
@@ -293,11 +282,11 @@ nested.compare = function(object, type="devrat", digits=4, pow=1) {
   if (dorf == 1) {
     lr = 0 
     if (sum(ensemble[c(2,6)])> 0) {
-      cat ("\n RF with lasso feature - no feature          ") ;  nested.compare0(rf.perf.rep[,2] , rf.perf.rep[,1], pow, bootstrap, digits)   
+      cat ("\n RF with lasso feature - no feature          ") ;  nested.compare0_0_5_3(rf.perf.rep[,2] , rf.perf.rep[,1], pow, bootstrap, digits)   
       lr = 1 
     }
     if ((sum(ensemble[c(3,4,7,8)])> 0) & (family == "gaussian")) {
-      cat ("\n RF with lasso offset - no offset            ") ;  nested.compare0(rf.perf.rep[,3] , rf.perf.rep[,1], pow, bootstrap, digits)   
+      cat ("\n RF with lasso offset - no offset            ") ;  nested.compare0_0_5_3(rf.perf.rep[,3] , rf.perf.rep[,1], pow, bootstrap, digits)   
       lr = 1 
     }
     if (lr == 1) { cat("\n") } 
@@ -306,11 +295,11 @@ nested.compare = function(object, type="devrat", digits=4, pow=1) {
   if (doorf == 1) {
     lr = 0 
     if (sum(ensemble[c(2,6)])> 0) {
-      cat ("\n ORF with lasso feature - no feature          ") ;  nested.compare0(orf.perf.rep[,2] , orf.perf.rep[,1], pow, bootstrap, digits)   
+      cat ("\n ORF with lasso feature - no feature          ") ;  nested.compare0_0_5_3(orf.perf.rep[,2] , orf.perf.rep[,1], pow, bootstrap, digits)   
       lr = 1 
     }
     if ((sum(ensemble[c(3,4,7,8)])> 0) & (family == "gaussian")) {
-      cat ("\n ORF with lasso offset - no offset            ") ;  nested.compare0(orf.perf.rep[,3] , orf.perf.rep[,1], pow, bootstrap, digits)   
+      cat ("\n ORF with lasso offset - no offset            ") ;  nested.compare0_0_5_3(orf.perf.rep[,3] , orf.perf.rep[,1], pow, bootstrap, digits)   
       lr = 1 
     }
     if (lr == 1) { cat("\n") } 
@@ -319,118 +308,118 @@ nested.compare = function(object, type="devrat", digits=4, pow=1) {
   if (doann == 1) {
     lr = 0 
     if (sum(ensemble[6])> 0) {
-      cat ("\n ANN with with lasso feature - no feature    ") ;  nested.compare0(ann.perf.rep[,6] , ann.perf.rep[,1], pow, bootstrap, digits) ; lr = 1 ;
+      cat ("\n ANN with with lasso feature - no feature    ") ;  nested.compare0_0_5_3(ann.perf.rep[,6] , ann.perf.rep[,1], pow, bootstrap, digits) ; lr = 1 ;
     } else if (sum(ensemble[2])> 0) {
-      cat ("\n ANN with with lasso feature - no feature    ") ;  nested.compare0(ann.perf.rep[,2] , ann.perf.rep[,1], pow, bootstrap, digits) ; lr = 1 ;
+      cat ("\n ANN with with lasso feature - no feature    ") ;  nested.compare0_0_5_3(ann.perf.rep[,2] , ann.perf.rep[,1], pow, bootstrap, digits) ; lr = 1 ;
       
     } 
     if (sum(ensemble[8])> 0) { 
-      cat ("\n ANN with with lasso offset - no offset      ") ;  nested.compare0(ann.perf.rep[,8] , ann.perf.rep[,1], pow, bootstrap, digits) ; lr = 1 ;
+      cat ("\n ANN with with lasso offset - no offset      ") ;  nested.compare0_0_5_3(ann.perf.rep[,8] , ann.perf.rep[,1], pow, bootstrap, digits) ; lr = 1 ;
     } else if (sum(ensemble[7])> 0) { 
-      cat ("\n ANN with with lasso offset - no offset      ") ;  nested.compare0(ann.perf.rep[,7] , ann.perf.rep[,1], pow, bootstrap, digits) ; lr = 1 ;
+      cat ("\n ANN with with lasso offset - no offset      ") ;  nested.compare0_0_5_3(ann.perf.rep[,7] , ann.perf.rep[,1], pow, bootstrap, digits) ; lr = 1 ;
     } else     if (sum(ensemble[4])> 0) { 
-      cat ("\n ANN with with lasso offset - no offset      ") ;  nested.compare0(ann.perf.rep[,4] , ann.perf.rep[,1], pow, bootstrap, digits) ; lr = 1 ;
+      cat ("\n ANN with with lasso offset - no offset      ") ;  nested.compare0_0_5_3(ann.perf.rep[,4] , ann.perf.rep[,1], pow, bootstrap, digits) ; lr = 1 ;
     } else     if (sum(ensemble[3])> 0) { 
-      cat ("\n ANN with with lasso offset - no offset      ") ;  nested.compare0(ann.perf.rep[,3] , ann.perf.rep[,1], pow, bootstrap, digits) ; lr = 1 ;
+      cat ("\n ANN with with lasso offset - no offset      ") ;  nested.compare0_0_5_3(ann.perf.rep[,3] , ann.perf.rep[,1], pow, bootstrap, digits) ; lr = 1 ;
     } 
     if (lr == 1) { cat("\n") } 
   }
   
   if (dostep == 1) {
-    cat ("\n step (df) - step (p)                        ") ;  nested.compare0(step.perf.rep[,1]      , step.perf.rep[,2], pow, bootstrap, digits) ;  cat("\n")
+    cat ("\n step (df) - step (p)                        ") ;  nested.compare0_0_5_3(step.perf.rep[,1]      , step.perf.rep[,2], pow, bootstrap, digits) ;  cat("\n")
   }
   
   #  cat("\n")
   
   if ((dolasso == 1) & (doxgb == 1)) {
-    cat ("\n lasso.minR - XGB (tuned)                    ") ;  nested.compare0(lasso.perf.rep[,4] , xgb.perf.rep[,4], pow, bootstrap, digits) 
+    cat ("\n lasso.minR - XGB (tuned)                    ") ;  nested.compare0_0_5_3(lasso.perf.rep[,4] , xgb.perf.rep[,4], pow, bootstrap, digits) 
     
     if (sum(ensemble[c(2,6)])> 0) {
-      cat ("\n lasso.minR - XGB with lasso feature         ") ;  nested.compare0(lasso.perf.rep[,4] , xgb.perf.rep[,5], pow, bootstrap, digits) 
+      cat ("\n lasso.minR - XGB with lasso feature         ") ;  nested.compare0_0_5_3(lasso.perf.rep[,4] , xgb.perf.rep[,5], pow, bootstrap, digits) 
     }
     if (sum(ensemble[c(3,4,7,8)])> 0) {
-      cat ("\n lasso.minR - XGB with lasso offset          ") ;  nested.compare0(lasso.perf.rep[,4] , xgb.perf.rep[,6], pow, bootstrap, digits)   
+      cat ("\n lasso.minR - XGB with lasso offset          ") ;  nested.compare0_0_5_3(lasso.perf.rep[,4] , xgb.perf.rep[,6], pow, bootstrap, digits)   
     }
   }
   
   if ((dolasso == 1) & (dorf == 1)) {
-    cat ("\n lasso.minR - Random Forest                  ") ;  nested.compare0(lasso.perf.rep[,4] , rf.perf.rep[,1], pow, bootstrap, digits) 
+    cat ("\n lasso.minR - Random Forest                  ") ;  nested.compare0_0_5_3(lasso.perf.rep[,4] , rf.perf.rep[,1], pow, bootstrap, digits) 
     
     if (sum(ensemble[c(2,6)])> 0) {
-      cat ("\n lasso.minR - RF with lasso feature          ") ;  nested.compare0(lasso.perf.rep[,4] , rf.perf.rep[,2], pow, bootstrap, digits) 
+      cat ("\n lasso.minR - RF with lasso feature          ") ;  nested.compare0_0_5_3(lasso.perf.rep[,4] , rf.perf.rep[,2], pow, bootstrap, digits) 
     }
     if ( (sum(ensemble[c(3,4,7,8)])> 0) & (family == "gaussian") ) {
-      cat ("\n lasso.minR - RF with lasso offset           ") ;  nested.compare0(lasso.perf.rep[,4] , rf.perf.rep[,3], pow, bootstrap, digits)   
+      cat ("\n lasso.minR - RF with lasso offset           ") ;  nested.compare0_0_5_3(lasso.perf.rep[,4] , rf.perf.rep[,3], pow, bootstrap, digits)   
     }
   }
   
   if ((dolasso == 1) & (doorf == 1)) {
-    cat ("\n lasso.minR - Oblique Random Forest          ") ;  nested.compare0(lasso.perf.rep[,4] , orf.perf.rep[,1], pow, bootstrap, digits) 
+    cat ("\n lasso.minR - Oblique Random Forest          ") ;  nested.compare0_0_5_3(lasso.perf.rep[,4] , orf.perf.rep[,1], pow, bootstrap, digits) 
     
     if (sum(ensemble[c(2,6)])> 0) {
-      cat ("\n lasso.minR - ORF with lasso feature         ") ;  nested.compare0(lasso.perf.rep[,4] , orf.perf.rep[,2], pow, bootstrap, digits) 
+      cat ("\n lasso.minR - ORF with lasso feature         ") ;  nested.compare0_0_5_3(lasso.perf.rep[,4] , orf.perf.rep[,2], pow, bootstrap, digits) 
     }
     if ( (sum(ensemble[c(3,4,7,8)])> 0) & (family == "gaussian") ) {
-      cat ("\n lasso.minR - ORF with lasso offset          ") ;  nested.compare0(lasso.perf.rep[,4] , orf.perf.rep[,3], pow, bootstrap, digits)   
+      cat ("\n lasso.minR - ORF with lasso offset          ") ;  nested.compare0_0_5_3(lasso.perf.rep[,4] , orf.perf.rep[,3], pow, bootstrap, digits)   
     }
   }
   
   if ((dolasso == 1) & (doann == 1)) {
-    cat ("\n lasso.minR - ANN                            ") ;  nested.compare0(lasso.perf.rep[,4] , ann.perf.rep[,1], pow, bootstrap, digits) 
+    cat ("\n lasso.minR - ANN                            ") ;  nested.compare0_0_5_3(lasso.perf.rep[,4] , ann.perf.rep[,1], pow, bootstrap, digits) 
     if (ensemble[6]) { 
-      cat ("\n lasso.minR - ANN l lasso feature            ") ;  nested.compare0(lasso.perf.rep[,4] , ann.perf.rep[,6], pow, bootstrap, digits)   
+      cat ("\n lasso.minR - ANN l lasso feature            ") ;  nested.compare0_0_5_3(lasso.perf.rep[,4] , ann.perf.rep[,6], pow, bootstrap, digits)   
     } else if (ensemble[2]) { 
-      cat ("\n lasso.minR - ANN lasso feature              ") ;  nested.compare0(lasso.perf.rep[,4] ,  ann.perf.rep[,2], pow, bootstrap, digits)   
+      cat ("\n lasso.minR - ANN lasso feature              ") ;  nested.compare0_0_5_3(lasso.perf.rep[,4] ,  ann.perf.rep[,2], pow, bootstrap, digits)   
     }  
     if (ensemble[8]) { 
-      cat ("\n lasso.minR - ANN l lasso offset (upated)    ") ;  nested.compare0(lasso.perf.rep[,4] , ann.perf.rep[,8], pow, bootstrap, digits)   
+      cat ("\n lasso.minR - ANN l lasso offset (upated)    ") ;  nested.compare0_0_5_3(lasso.perf.rep[,4] , ann.perf.rep[,8], pow, bootstrap, digits)   
     } else if (ensemble[4]) { 
-      cat ("\n lasso.minR - ANN lasso offset               ") ;  nested.compare0(lasso.perf.rep[,4] , ann.perf.rep[,4], pow, bootstrap, digits)  
+      cat ("\n lasso.minR - ANN lasso offset               ") ;  nested.compare0_0_5_3(lasso.perf.rep[,4] , ann.perf.rep[,4], pow, bootstrap, digits)  
     } else if (ensemble[7]) { 
-      cat ("\n lasso.minR - ANN l lasso offset (upated)    ") ;  nested.compare0(lasso.perf.rep[,4] , ann.perf.rep[,7], pow, bootstrap, digits)   
+      cat ("\n lasso.minR - ANN l lasso offset (upated)    ") ;  nested.compare0_0_5_3(lasso.perf.rep[,4] , ann.perf.rep[,7], pow, bootstrap, digits)   
     }  else if (ensemble[3]) { 
-      cat ("\n lasso.minR - ANN lasso offset               ") ;  nested.compare0(lasso.perf.rep[,4] , ann.perf.rep[,3], pow, bootstrap, digits)   
+      cat ("\n lasso.minR - ANN lasso offset               ") ;  nested.compare0_0_5_3(lasso.perf.rep[,4] , ann.perf.rep[,3], pow, bootstrap, digits)   
     }
   }
   
   if (dolasso) { cat("\n") } 
   
   if ((doxgb == 1) & (dorf == 1)) {
-    cat ("\n XGBoost (tuned) - RF                        ") ;  nested.compare0(xgb.perf.rep[,4] ,  rf.perf.rep[,1], pow, bootstrap, digits)   
+    cat ("\n XGBoost (tuned) - RF                        ") ;  nested.compare0_0_5_3(xgb.perf.rep[,4] ,  rf.perf.rep[,1], pow, bootstrap, digits)   
     if (sum(ensemble[c(2,6)]) > 0) {
-      cat ("\n XGBoost lasso feature-RF with lasso feature ") ;  nested.compare0(xgb.perf.rep[,5] ,  rf.perf.rep[,2], pow, bootstrap, digits)   
+      cat ("\n XGBoost lasso feature-RF with lasso feature ") ;  nested.compare0_0_5_3(xgb.perf.rep[,5] ,  rf.perf.rep[,2], pow, bootstrap, digits)   
     } 
     if ( (sum(ensemble[c(3,4,7,8)]) > 0)  & (family == "gaussian") ) {
-      cat ("\n XGBoost lasso offset-  RF with lasso offset ") ;  nested.compare0(xgb.perf.rep[,6] ,  rf.perf.rep[,3], pow, bootstrap, digits)   
+      cat ("\n XGBoost lasso offset-  RF with lasso offset ") ;  nested.compare0_0_5_3(xgb.perf.rep[,6] ,  rf.perf.rep[,3], pow, bootstrap, digits)   
     }
   }
   
   if ((doxgb == 1) & (doorf == 1)) {
-    cat ("\n XGBoost (tuned) - ORF                       ") ;  nested.compare0(xgb.perf.rep[,4] ,  orf.perf.rep[,1], pow, bootstrap, digits)   
+    cat ("\n XGBoost (tuned) - ORF                       ") ;  nested.compare0_0_5_3(xgb.perf.rep[,4] ,  orf.perf.rep[,1], pow, bootstrap, digits)   
     if (sum(ensemble[c(2,6)]) > 0) {
-      cat ("\n XGBoost lasso feature-ORF with lasso feature") ;  nested.compare0(xgb.perf.rep[,5] ,  orf.perf.rep[,2], pow, bootstrap, digits)   
+      cat ("\n XGBoost lasso feature-ORF with lasso feature") ;  nested.compare0_0_5_3(xgb.perf.rep[,5] ,  orf.perf.rep[,2], pow, bootstrap, digits)   
     } 
     if ( (sum(ensemble[c(3,4,7,8)]) > 0)  & (family == "gaussian") ) {
-      cat ("\n XGBoost lasso offset-  ORF with lasso offset") ;  nested.compare0(xgb.perf.rep[,6] ,  orf.perf.rep[,3], pow, bootstrap, digits)   
+      cat ("\n XGBoost lasso offset-  ORF with lasso offset") ;  nested.compare0_0_5_3(xgb.perf.rep[,6] ,  orf.perf.rep[,3], pow, bootstrap, digits)   
     }
   }
   
   if ((doxgb == 1) & (doann == 1)) {
-    cat ("\n XGBoost (tuned) - ANN                       ") ;  nested.compare0(xgb.perf.rep[,4] ,  ann.perf.rep[,1], pow, bootstrap, digits)   
+    cat ("\n XGBoost (tuned) - ANN                       ") ;  nested.compare0_0_5_3(xgb.perf.rep[,4] ,  ann.perf.rep[,1], pow, bootstrap, digits)   
     if (ensemble[6]) { 
-      cat ("\n XGBoost lasso feature - ANN, l lasso feature ") ;  nested.compare0(xgb.perf.rep[,5] ,  ann.perf.rep[,6], pow, bootstrap, digits)   
+      cat ("\n XGBoost lasso feature - ANN, l lasso feature ") ;  nested.compare0_0_5_3(xgb.perf.rep[,5] ,  ann.perf.rep[,6], pow, bootstrap, digits)   
     } else if (ensemble[2]) { 
-      cat ("\n XGBoost lasso feature - ANN lasso feature   ") ;  nested.compare0(xgb.perf.rep[,5] ,  ann.perf.rep[,2], pow, bootstrap, digits)   
+      cat ("\n XGBoost lasso feature - ANN lasso feature   ") ;  nested.compare0_0_5_3(xgb.perf.rep[,5] ,  ann.perf.rep[,2], pow, bootstrap, digits)   
     } 
     if (family == "gaussian") {
       if (ensemble[8]) { 
-        cat ("\n XGBoost lasso offset-ANN l lasso offset(upated) ") ;  nested.compare0(xgb.perf.rep[,6] ,  ann.perf.rep[,8], pow, bootstrap, digits)   
+        cat ("\n XGBoost lasso offset-ANN l lasso offset(upated) ") ;  nested.compare0_0_5_3(xgb.perf.rep[,6] ,  ann.perf.rep[,8], pow, bootstrap, digits)   
       } else if (ensemble[4]) { 
-        cat ("\n XGBoost lasso offset - ANN, lasso offset   ") ;  nested.compare0(xgb.perf.rep[,6] ,  ann.perf.rep[,4], pow, bootstrap, digits)   
+        cat ("\n XGBoost lasso offset - ANN, lasso offset   ") ;  nested.compare0_0_5_3(xgb.perf.rep[,6] ,  ann.perf.rep[,4], pow, bootstrap, digits)   
       } else if (ensemble[7]) { 
-        cat ("\n XGBoost lasso offset - ANN l lasso offset  ") ;  nested.compare0(xgb.perf.rep[,6] ,  ann.perf.rep[,7], pow, bootstrap, digits)   
+        cat ("\n XGBoost lasso offset - ANN l lasso offset  ") ;  nested.compare0_0_5_3(xgb.perf.rep[,6] ,  ann.perf.rep[,7], pow, bootstrap, digits)   
       } else if (ensemble[3]) { 
-        cat ("\n XGBoost offset - ANN lasso offset          ") ;  nested.compare0(xgb.perf.rep[,6] ,  ann.perf.rep[,3], pow, bootstrap, digits)   
+        cat ("\n XGBoost offset - ANN lasso offset          ") ;  nested.compare0_0_5_3(xgb.perf.rep[,6] ,  ann.perf.rep[,3], pow, bootstrap, digits)   
       }  
     }
   }
@@ -438,50 +427,50 @@ nested.compare = function(object, type="devrat", digits=4, pow=1) {
   if (doxgb) { cat("\n") }
   
   if ((dorf == 1) & (doorf == 1)) {
-    cat ("\n RF - ORF                                    ") ;  nested.compare0(rf.perf.rep[,1] ,  orf.perf.rep[,1], pow, bootstrap, digits) 
+    cat ("\n RF - ORF                                    ") ;  nested.compare0_0_5_3(rf.perf.rep[,1] ,  orf.perf.rep[,1], pow, bootstrap, digits) 
     if (sum(ensemble[c(2,6)]) > 0) {
-      cat ("\n RF lasso feature - ORF l lasso feature      " ) ;  nested.compare0(rf.perf.rep[,2] , orf.perf.rep[,2], pow, bootstrap, digits) 
+      cat ("\n RF lasso feature - ORF l lasso feature      " ) ;  nested.compare0_0_5_3(rf.perf.rep[,2] , orf.perf.rep[,2], pow, bootstrap, digits) 
     }  
     if (sum(ensemble[c(3,4,7,8)]) > 0) {
-      cat ("\n RF lasso feature - ORF lasso feature        " ) ;  nested.compare0(rf.perf.rep[,3] , orf.perf.rep[,3], pow, bootstrap, digits)  
+      cat ("\n RF lasso feature - ORF lasso feature        " ) ;  nested.compare0_0_5_3(rf.perf.rep[,3] , orf.perf.rep[,3], pow, bootstrap, digits)  
     }
     cat("\n")
   }
   
   if ((dorf == 1) & (doann == 1)) {
-    cat ("\n RF - ANN                                    ") ;  nested.compare0(rf.perf.rep[,1] ,  ann.perf.rep[,1], pow, bootstrap, digits) 
+    cat ("\n RF - ANN                                    ") ;  nested.compare0_0_5_3(rf.perf.rep[,1] ,  ann.perf.rep[,1], pow, bootstrap, digits) 
     if (ensemble[6]) {
-      cat ("\n RF lasso feature - ANN  l lasso feature     " ) ;  nested.compare0(rf.perf.rep[,2] ,  ann.perf.rep[,6], pow, bootstrap, digits) 
+      cat ("\n RF lasso feature - ANN  l lasso feature     " ) ;  nested.compare0_0_5_3(rf.perf.rep[,2] ,  ann.perf.rep[,6], pow, bootstrap, digits) 
     } else if (ensemble[2]) {
-      cat ("\n RF lasso feature - ANN lasso feature        " ) ;  nested.compare0(rf.perf.rep[,2] ,  ann.perf.rep[,2], pow, bootstrap, digits)  
+      cat ("\n RF lasso feature - ANN lasso feature        " ) ;  nested.compare0_0_5_3(rf.perf.rep[,2] ,  ann.perf.rep[,2], pow, bootstrap, digits)  
     }
     if (ensemble[8]) {
-      cat ("\n RF lasso offset - ANN l lasso offset (upated) " ) ;  nested.compare0(rf.perf.rep[,3] ,  ann.perf.rep[,8], pow, bootstrap, digits)   
+      cat ("\n RF lasso offset - ANN l lasso offset (upated) " ) ;  nested.compare0_0_5_3(rf.perf.rep[,3] ,  ann.perf.rep[,8], pow, bootstrap, digits)   
     } else if (ensemble[4]) {
-      cat ("\n RF lasso offset - ANN lasso offset           " ) ;  nested.compare0(rf.perf.rep[,3] ,  ann.perf.rep[,4], pow, bootstrap, digits)  
+      cat ("\n RF lasso offset - ANN lasso offset           " ) ;  nested.compare0_0_5_3(rf.perf.rep[,3] ,  ann.perf.rep[,4], pow, bootstrap, digits)  
     } else if (ensemble[7]) {
-      cat ("\n RF lasso offset - ANN, l lasso offset (upated) " ) ;  nested.compare0(rf.perf.rep[,3] ,  ann.perf.rep[,7], pow, bootstrap, digits) 
+      cat ("\n RF lasso offset - ANN, l lasso offset (upated) " ) ;  nested.compare0_0_5_3(rf.perf.rep[,3] ,  ann.perf.rep[,7], pow, bootstrap, digits) 
     } else if (ensemble[3]) {
-      cat ("\n RF lasso offset - ANN, lasso offset          " ) ;  nested.compare0(rf.perf.rep[,3] ,  ann.perf.rep[,3], pow, bootstrap, digits)  
+      cat ("\n RF lasso offset - ANN, lasso offset          " ) ;  nested.compare0_0_5_3(rf.perf.rep[,3] ,  ann.perf.rep[,3], pow, bootstrap, digits)  
     }
     cat("\n")
   }
   
   if ((doorf == 1) & (doann == 1)) {
-    cat ("\n ORF - ANN                                   ") ;  nested.compare0(orf.perf.rep[,1] ,  ann.perf.rep[,1], pow, bootstrap, digits) 
+    cat ("\n ORF - ANN                                   ") ;  nested.compare0_0_5_3(orf.perf.rep[,1] ,  ann.perf.rep[,1], pow, bootstrap, digits) 
     if (ensemble[6]) {
-      cat ("\n ORF lasso feature - ANN  l lasso feature    " ) ;  nested.compare0(orf.perf.rep[,2] ,  ann.perf.rep[,6], pow, bootstrap, digits) 
+      cat ("\n ORF lasso feature - ANN  l lasso feature    " ) ;  nested.compare0_0_5_3(orf.perf.rep[,2] ,  ann.perf.rep[,6], pow, bootstrap, digits) 
     } else if (ensemble[2]) {
-      cat ("\n ORF lasso feature - ANN lasso feature       " ) ;  nested.compare0(orf.perf.rep[,2] ,  ann.perf.rep[,2], pow, bootstrap, digits)  
+      cat ("\n ORF lasso feature - ANN lasso feature       " ) ;  nested.compare0_0_5_3(orf.perf.rep[,2] ,  ann.perf.rep[,2], pow, bootstrap, digits)  
     }
     if (ensemble[8]) {
-      cat ("\n ORF lasso offset - ANN l lasso offset (upated)" ) ;  nested.compare0(orf.perf.rep[,3] ,  ann.perf.rep[,8], pow, bootstrap, digits)   
+      cat ("\n ORF lasso offset - ANN l lasso offset (upated)" ) ;  nested.compare0_0_5_3(orf.perf.rep[,3] ,  ann.perf.rep[,8], pow, bootstrap, digits)   
     } else if (ensemble[4]) {
-      cat ("\n ORF lasso offset - ANN lasso offset          " ) ;  nested.compare0(orf.perf.rep[,3] ,  ann.perf.rep[,4], pow, bootstrap, digits)  
+      cat ("\n ORF lasso offset - ANN lasso offset          " ) ;  nested.compare0_0_5_3(orf.perf.rep[,3] ,  ann.perf.rep[,4], pow, bootstrap, digits)  
     } else if (ensemble[7]) {
-      cat ("\n ORF lasso offset - ANN, l lasso offset (upated)" ) ;  nested.compare0(orf.perf.rep[,3] ,  ann.perf.rep[,7], pow, bootstrap, digits) 
+      cat ("\n ORF lasso offset - ANN, l lasso offset (upated)" ) ;  nested.compare0_0_5_3(orf.perf.rep[,3] ,  ann.perf.rep[,7], pow, bootstrap, digits) 
     } else if (ensemble[3]) {
-      cat ("\n ORF lasso offset - ANN, lasso offset         " ) ;  nested.compare0(orf.perf.rep[,3] ,  ann.perf.rep[,3], pow, bootstrap, digits)  
+      cat ("\n ORF lasso offset - ANN, lasso offset         " ) ;  nested.compare0_0_5_3(orf.perf.rep[,3] ,  ann.perf.rep[,3], pow, bootstrap, digits)  
     }
     cat("\n")
   }

@@ -2,7 +2,7 @@
 % Please edit documentation in R/nested.cis_240708.R
 \name{nested.cis}
 \alias{nested.cis}
-\title{Calculate performance measure CI's and p's}
+\title{Calculate performance measure "nominal" CI's and p's}
 \usage{
 nested.cis(object, type = "devrat", pow = 1, digits = 4, returnd = 0)
 }
@@ -35,9 +35,12 @@ deviance ratios.}
 A printout to the R console
 }
 \description{
-Calculate overall estimates and confidence intervals for performance measures
-based upon stored cross validation performance measures in a nested.glmnetr()
-output object.
+Calculate overall estimates and "nominal" confidence intervals for 
+performance measures based upon stored cross validation performance 
+measures in a nested.glmnetr() output object. The simple standard errors 
+derived here from cross-validation are questionable and the actual 
+coverage probabilities of these CIs and the p's, may be differ meaningfully.
+See the Vignette references.
 }
 \examples{
 \donttest{

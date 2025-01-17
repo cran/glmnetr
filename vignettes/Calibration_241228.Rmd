@@ -1,7 +1,7 @@
 ---
 title: "Calibration of Machine Learning Models in glmnetr"
 author: "Walter K. Kremers, Mayo Clinic, Rochester MN"
-date: "24 October 2024"
+date: "28 December 2024"
 output: pdf_document 
 vignette: >
   %\VignetteIndexEntry{Calibration of Machine Learning Models}
@@ -12,7 +12,7 @@ vignette: >
 knitr::opts_chunk$set(echo=TRUE)
 #library( glmnetr )
 #library(survival)
-source("~/Documents/Rpackages/glmnetr_supl/_load_glmnetr_vig_241024.R" , echo=TRUE)
+source("~/Documents/Rpackages/glmnetr_supl/_load_glmnetr_vig_241228.R" , echo=TRUE)
 set.seed(116291949) 
 simdata=glmnetr.simdata(nrows=1000, ncols=100, beta=NULL)
 xs = simdata$xs                           # matrix of predictors 
@@ -20,7 +20,7 @@ yt = simdata$yt                           # vector of Gaussian (normal) outcomes
 yg = simdata$y_                           # vector of Gaussian (normal) outcomes
 yb = simdata$yb                           # vector of yes/no (binomial) outcomes
 event = simdata$event
-load( file="~/Documents/Rpackages/glmnetr_supl/using_glmnetr_outputs_241024.RLIST" ) ## 240828 
+load( file="~/Documents/Rpackages/glmnetr_supl/using_glmnetr_outputs_241228.RLIST" ) ## 240828 
 ```
 # The Package 
 The "An Overview of glmnetr" vignette shows how to run the main package function nested.glmnetr() and how to summarize model performances. If one identifies a well performing model according to the metrics in this summary, e.g. concordance, correlation, deviance ratio, linear calibration, one may want to do further evaluation in terms of calibration. The strongest calibration and validation will involve calibration with new, independent datasets. Frequently one will not have immediate access to such new data sets, or one may want first to do an internal validation before subjecting a model to an external validation. Here we consider an internal validation approach using cross validation or bootstrap re-sampling, similar to how we numerically assessed model performance.
@@ -68,11 +68,13 @@ For each of the models fit, nested.glmnetr() saves the X* Beta's from the final 
 ```{r calplot 1 }
 calplot(nested.cox.fit, wbeta=5)
 ```
-Here we see a smooth, nearly linear predicted log hazard ratio as a function of the model X* Beta from the relaxed lasso model. The bounding lines in red depict the average +/- 2 standard errors (SE) to assist in assessing meaningfulness in any deviation from the ideal identity line, and non linearities. In these curves the central region with solid lines denotes the region within the range of all the calibration spline fit, i.e. spline fits from all the different leave-out folds of the CV overlap without extrapolation. The dashed lines depict areas out of range for at least one of the leave out folds. Because spline fits can be rather uncertain when extrapolating beyond the data range, one should be more cautious in making strong conclusions in the dashed regions of these plots. Here we see somewhat wider confidence bounds about the overall calibration curve. 
+Here we see a smooth, nearly linear predicted log hazard ratio as a function of the model X* Beta from the relaxed lasso model. The bounding lines in red depict the average +/- 2 standard errors (SE) to assist in assessing meaningfulness in any deviation from the ideal identity line, and non linearities. In these curves the central region with solid lines denotes the region within the range of all the calibration spline fit, i.e. spline fits from all the different leave-out folds of the CV overlap without extrapolation. The dashed lines depict areas out of range for at least one of the leave out folds. Because spline fits can be rather uncertain when extrapolating beyond the data range, one should be more cautious in making strong conclusions in the dashed regions of these plots. Here we see somewhat wider confidence bounds about the overall calibration curve.
 
-A naive calibration curve similar to that shown above can also be easily gotten using the calplot function when specifying to not use the resample for construction as in 
+Bengio et al. showed that the standard deviations from cross validation might not be accurate for estimation of the actual standard errors. Bates et al. showed that the cross validation (CV) estimates and standard errors may be biased, and should thus be viewed with caution. In particular the CV estimates may more closely estimate the expected performance measures over multiple samples than the performance of the model based upon the observed data, and usage the CV standard errors when constructing confidence intervals might be associated with mis-coverage three times the nominal non-coverage. This is discussed further in the vignette "An Overview of glmnetr".
+
+A naive calibration curve similar to that shown above (the first figure) can also be easily gotten using the calplot function when specifying to not use the resample for construction as in 
 ```{r calplot naive 2, eval=TRUE }
-calplot(nested.cox.fit, wbeta=5, resample=0, xlim=c(-10,9), ylim=c(-15,10))
+calplot(nested.cox.fit, wbeta=5, resample=0, xlim=c(-10,9), ylim=c(-15,10), col.term=2, col.se=7)
 ```
 The code above using the termplot() function is provided to show our general approach for derivation of the calibration curves.
 
@@ -130,7 +132,7 @@ calplot(nested.bin.fit, 7, plotfold=0)
 This may calibrate slightly better but is not as linear as we might expect.
 
 # A Binomial Model Calibrated Using Bootstrap 
-Considering this we next fit models using bootstrap, that is fit models based upon random samples from the original sample (with replacement) of size the same as the original sample. Then we fit calibration curves for the out-of-bag sample units for each bootstrap sample, that is the elements of the original sample that are not selected by the bootstrap sample. This is done by specifying the number of bootstrap samples for calculation with the bootstrap option in the calplot() call. First we perform the bootstrap model generation and Out Of Bag (OOB) performance calculations using the nested.glmnetr() function with the _boostrap_ option,
+Considering this we next fit models using bootstrap, that is fit models based upon random samples from the original sample (with replacement) of same sample size as the original sample. Then we fit calibration curves for the out-of-bag sample units for each bootstrap sample fitted model, that is the elements of the original sample that are not selected by the bootstrap sample. The number of bootstrap samples for calculation is specified using the _bootstrap_ option in the nested.glmnetr() call,
 ```{r Nested cross-validation evaluation for multiple machine learning models - binomial - boot, include=TRUE, eval=FALSE, warning=FALSE}
 yb = simdata$yb 
 nested.bin.boot.fit = nested.glmnetr(xs,NULL,yb,NULL,family="binomial",
@@ -138,40 +140,38 @@ nested.bin.boot.fit = nested.glmnetr(xs,NULL,yb,NULL,family="binomial",
       folds_n=10, seed=219301029, track=1, bootstrap=20) 
 ```
 
-with resulting plot 
+The Out-Of-Bag (OOB) calibration plots can then be constructed using the calplot() function as before, 
 ```{r Calibration binomial eval -boot, warning=FALSE, error=FALSE, eval=TRUE, warning=FALSE}
 calplot(nested.bin.boot.fit, 5, plotfold=1) 
 ```
 
 Here we see a similar yet slightly different characteristics between the (nested) cross validation and bootstrap calibration plots. While technically the bootstrap might seem more accurate due to the confidence interval containing the ideal line (which we know applies due ot the way we simulated the data), this may as well be due to the random nature of the re-sample selection process. For the bootstrap one can run a larger number of re-samples to minimize this effect. For the cross validation one may repeat the whole process many times (see the glmnet package vignettes) and then average, but we have not done this here.
 
-# Variability in bootstrap in-bag calibrations
-In earlier works Austin PC, Steyerberg EW. Graphical assessment of internal and external calibration of logistic regression models by using loess smoothers. Stat Med. 2014; 33(3):517-35. doi: 10.1002/sim.5941. as well as Riley RD, Pate A, Dhiman P, Archer L, Martin GP, Collins GS. Clinical prediction models and the multiverse of madness. BMC Med. 2023; 21(1):502. doi: 10.1186/s12916-023-03212-y fit models based upon bootstrap samples and then fit calibration curves based upon the In Bag data points and model XBeta (predicteds). This follows the usual procedure for bootstrap analysis. 
-```{r Bootstrap calibration plot - binomial In Bag, include=TRUE, eval=TRUE, warning=FALSE}
+# Variability in Bootstrap In-Bag Calibrations
+In earlier works Austin et al. as well as Riley et al. fit models based upon bootstrap samples and then fit calibration curves based upon the in-bag data points and model XBeta (predicteds). This mimics the usual procedure for bootstrap analysis. This can be done using the calplot() function by setting the _oob_ option to 0, 
+```{r Bootstrap calibration plot - binomial in-bag, include=TRUE, eval=TRUE, warning=FALSE}
 calplot(nested.bin.boot.fit, wbeta=5, oob=0, plotfold=1)
 ```
-This figure shows the variability expected in the construction of calibration curves as described by the above authors. These curves however make no adjustment for bias correction possible using the bootstrap. Making the usual bias adjustment we have (XBeta_full) - (XBeta_i - XBeta_full) or 2*XBeta_full - XBeta_i. These can be produced with the call
+This figure shows the variability expected in the construction of calibration curves as described by the above authors. These curves however make no adjustment for bias correction possible using the bootstrap. Making the usual bias adjustment we have (XBeta_full) - (XBeta_i - XBeta_full) or 2*XBeta_full - XBeta_i. These can be produced setting the _bootci_ option to 1 as with the call
 ```{r Bootstrap calibration plot - binomial - bias corrected, include=TRUE, eval=TRUE, warning=FALSE}
 calplot(nested.bin.boot.fit, wbeta=5, bootci=1, plotfold=1)
 ```
 This figure differs from the simple in-bag calibrations. These two figures differ meaningfully from the out-of-bag calibration curves described above. 
 
-These two plots were for the relaxed lasso model fit. The corresponding out-of-bag bootstrap calibration plot above for the random forest model shows large variability but confidence limits containing the identity line. 
-
 # Bootstrap In-Bag Calibration for a Random Forest
-The variability in the in-bag bootstrap calibratin curves for the random forest model is depicted in the graph 
+These bootstrap plots above were for the relaxed lasso model fit. We now examine similar bootstrap calibration plots but for random forest models. The variability in the in-bag bootstrap calibratin curves for the random forest model is depicted in the graph 
 ```{r Bootstrap calibration plot - RF binomial no bias correction, include=TRUE, eval=TRUE, warning=FALSE}
 calplot(nested.bin.boot.fit, wbeta=16, bootci=0, oob=0, plotfold=1) 
 ```
 Here we see a strong deviation from the identity line. The bias corrected bootstrap calibration curves 
-```{r Bootstrap calibration plot - RF binomial In Bag bias correction, include=TRUE, eval=TRUE, warning=FALSE}
+```{r Bootstrap calibration plot - RF binomial in-bag bias correction, include=TRUE, eval=TRUE, warning=FALSE}
 calplot(nested.bin.boot.fit, wbeta=16, bootci=1, plotfold=1)
 ```
-have a more unusual and expected deviation form the ideal calibration curves of the identity line. Returning to the out-of-bag calibration bootstrap plots  
+have a more unusual and unexpected deviation from the ideal calibration curve of the identity line. Returning to the out-of-bag calibration bootstrap plots  
 ```{r Bootstrap calibration plot - RF binomial OOB, include=TRUE, eval=TRUE, warning=FALSE}
 calplot(nested.bin.boot.fit, wbeta=16, plotfold=1)
 ```
-we see that these too are highly varible but more consistent with an appropriately fitting model than suggested by the in-bag plots.   
+we see that these too are highly variable but more consistent with the ideal calibration curve, the identity line, than the in-bag calıbratıon curves.   
 
 While these two in-bag calibration curve sets strongly depart from the ideal of the identity line, the out-of-bag curves while possibly highly variable were consistent as a group with the ideal of the identity line. The bootstrap out-of-bag calibration curves have a clearer basis and depict more reasonable findings. In a sense this is not unexpected. When fitting machine learning models one typically evaluates model fit based upon the out-of-bag data points and not the in-bag data points. A difficulty here could be that the calibration curves, calculated at particular values for XBeta, do not describe a well defined parameter in terms of the disturbution function. Potentially as well the fitting process for machine learning models might not lend it self to the assumptions typically used to support bootstrap inferences. In particular as we see here when fitting random forest models, with the multiple repeat observations in the bootstrap resamples the model refits are overly optimistic, more strongly overfit and give more extreme XBeta as evidenced in these figures. We present the in-bag and biased adjusted bootstrap calibration curves not to promote their usage but to 1) show the variability in model fit and 2) how they may give poor inferences for a simple dataset. The user may want to generate other datasets of different known form and see how the bootstrap performs for their data.  
 
@@ -189,4 +189,14 @@ calplot(nested.gau.fit, wbeta=7)
 we see a small but probably not significant deviation from the ideal calibration line, the identity function. 
 
 # Perspective
-The summary and calibration plot functions used here do not address all needed for model validation and calibration but do allow a meaningful and un (or minimally) biased summary of model fits. The original outcome variable and X*betas are stored as vectors or matrices in the output with names y_, xbetas (full model) and xbetas.cv (cross-validation) and xbetas.boot.oob and betas.boot.inb (bootstrap in and out of bag) allowing the user to further inspect model fits and to perform other the calibrations. For cross-validation analyses the fold information is contained in the output object in the vector foldid. For bootstrap analyses the first column of xbetas.boot.oob and betas.boot.inb describe the replication of the bootstrap sampling process and the second columns the sequential index for the data point in the input dataset. 
+The summary and calibration plot functions used here do not address all needed for model validation and calibration but do allow a meaningful and un (or minimally) biased summary of model fits. The original outcome variable and X*betas are stored as vectors or matrices in the output with names y_, xbetas (full model) and xbetas.cv (cross-validation) and xbetas.boot.oob and betas.boot.inb (bootstrap out-of-bag and in-bag) allowing the user to further inspect model fits and to perform other means of calibration. For cross-validation analyses the fold information is contained in the output object in the vector foldid. For bootstrap analyses the first column of xbetas.boot.oob and betas.boot.inb describe the replication of the bootstrap sampling process and the second columns the sequential index for the data point in the input dataset. 
+
+# References
+Austin PC, Steyerberg EW. Graphical assessment of internal and external calibration of logistic regression models by using loess smoothers. Stat Med. 2014; 33(3):517-35. doi: 10.1002/sim.5941 . 
+
+Bates S, Hastie T, Tibshirani R, "Cross-validation: what does it estimate and how well does it do it?", 2022, https://arxiv.org/abs/2104.00673 .
+
+Bengio Y & Grandvalet Y, "No Unbiased Estimator of the Variance of K-Fold Cross-Validation", Journal of Machine Learning Research 5, 2004, 1089–1105, https://www.jmlr.org/papers/volume5/grandvalet04a/grandvalet04a.pdf .
+
+Riley RD, Pate A, Dhiman P, Archer L, Martin GP, Collins GS. Clinical prediction models and the multiverse of madness. BMC Med. 2023; 21(1):502. doi: 10.1186/s12916-023-03212-y .
+

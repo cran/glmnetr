@@ -1,7 +1,7 @@
 ---
 title: "Using ann_tab_cv() and transfer learning" 
 author: "Walter K. Kremers, Mayo Clinic, Rochester MN"
-date: "24 October 2024"
+date: "28 December 2024"
 output: pdf_document 
 vignette: >
   %\VignetteIndexEntry{Using ann_tab_cv}
@@ -10,10 +10,10 @@ vignette: >
 ---
 ```{r setup, include=FALSE}
   evalload = TRUE  ; evalmodel = FALSE ;
-  evalload = FALSE ; evalmodel = TRUE  ;
+#  evalload = FALSE ; evalmodel = TRUE  ;
 knitr::opts_chunk$set(echo = TRUE)
 #library( glmnetr )
-source("~/Documents/Rpackages/glmnetr_supl/_load_glmnetr_vig_241024.R" , echo=FALSE)
+source("~/Documents/Rpackages/glmnetr_supl/_load_glmnetr_vig_241228.R" , echo=FALSE)
 ```
 # The functions
 The ann_cv_lin() function fits a neural network (NN) model to tabular data. The network has a simple "sequential" structure with linear components and by default ReLU activations. It has two hidden layers where the number of terms in the two layers can be specified by the user. Data for input are in a format as with the nested.glmnetr() function. Models can be fit as generalizations to the Cox, logistic or linear regression models.
@@ -76,7 +76,7 @@ print(xs[1:10,c(1:12,18:20)])
 To fit a NN model we can use a simple function call as in
 ```{r load ann_tab_cv() fits, include=FALSE, eval=evalload}
 ## always run ann_tab_cox_ex1 & nested_cox_fit_ex2 
-load( file="~/Documents/Rpackages/glmnetr_supl/using_ann_tab_cv_outputs_241024.RLIST" ) 
+load( file="~/Documents/Rpackages/glmnetr_supl/using_ann_tab_cv_outputs_241228.RLIST" ) 
 ```
 ```{r fit ann_tab_cox_ex1, an ann_tab_cv() model}
 ## fit a model with some monitoring to the R console 
@@ -188,7 +188,7 @@ nested_cox_fit_ex2 = nested.glmnetr(xs=xs, y_=yt, event=event, family="cox",
 ```
 ```{r save2, include=FALSE, eval=evalmodel}
 save( ann_tab_cox_ex1, nested_cox_fit_ex2,  
-      file="~/Documents/Rpackages/glmnetr_supl/using_ann_tab_cv_outputs_241024.RLIST") 
+      file="~/Documents/Rpackages/glmnetr_supl/using_ann_tab_cv_outputs_241228.RLIST") 
 ```
 Here we see that to fit a NN informed by a lasso model the user need do very little beyond specifying the data for the fit. In addition to providing the usual data for a Cox model, one specifies doann=1 to "do an ann" model, and ensemble=c(0,0,1) where the ensemble[3] = 1 indicates the NN model is to be fit informed by the lasso model. The folds_n=10 specifies there are to be 10 folds for CV, and the resample = 0 indicates to not do a nested CV, that is to just do the one layer of CV. If unspecified, resample defaults to 1 and a nested CV will be performed allowing one to assess and compare model performances. How to specify these terms is described in the reference manual. 
 
@@ -244,7 +244,7 @@ nested_nrm_fit_ex3 = nested.glmnetr(xs=xs, y_=y_, family="gaussian", dolasso=1, 
 ```
 ```{r save3, include=FALSE, eval=evalmodel}
 save( ann_tab_cox_ex1, nested_cox_fit_ex2, nested_nrm_fit_ex3,  
-      file="~/Documents/Rpackages/glmnetr_supl/using_ann_tab_cv_outputs_241024.RLIST") 
+      file="~/Documents/Rpackages/glmnetr_supl/using_ann_tab_cv_outputs_241228.RLIST") 
 ```
 Here since we did a nested cross validation of the derived model (with the option resample left as defualt) we can calibrate using the calplot() function 
 ```{r nested.glminetr() ann_fit_1 predicteds 2 }
@@ -271,7 +271,7 @@ nested_bin_fit_ex4 = nested.glmnetr(xs=xs, y_=yb, family="binomial",
 ```
 ```{r save4, include=FALSE, eval=evalmodel}
 save( ann_tab_cox_ex1, nested_cox_fit_ex2, nested_nrm_fit_ex3, nested_bin_fit_ex4 ,  
-      file="~/Documents/Rpackages/glmnetr_supl/using_ann_tab_cv_outputs_241024.RLIST") 
+      file="~/Documents/Rpackages/glmnetr_supl/using_ann_tab_cv_outputs_241228.RLIST") 
 ```
 ```{r nested.glminetr() nested_bin_fit_ex4 4, eval=FALSE}
 ## fit a neural network based upon logistic regression framework 
@@ -307,7 +307,7 @@ nested_nrm_fit_ex5 = nested.glmnetr(xs=simdata$xs,y_=simdata$y_,
 ```
 ```{r save5, include=FALSE, eval=evalmodel}
 save( ann_tab_cox_ex1, nested_cox_fit_ex2, nested_nrm_fit_ex3, nested_bin_fit_ex4 , nested_nrm_fit_ex5 , 
-      file="~/Documents/Rpackages/glmnetr_supl/using_ann_tab_cv_outputs_241024.RLIST") 
+      file="~/Documents/Rpackages/glmnetr_supl/using_ann_tab_cv_outputs_241228.RLIST") 
 ```
 ```{r Fit and estiamte performances of relaxed lasso and ANN models 2, include=FALSE, eval=FALSE }
 # Fit a neural network model informed by cross validation 
@@ -370,5 +370,5 @@ Just as one can assign a subset of the bias and weight (initial) values for the 
 Just as we have informed the NN model with the results form a relaxed lasso model fit we an do the same with gradient boosting machines by either adding the lasso predicted as an additional predictor or including it as an offset. This is done by setting doxgb=1 in the nested.glmnetr() call. Results are similar but different from those for the NN models. For our data sets the GBMs took much longer to run since we used a search algorithm to find a "best" hyperparameter set.
 ```{r save, include=FALSE, eval=evalmodel}
 save( ann_tab_cox_ex1, nested_cox_fit_ex2, nested_nrm_fit_ex3, nested_bin_fit_ex4 , nested_nrm_fit_ex5 , 
-      file="~/Documents/Rpackages/glmnetr_supl/using_ann_tab_cv_outputs_241024.RLIST") 
+      file="~/Documents/Rpackages/glmnetr_supl/using_ann_tab_cv_outputs_241228.RLIST") 
 ```

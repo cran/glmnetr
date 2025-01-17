@@ -4,7 +4,11 @@
 #' Calculate performance measure CI's and p's
 #' 
 #' @description 
-#' Calculate performances as called from nested.cis().  
+#' Calculate "nominal" performances as called from nested.cis(). In general 
+#' the standard deviations for the performance measures evaluated 
+#' on the leave-out samples may be biased. The confidence intervals and 
+#' p values presented by this function should not be interpreted exactly 
+#' but may still be of value. See the package vignettes for more discussion.  
 #'
 #' @param a One term
 #' @param mu null value
@@ -62,12 +66,15 @@ nested.cis0 = function(a, mu, digits=4, txt=0, pow=1, alldevrat=NULL, bootstrap=
 ################################################################################
 ################################################################################
 
-#' Calculate performance measure CI's and p's
+#' Calculate performance measure "nominal" CI's and p's
 #'
 #' @description 
-#' Calculate overall estimates and confidence intervals for performance measures
-#' based upon stored cross validation performance measures in a nested.glmnetr()
-#' output object.
+#' Calculate overall estimates and "nominal" confidence intervals for 
+#' performance measures based upon stored cross validation performance 
+#' measures in a nested.glmnetr() output object. The simple standard errors 
+#' derived here from cross-validation are questionable and the actual 
+#' coverage probabilities of these CIs and the p's, may be differ meaningfully.
+#' See the Vignette references. 
 #'
 #' @param object A nested.glmnetr output object.
 #' @param digits digits for printing of z-scores, p-values, etc. with default of 4 
@@ -110,6 +117,10 @@ nested.cis0 = function(a, mu, digits=4, txt=0, pow=1, alldevrat=NULL, bootstrap=
 
 ## object = xx ; digits=4 ; type="devrat" ; pow=1 ; returnd = 0 ; 
 nested.cis = function(object, type="devrat", pow=1, digits=4, returnd=0) {
+  
+  cat(paste(" The standard errors (SEs) derived from cross-validation are questionable",
+            "\n and the actual coverage probabilities of these CIs and the p's",
+            "\n may be differ meaningfully."))
   family =  object$sample[1]
   tuning  = object$tuning
   bootstrap = tuning[8] 

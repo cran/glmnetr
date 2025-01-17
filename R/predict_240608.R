@@ -28,7 +28,6 @@
 #' 
 #' @seealso 
 #'    \code{\link{predict.cv.glmnetr}} , \code{\link{predict_ann_tab}} , \code{\link{nested.glmnetr}}
-#    , \code{\link{predict_nested_xgb}} , \code{\link{predict_nested_rf}} 
 #' 
 #' @export 
 #'
