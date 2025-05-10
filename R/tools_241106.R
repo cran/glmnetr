@@ -469,15 +469,14 @@ diff_time = function(time_start=NULL, time_last=NULL) {
 #' 
 #' @examples
 #' sim.data=glmnetr.simdata(nrows=1000, ncols=100, beta=NULL)
-#' # for Cox PH survial model data 
+#' # Design matrix for all data types 
 #' xs=sim.data$xs 
+#' # for Cox PH survival model data 
 #' y_=sim.data$yt
 #' event=sim.data$event
 #' # for linear regression model data 
-#' xs=sim.data$xs 
 #' y_=sim.data$y_
 #' # for logistic regression model data 
-#' xs=sim.data$xs 
 #' y_=sim.data$yb
 #' 
 glmnetr.simdata = function(nrows=1000, ncols=100, beta=NULL, intr=NULL, nid=NULL) {

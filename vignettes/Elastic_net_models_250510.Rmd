@@ -1,0 +1,133 @@
+---
+title: "Elastic Net Models"
+author: "Walter K. Kremers, Mayo Clinic, Rochester MN"
+date: "10 May 2025" 
+output: pdf_document 
+vignette: >
+  %\VignetteIndexEntry{Using stepreg}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+```{r setup, include=FALSE}
+  evalload = TRUE ; evalmodel = FALSE ;
+  evalload = FALSE ; evalmodel = TRUE ;
+knitr::opts_chunk$set(echo = TRUE) 
+#library(glmnetr)
+#library(survival)
+source("~/Documents/Rpackages/glmnetr_supl/_load_glmnetr_vig_241228.R" , echo=TRUE)
+#library(Matrix)
+```
+# Introduction
+From our experience the relaxed lasso models involving a wieghted average of coefficients between the fully penalized lasso model and the unpenalized regression model based upon the non zero terms (from the penalized lasso model) generally provides a balance bewteen good fit and parsimony (fewer terms and so a simpler model). We understand may find advantage of the elastic net model which also involves a weighted average between a penalized and unpanalized regression models but allows for the penalty to involve a combination of L1 and L2 distance measures (See the vignette "An Introduction to glmnet" at https://CRAN.R-project.org/package=glmnet).
+
+To allow one to investigate how the elastic net model may benefit their data the nested.glmnetr() program can fit elastic net models for multiple values of both alpha, the mixing paramater for the L1 and L2 penalty metics, and gamma, the mixing paramter between the penalzed and unpenalzed fits. As for the other models the nested.glmnetr() function performs a "simple" nested cross validation of the elastic net model in parallel with all other fitted models, even if not involving all the advantages of the nested corss valdiaiton described by Bates, Hastie and Tibshirani. 
+
+In additon to comparing the nested cross validation performances of deviances, agreement and calibration one can graphically inspect the (non nested) cross validation deviance values for the candidate models as function of each of the alpha, gamma and lambda. 
+
+# An example dataset
+To demonstrate usage of _cv.stepreg_ we first generate a data set for analysis, run an analysis and evaluate.  Following the _Using glmnetr_ vignette, the code
+```{r Simuate survival data}
+# Simulate data for use in an example survival model fit
+# first, optionally, assign a seed for random number generation to get applicable results  
+set.seed(116291950) 
+simdata=glmnetr.simdata(nrows=1000, ncols=100, beta=NULL)
+```
+generates simulated data for analysis.  We extract data in the format required for input to the _nested.glmnetr_ (and _glmnetr_) programs.
+```{r Extract data from the simulation output object}
+# Extract simulated survival data 
+xs = simdata$xs        # matrix of predictors 
+y_ = simdata$y_        # vector of numerical responces 
+```
+Inspecting the predictor matrix and outcome vector we see
+```{r Inspect xs, the design matrix}
+# Check the sample size and number of predictors
+print(dim(xs)) 
+# Check the rank of the design matrix, i.e. the degrees of freedom in the predictors 
+Matrix::rankMatrix(xs)[[1]]
+# Inspect the first few rows and some select columns 
+print(round(xs[1:10,c(1:12,18:20)],digits=6))
+summary(y_)
+```
+# Fitting an Elastic Net model
+To fit the elastic net model we call the neted.glmnetr() function line in the "An Introduction to glmnetr" while now specifying a vector of candidate alpha values using the alpha option in the function call. For comparison we are also fitting the random forest model as well as the full model including all candiate predictors.
+```{r load 1, include=FALSE, eval=evalload}
+load( file="~/Documents/Rpackages/glmnetr_supl/Elastic_Net_Models_250510.RLIST" ) 
+#nested.gau.fit$fits[1] = 0 
+```
+```{r  Fit an elastic net model informed by cross validation, eval=evalmodel }
+# Fit a relaxed lasso model informed by cross validation 
+nested_elastic_fit = nested.glmnetr(xs, start=NULL, y_, event=NULL, family="gaussian", resample=NULL, folds_n=10,
+                                    dolasso=1, doxgb=0, dorf=1, doorf=0, doann=0, dorpart=0, dostep=0, doaic=0, dofull=1, 
+                                    alpha=seq(0,1,0.2), seed=791590258, track=0) 
+```
+When alpha is not specified the value c(1) is used to fit models based only on the L1 penalty. By default the candidate values for gamma are c(0, 0.25, 0.5, 0.75, 1), as suggested in the glmnet package. 
+
+# A tabular summary of model performances
+```{r  Evaluate elastic net model fit }
+# Fit a relaxed lasso model informed by cross validation 
+summary(nested_elastic_fit)
+```
+
+# A graphical summary of model performances
+Model deviance ratios, measures of agreement (r-square or concordance) and linear calibration coefficients obtained from nested cross validation can be displayed graphically, including values from calculated from individual fold values, the averages over the folds and the naive values obtained basing caculations on the training data are displayed. Here we present only the figure for deviance ratios. 
+```{r  Graphically display deviance ration, average and by fold }
+# Fit a relaxed lasso model informed by cross validation 
+plot(nested_elastic_fit, ylim=c(0.6,0.95))
+```
+
+# Graphical presentations of cross validation deviances
+```{r  Graphically display deviances by gamma and lambda }
+# Fit a relaxed lasso model informed by cross validation 
+plot(nested_elastic_fit , type="elastic")
+```
+
+Here we see that all curves for differnt vlaues of gamma are for the same loss minimizing value for alpha of 1. We can also plot the curves for other values of alpha, for eample 0 correspoinding to a pure L2 penaly.
+```{r  Graphically display deviances by gamma and lambda alpha zero }
+# Fit a relaxed lasso model informed by cross validation 
+plot(nested_elastic_fit , type="elastic", alpha = 0)
+```
+We can also plot the deviance curves for different values of alpha when specifying a single value for gamma.
+```{r  Graphically display deviances by gamma and lambda gamma a half }
+# Fit a relaxed lasso model informed by cross validation 
+plot(nested_elastic_fit , type="elastic", gamma = 0.5)
+```
+
+# Graphical presentations of beta estimates
+Similary we can plot the beta estimates for the optimizing values for alpha and gamma as a function of lambda. 
+```{r  Graphically display beta sat alpha.min and gamma.min }
+# Fit a relaxed lasso model informed by cross validation 
+plot(nested_elastic_fit , type="elastic", coefs=1)
+```
+Similary we can plot beta's for other values of alpha and gamma, specifying eihter alpha, gamma or both. If we spedify only one of alpha or gamma, the plot will search for the other value minimizing the cross validation deviance.  
+```{r  Graphically display betas by gamma and lambda alpha zero }
+# Fit a relaxed lasso model informed by cross validation 
+plot(nested_elastic_fit , type="elastic", coefs=1, alpha=0)
+```
+corresponding to relaxed model restricing the penalty to the L2 metric. 
+
+# Numerical values for beta and predicteds 
+To extract beta's or calculate predicteds we use the predict() function. By default predictions are given for the lasso model. Alternatively one may specify th model type as "lasso", "elastic" or "ridge". 
+```{r  inspect the betas from the lasso models }
+# get betas  ...  
+betas = predict(nested_elastic_fit)
+ betas
+
+# predicteds ...
+preds = predict(nested_elastic_fit , xs) 
+preds[1:10] 
+```
+For this case the best lasso model is the "fully" penalized (relaxed) lasso model.  
+```{r  inspect the betas from the ridge models, eval=FALSE }
+# get betas  ...  
+betas = predict(nested_elastic_fit, type="elastic" )
+betas
+
+# predicteds ...
+preds = predict(nested_elastic_fit , xs, type="elastic" ) 
+preds[1:10] 
+```
+For this analysis the best elastic net model is the same as the best lasso model, so we suppressed here the printing out of the same numbers.
+
+```{r save1, include=FALSE, eval=evalmodel}
+save( nested_elastic_fit , file="~/Documents/Rpackages/glmnetr_supl/Elastic_Net_Models_250510.RLIST" )
+```

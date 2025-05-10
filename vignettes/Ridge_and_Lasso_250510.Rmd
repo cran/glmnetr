@@ -1,0 +1,122 @@
+---
+title: "Lasso and Ridge, Model and Coefficient stability"
+author: "Walter K. Kremers, Mayo Clinic, Rochester MN"
+date: "10 May 2025" 
+output: pdf_document 
+vignette: >
+  %\VignetteIndexEntry{Lasso and Ridge Stability}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+```{r setup, include=FALSE}
+  evalload = TRUE  ; evalmodel = FALSE ;
+  evalload = FALSE ; evalmodel = TRUE  ;
+knitr::opts_chunk$set(echo = TRUE)
+library(glmnet)
+```
+# The matter
+It is well recognized that repeat terms in a predictor set will not impact a lasso model.  The lasso model will split the coefficient weight over the multiple repeat predictors without changing either the L1 penalty or the model prediction.  It is also well recognized that the ridge model will distribute the weight for a coefficient equally among repeat terms of the predictor to minimize the loss function for any given lambda.  For the lasso then the models are invariant to adding a repeat predictor even if the individual coefficients may change or be "unstable".  For the ridge model the coefficients are generally uniquely determined for any particular lambda penalty, but the addition of a repeat predictor can change all the non-zero coefficients in a model.
+
+# An example dataset 
+Set up a simple dataset with multiple predictors.  For the moment there will be no repeat predictors.
+```{r Simuate survival data}
+# Simulate a simple example data set 
+set.seed(1) 
+nobs=100 
+beta = c(1,0.9,0.8,0.7,0.6,0.5,0.4,0.3,0.2,0.1,0.1,0.1,0,0,0)
+xs1 = matrix(runif(nobs*length(beta)),nrow = nobs, ncol = length(beta))
+## the first few rows of the matrix
+round( xs1[1:5,] , digits=4 ) 
+#y_ = xs1 %*% beta + 0.4*rnorm(nobs)
+y_ = xs1 %*% beta + 0.5*rnorm(nobs)
+dim(xs1)
+```
+,,,,
+```{r set up folds}
+set.seed(2)
+fold_n = 10 
+foldid = sample( rep( 1:fold_n , ceiling(nobs/fold_n) )[ 1:nobs ] , nobs ) 
+```
+```{r Fit lasso model 1}
+lasso.fit1 = cv.glmnet(xs1,y_, family="gaussian", foldid=foldid) 
+beta.lasso.1 = as.matrix(coef(lasso.fit1))
+lasso.lambda = lasso.fit1$lambda
+```
+```{r Fit ridge model 1}
+ridge.fit1 = cv.glmnet(xs1,y_, family="gaussian", alpha=0, foldid=foldid) 
+beta.ridge.1 = as.matrix(coef(ridge.fit1))
+ridge.lambda = ridge.fit1$lambda
+```
+Here we see that the models have very similar reductions in mean square error, though the ridge model has a slightly larger value.  
+```{r Fit lasso 2}
+## create a repeat of the first predictor
+ xs2 = cbind( xs1, xs1[,1] )
+# xs2 = cbind( xs1, xs1[,5] )
+
+## fit the lasso model to the updated predictor set
+lasso.fit2 = cv.glmnet(xs2,y_, family="gaussian", foldid=foldid, lambda=lasso.lambda) 
+beta.lasso.2 = as.matrix(coef(lasso.fit2))
+```
+```{r Fit Ridge 2}
+## fit the ridge model to the updated predictor set
+ridge.fit2 = cv.glmnet(xs2,y_, family="gaussian", alpha=0, foldid=foldid, lambda=ridge.lambda )
+beta.ridge.2 = as.matrix(coef(ridge.fit2))
+```
+```{r Betas for teh 4 models}
+## put the betas from the 4 models into a common matrix
+betas = cbind(rbind(beta.lasso.1,0), beta.lasso.2, rbind(beta.ridge.1,0), beta.ridge.2)
+colnames(betas) = c("lasso 1", "lasso 2", "ridge 1", "ridge 2") 
+rownames(betas)[17] = "V1.2"
+
+## betas for the 2 lasso and 2 ridge models
+betas
+## betas terms for the 2 repeat predictors 
+betas[c(2,17),]
+## sum of betas terms for the 2 repeat predictors, i.e. the collective 
+## weight of the repeated term
+colSums(betas[c(2,17),])
+```
+Here we see how for lasso model that the total weight for the coefficients for repeat terms have changed only in the 4'th decimal place, presumably because of the numerical algorithm.  The weights for all other terms too are vary similar, differing only after a few decimal places.  For the ridge model, the total weight for the coefficients for repeat terms have substantially increased form about 0.68 to 0.82, a change in the first decimal palce.  Further, the weights for many cofficients have changed in either the first or 2nd decimal place. We can see this by calculating the change sin teh coefficients
+```{r  load ann_tab_cv() fits, include=FALSE, eval=evalload}
+round(cbind( betas[,2] - betas[,1], betas[,4] - betas[,3] ), digits=5)
+```
+# Impact of repeats in the predicteds
+To understand the impact of these coefficient changes we look at the predicteds, i.e. 'X*betas', in the data used to fit the model. For the lasso model we see 
+```{r  fit ann_tab_cox_ex1, an ann_tab_cv() model}
+pred.lasso.1 = predict( lasso.fit1, xs1)
+pred.lasso.2 = predict( lasso.fit2, xs2)
+cor(pred.lasso.1, pred.lasso.2)
+```
+that the predicteds have a correlation of (almost) 1, and plotting one against teh other it is difficlut to see any differneces between the two.
+```{r  plot ann_tab_cox_ex1, an ann_tab_cv() }
+plot(pred.lasso.1, pred.lasso.2)
+```
+For tthat the predicteds have a correlation of (almost) 1, and plotting one against teh other it is difficlut to see any differneces between the two.
+
+Repearint thee calculaitons fo rhte reidge predicteds we see 
+```{r  fit ann_tab_cox_ex1 an ann_tab_cv() model}
+pred.ridge.1 = predict( ridge.fit1, xs1)
+pred.ridge.2 = predict( ridge.fit2, xs2)
+cor(pred.ridge.1, pred.ridge.2)
+#ridge.compare = glm(pred.ridge.2 ~ pred.ridge.1, family="gaussian")
+#summary(ridge.compare)
+#names( ridge.compare )
+#1 - ridge.compare$deviance/ridge.compare $null.deviance
+```
+a very large correlation of 0.989 but a plot of one against the other shows clear differences between the two.
+```{r  plotm model}
+plot(pred.ridge.1, pred.ridge.2)
+```
+The inclusion of a repeat term in the design matrix did not meaningful change the reduction in MSE for the lasso model but did have an ever so small impact on the MSE for the ridge model, as decribe by   
+```{r values1, include=FALSE, eval=TRUE}
+L1 = round( lasso.fit1$glmnet.fit$dev.ratio[lasso.fit1$index[1]], digits=6 )
+L2 = round( lasso.fit2$glmnet.fit$dev.ratio[lasso.fit2$index[1]], digits=6 )
+R1 = round( ridge.fit1$glmnet.fit$dev.ratio[ridge.fit1$index[1]], digits=6 )
+R2 = round( ridge.fit2$glmnet.fit$dev.ratio[ridge.fit2$index[1]], digits=6 )
+devratio = round( c(L1, L2, R1, R2) , digits=4) 
+names(devratio) = c("lasso 1", "lasso 2", "ridge 1", "ridge 2") 
+```
+```{r values2, include=TRUE, eval=TRUE}
+devratio 
+```
+We do not compare here the deviance ratios between the lasso and ridge models as these are biased when we calculate them on the same data as used to derive the models.  This can be done with nested cross validation, but this is better done with real data.

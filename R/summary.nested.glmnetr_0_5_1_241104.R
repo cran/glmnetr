@@ -39,7 +39,7 @@
 
 summary.nested.glmnetr_0_5_1 = function(object, cvfit=FALSE, pow=2, printg1=FALSE, 
                                   digits=4, Call=NULL, onese=0, table=1, tuning=0, width=84, ...) {
-# cvfit=FALSE ; pow=2 ; printg1=FALSE ; digits=4 ; Call=NULL ; onese=0 ; table=1 ; tuning=0 ; width=108  
+# cvfit=FALSE ; pow=2 ; printg1=FALSE ; digits=4 ; Call=NULL ; onese=0 ; table=1 ; tuning=0 ; width=108 ;  
   
   get.DevRat = function( devian.rep, null.m2LogLik.rep, sat.m2LogLik.rep, n.rep, bootstrap=0 ) {
     if (bootstrap == 0) {

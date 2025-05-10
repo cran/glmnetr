@@ -44,15 +44,14 @@ can cause difficulties with the glmnet() of the 'glmnet' package.
 }
 \examples{
 sim.data=glmnetr.simdata(nrows=1000, ncols=100, beta=NULL)
-# for Cox PH survial model data 
+# Design matrix for all data types 
 xs=sim.data$xs 
+# for Cox PH survival model data 
 y_=sim.data$yt
 event=sim.data$event
 # for linear regression model data 
-xs=sim.data$xs 
 y_=sim.data$y_
 # for logistic regression model data 
-xs=sim.data$xs 
 y_=sim.data$yb
 
 }
