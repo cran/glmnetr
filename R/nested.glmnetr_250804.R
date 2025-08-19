@@ -171,18 +171,19 @@
 #' is assigned c(1,0,0,0, 0,1,0,1).
 #' @param method  method for choosing model in stepwise procedure, "loglik" or "concordance".
 #' Other procedures use the "loglik". 
-#' @param alpha   alpha vector for the elastic net models, default is NULL or 
-#' c(1) for a striclty L1 penalty. Note, in modifications for 
-#' the elastic net including alpha as a tuning parameter, the current 
-#' nested.glmnetr() version uses cv.glmnet() for the elastic net calculations.    
-#' @param gamma   gamma vector for the relaxed lasso fit, default is 
+#' @param alpha A vector for alpha values considered when tuning the elasic net 
+#' models, for example c(0,0.2,0.4,0.6,0.8,1). Default is c(1) to fit the 
+#' lasso model involving only the L1 penalty. The value for alpha of 0 
+#' corresponds to the ridge model where the penalty involves only the L2 norm.   
+#' @param gamma A vector of gamma values for the relaxed lasso fit, default is 
 #' c(0,0.25,0.5,0.75,1). The values of 0 and 1 are added to gamma if not 
-#' described. Note, in modifications for 
+#' provided by the user. Note, in modifications for 
 #' the elastic net including alpha as a tuning parameter, the current 
 #' nested.glmnetr() version uses cv.glmnet() for the elastic net calculations. 
-#' @param lambda  lambda vector for the lasso fit. Note, in modifications for 
-#' the elastic net including alpha as a tuning parameter, the current 
-#' nested.glmnetr() version uses cv.glmnet() for the elastic net calculations. 
+#' @param lambda A vector of lambda values for the lasso fit. Note, in 
+#' modifications for the elastic net including alpha as a tuning parameter, 
+#' the current nested.glmnetr() version uses cv.glmnet() for the elastic net 
+#' calculations. 
 #' @param steps_n number of steps done in stepwise regression fitting 
 #' @param seed optional, either NULL, or a numerical/integer vector of length 
 #' 2, for R and torch random generators, or a list with two vectors, each of 
@@ -367,7 +368,7 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", res
     cat(paste0("  With family = ", family, ", stratified is set to 0\n"))
   } 
   
-  pver = "glmnetr version 0.6-1 (2025-05-10)" 
+  pver = "glmnetr version 0.6-2 (2025-08-18)" 
   
   if ( (!is.null(do_ncv)) & (is.null(resample)) ) { 
     resample = do_ncv
@@ -753,22 +754,22 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", res
   n00.rep = n.rep 
   
   ## log likelihoods & concordances from LASSO and relaxed lasso by Cross Validation 
-  zero_nby5 = matrix ( data=rep(0,(5*reps)), nrow = reps, ncol = 5 ) 
-  ones_nby5 = matrix ( data=rep(1,(5*reps)), nrow = reps, ncol = 5 ) 
-  lasso.devian.rep = ones_nby5
-  lasso.agree.rep  = zero_nby5
-  lasso.intcal.rep = zero_nby5
-  lasso.lincal.rep = zero_nby5
-  lasso.cal.devian.rep = ones_nby5
-  lasso.cal.agree.rep  = zero_nby5
-  lasso.cal.intcal.rep = zero_nby5
-  lasso.cal.lincal.rep = zero_nby5
+  zero_nby7 = matrix ( data=rep(0,(7*reps)), nrow = reps, ncol = 7 ) 
+  ones_nby7 = matrix ( data=rep(1,(7*reps)), nrow = reps, ncol = 7 ) 
+  lasso.devian.rep = ones_nby7
+  lasso.agree.rep  = zero_nby7
+  lasso.intcal.rep = zero_nby7
+  lasso.lincal.rep = zero_nby7
+  lasso.cal.devian.rep = ones_nby7
+  lasso.cal.agree.rep  = zero_nby7
+  lasso.cal.intcal.rep = zero_nby7
+  lasso.cal.lincal.rep = zero_nby7
   ## number of non-zero coefficients in LASSO models 
-  lasso.nzero.rep = zero_nby5
+  lasso.nzero.rep = zero_nby7
   lassogammacv = matrix ( data=rep(0,(2*reps)), nrow = reps, ncol = 2)
-  lasso_nms = c( "lasso", "lassoR", "lassoR0", "elastic net", "ridge" ) 
-  lasso_xb_nms = c("lasso"    , "lassoR"    , "lassoR0"    , "elastic"    , "ridge",
-                   "lasso cal", "lassoR cal", "lassoR0 cal", "elastic cal", "ridge cal" )
+  lasso_nms = c( "lasso", "lassoR" , "lassoR0" , "elastic net" , "ridge" , "elastic net G0", "elastic net G1" ) 
+  lasso_xb_nms = c("lasso"    , "lassoR"    , "lassoR0"    , "elastic"    , "ridge"    , "elastic G0", "elastic G1", 
+                   "lasso cal", "lassoR cal", "lassoR0 cal", "elastic cal", "ridge cal", "elastic G0 cal", "elastic G1 cal" )
   colnames(lasso.devian.rep) = lasso_nms 
   colnames(lasso.cal.devian.rep) = lasso_nms 
   colnames(lasso.agree.rep ) = lasso_nms
@@ -935,16 +936,18 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", res
   
   #########################################################################################################
   ##### LASSO fit #########################################################################################
-  lasso.nzero = rep(0,5) 
+  lasso.nzero = rep(0,7) 
   
   if (dolasso == 1) {
     
-    xbetas.lasso    = matrix(rep(xbnull,10*nobs), nrow=nobs, ncol=10)  
+#    xbetas.lasso    = matrix(rep(xbnull,10*nobs), nrow=nobs, ncol=10)  
+    xbetas.lasso    = matrix(rep(xbnull,14*nobs), nrow=nobs, ncol=14)  
     xbetas.cv.lasso = xbetas.lasso 
     
     if (track >= 1) { cat(paste0("\n ########## Initial (CV) lasso fit of all data ########################################" , "\n")) }
 #    cat(paste(" (1) fine = ", fine, "\n"))
 #    trainxs, trainy__, family, lambda=NULL, gamma=c(0,0.25,0.5,0.75,1), alpha=1, foldid=NULL, folds_n=NULL, fine=0, path=0, track=0, ... ) {
+    ##### ", ... " ") # , ... "
     cv.glmnetr.list  = cv.glmnetr(xs, y__, family, lambda=lambda, gamma=gamma, alpha=alpha, foldid=foldid, folds_n=folds_n, fine=fine, path=path, track=track, ... ) 
 #    cat(paste(" (2) fine = ", fine, "\n"))
     cv_glmnet_fit_f_ = cv.glmnetr.list$cv_glmnet_fit_
@@ -960,6 +963,7 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", res
     cv_glmnetr_perf = cv.glmnetr_perf(cv.glmnetr.list, xs, y__, xs, y__, family, ensemble, lasso_nms, lasso_xb_nms ) 
 #     testxs=xs ; testy__=y__ ; trainxs=xs ; trainy__=y__ ; 
 #     cv.glmnetr.list, xs, y__, xs, y__, family, ensemble, lasso_nms, lasso_xb_nms 
+#    testxs=xs ; testy__=y__ ; trainxs=xs ; trainy__=y__ ; tol=1e-14 ;
     
     lasso.devian.naive      = cv_glmnetr_perf$lasso.devian
     lasso.agree.naive       = cv_glmnetr_perf$lasso.agree
@@ -975,8 +979,7 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", res
     
     colnames(xbetas.cv.lasso) = lasso_xb_nms 
     
-    if (track >= 1) { cat(paste0(" length(lambda) = " , length(cv_lasso_fit_f$lambda), "\n" )) } 
-    
+    if (track >= 2) { cat(paste0(" length(lambda) = " , length(cv_lasso_fit_f$lambda), "  length(alpha) = ", length(alpha), "\n" )) } 
     if (track >= 1) { time_last = diff_time(time_start, time_last)  }
 
   }

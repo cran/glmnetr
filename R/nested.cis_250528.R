@@ -26,7 +26,7 @@
 #' 
 #' @noRd
 
-nested.cis0 = function(a, mu, digits=4, txt=0, pow=1, alldevrat=NULL, bootstrap=0) { 
+nested.cis0_0_6_2 = function(df, group, desc, a, mu, digits=4, pow=1, alldevrat=NULL, bootstrap=0) { 
   if ( pow != 2) { pow = 1 } 
 
     azs = (a)[!is.na(a)]
@@ -55,14 +55,13 @@ nested.cis0 = function(a, mu, digits=4, txt=0, pow=1, alldevrat=NULL, bootstrap=
     up   = up + adj
   }
   
-  if (txt==1) {
-    cat ( paste0(  " estimate (95% CI): ", round(mean, digits=digits), " (", round(lo, digits=digits), ", ", 
-                   round(up, digits=digits), ") , p=", round(p_, digits=digits) ) )
-  } else {
-    cat ( paste0( round(mean, digits=digits), " (", round(lo, digits=digits), ", ", 
-                  round(up, digits=digits), ")   ", round(p_, digits=digits) ) )
-  }
-  #  if ( pow == 2) {cat("   --", corr1, " - ", corr2)}
+#    cat ( paste0( round(mean, digits=digits), " (", round(lo, digits=digits), ", ", round(up, digits=digits), ")   ", round(p_, digits=digits) ) )
+
+#    dfr = as.data.frame(list(group=group))  
+    dfr = as.data.frame(list(group=group, desc=desc, mean=round(mean, digits=digits), lower95=round(lo, digits=digits), upper95=round(up, digits=digits), p=round(p_, digits=digits)))
+    if (is.null(df)) { df = dfr 
+    } else { df = rbind( df, dfr) }
+    return( df )
 }
 
 ################################################################################
@@ -97,6 +96,8 @@ nested.cis0 = function(a, mu, digits=4, txt=0, pow=1, alldevrat=NULL, bootstrap=
 #' deviances are stored in the nested.glmnetr() output object but not the deviance
 #' ratios.  This function provides a simple mechanism to obtain the cross validated
 #' deviance ratios. 
+#' @param table 1 to print table to console, 0 to output the tabled information 
+#' to a data frame
 #'  
 #' @return A printout to the R console 
 #' 
@@ -117,8 +118,8 @@ nested.cis0 = function(a, mu, digits=4, txt=0, pow=1, alldevrat=NULL, bootstrap=
 #' }
 #' 
 
-## object = xx ; digits=4 ; type="devrat" ; pow=1 ; returnd = 0 ; 
-nested.cis = function(object, type="devrat", pow=1, digits=4, returnd=0) {
+## object = nested_glmnetr_fit_kp_ind3 ; digits=4 ; type="devrat" ; pow=1 ; returnd = 0 ; 
+nested.cis = function(object, type="devrat", pow=1, digits=4, returnd=0, table=1) {
   
   cat(paste(" The standard errors (SEs) derived from cross-validation are questionable",
             "\n and the actual CI coverage probabilities and p-values may be inaccurate.", 
@@ -164,6 +165,11 @@ nested.cis = function(object, type="devrat", pow=1, digits=4, returnd=0) {
    }
   }
   
+  if (!(type %in% c("devrat", "devian", "agree", "intcal", "lincal"))) {
+    cat( ' type must be one of c("devrat", "devian", "agree", "intcal", "lincal"). type is set to "devrat".\n\n')
+    type = "devrat" 
+  }
+
   if (type == "agree") { 
     if (family %in% c("cox", "binomial")) { nullval = 0.5 
     } else { nullval = 0 } 
@@ -192,6 +198,7 @@ nested.cis = function(object, type="devrat", pow=1, digits=4, returnd=0) {
       lasso.alldevrat = AllDevRat( devian.rep, null.m2LogLik.rep, sat.m2LogLik.rep, n.rep, bootstrap )
       lasso.avedevrat = colMeans(lasso.perf.rep)
       lasso.sedevrat  = se_perf(lasso.perf.rep, bootstrap)
+      if (returnd == 1) { devrat$lasso = lasso.perf.rep ; devrat$lasso.all=lasso.alldevrat ; }
     } else if (type == "devian") {
       lasso.perf.rep  = object$lasso.devian.rep
     } else if (type == "lincal") {
@@ -210,6 +217,12 @@ nested.cis = function(object, type="devrat", pow=1, digits=4, returnd=0) {
       xgb.alldevrat = AllDevRat( devian.rep, null.m2LogLik.rep, sat.m2LogLik.rep, n.rep, bootstrap )
       xgb.avedevrat = colMeans(xgb.perf.rep)
       xgb.sedevrat  = se_perf(xgb.perf.rep, bootstrap)
+      if (returnd == 1) { 
+        devrat$xgb = xgb.perf.rep 
+        devrat$xgb.all = xgb.alldevrat 
+        if (sum(ensemble[c(2,6)]) == 0 ) { devrat$xgb[,c(2)] = 0 ; devrat$xgb.all[c(2)] = 0 ; }
+        if (sum(ensemble[c(3,4,7,8)]) == 0 ) { devrat$xgb[,c(3)] = 0 ; devrat$xgb.all[c(3)] = 0 ; }
+      }
     } else if (type == "devian") {
       xgb.perf.rep  = object$xgb.devian.rep
     } else if (type == "lincal") {
@@ -228,6 +241,12 @@ nested.cis = function(object, type="devrat", pow=1, digits=4, returnd=0) {
       rf.alldevrat = AllDevRat( devian.rep, null.m2LogLik.rep, sat.m2LogLik.rep, n.rep, bootstrap )
       rf.avedevrat = colMeans(rf.perf.rep)
       rf.sedevrat  = se_perf(rf.perf.rep, bootstrap)
+      if (returnd == 1) { 
+        devrat$rf = rf.perf.rep 
+        devrat$rf.all=rf.alldevrat 
+        if (sum(ensemble[c(2,6)]) == 0 ) { devrat$rf[,c(2)] = 0 ; devrat$rf.all[c(2)] = 0 ; }
+        if ( (sum(ensemble[c(3,4,7,8)]) == 0 ) | (family != "gaussian") ) { devrat$rf[,c(3)] = 0 ; devrat$rf.all[c(3)] = 0 ; }
+      }
     } else if (type == "devian") {
       rf.perf.rep  = object$rf.devian.rep
     }  else if (type == "lincal") {
@@ -246,6 +265,12 @@ nested.cis = function(object, type="devrat", pow=1, digits=4, returnd=0) {
       orf.alldevrat = AllDevRat( devian.rep, null.m2LogLik.rep, sat.m2LogLik.rep, n.rep, bootstrap )
       orf.avedevrat = colMeans(orf.perf.rep)
       orf.sedevrat  = se_perf(orf.perf.rep, bootstrap)
+      if (returnd == 1) { 
+        devrat$orf = orf.perf.rep 
+        devrat$orf.all=orf.alldevrat 
+        if (sum(ensemble[c(2,6)]) == 0 ) { devrat$orf[,c(2)] = 0 ; devrat$orf.all[c(2)] = 0 ; }
+        if ( (sum(ensemble[c(3,4,7,8)]) == 0 ) | (family != "gaussian") ) { devrat$orf[,c(3)] = 0 ; devrat$orf.all[c(3)] = 0 ; }
+      }
     } else if (type == "devian") {
       orf.perf.rep  = object$orf.devian.rep
     } else if (type == "lincal") {
@@ -264,6 +289,11 @@ nested.cis = function(object, type="devrat", pow=1, digits=4, returnd=0) {
       ann.alldevrat = AllDevRat( devian.rep, null.m2LogLik.rep, sat.m2LogLik.rep, n.rep, bootstrap )
       ann.avedevrat = colMeans(ann.perf.rep)
       ann.sedevrat  = se_perf(ann.perf.rep, bootstrap)
+      if (returnd == 1) { 
+        devrat$ann = ann.perf.rep 
+        devrat$ann.all=ann.alldevrat 
+        for ( i_ in c(2:8)) { if (sum(ensemble[c(i_)]) == 0 ) { devrat$ann[,c(i_)] = 0 ; devrat$ann.all[c(i_)] = 0 ; } }
+      }
     } else if (type == "devian") {
       ann.perf.rep  = object$ann.devian.rep
     }  else if (type == "lincal") {
@@ -282,6 +312,12 @@ nested.cis = function(object, type="devrat", pow=1, digits=4, returnd=0) {
       rpart.alldevrat = AllDevRat( devian.rep, null.m2LogLik.rep, sat.m2LogLik.rep, n.rep, bootstrap )
       rpart.avedevrat = colMeans(rpart.perf.rep)
       rpart.sedevrat  = se_perf(rpart.perf.rep, bootstrap)
+      if (returnd == 1) { 
+        devrat$rpart = rpart.perf.rep ; 
+        devrat$rpart.all=rpart.alldevrat
+        if (sum(ensemble[c(2,6)])     == 0 ) { devrat$rpart[,c(2)] = 0 ; devrat$rpart.all[c(2)] = 0 ; }
+        if (sum(ensemble[c(3,4,7,8)]) == 0 ) { devrat$rpart[,c(3)] = 0 ; devrat$rpart.all[c(3)] = 0 ; }
+        }
     } else if (type == "devian") {
       rpart.perf.rep  = object$rpart.devian.rep
     } else if (type == "lincal") {
@@ -300,6 +336,16 @@ nested.cis = function(object, type="devrat", pow=1, digits=4, returnd=0) {
       step.alldevrat = AllDevRat( devian.rep, null.m2LogLik.rep, sat.m2LogLik.rep, n.rep, bootstrap )
       step.avedevrat = colMeans(step.perf.rep)
       step.sedevrat  = se_perf(step.perf.rep, bootstrap)
+      if (returnd == 1) {
+        devrat$step = step.perf.rep ; 
+        devrat$step.all=step.alldevrat ; 
+        if ((dostep != 1) ) { devrat$step[,c(1,2)] = 0 ; devrat$step.all[c(1,2)] = 0 ; }
+        if ((doaic  != 1) ) { devrat$step[,c( 3 )] = 0 ; devrat$step.all[c( 3 )] = 0 ; }
+        if ((dofull != 1) ) { devrat$step[,c( 4 )] = 0 ; devrat$step.all[c( 4 )] = 0 ; }
+        if ((dostep != 1) ) { devrat$step[,c(1,2)] = 0 ; devrat$step.all[c(1,2)] = 0 ; }
+        if ((doaic  != 1) ) { devrat$step[,c( 3 )] = 0 ; devrat$step.all[c( 3 )] = 0 ; }
+        if ((dofull != 1) ) { devrat$step[,c( 4 )] = 0 ; devrat$step.all[c( 4 )] = 0 ; }
+      }
     } else if (type == "devian") {
       step.perf.rep  = object$step.devian.rep
     }  else if (type == "lincal") {
@@ -335,106 +381,150 @@ nested.cis = function(object, type="devrat", pow=1, digits=4, returnd=0) {
   
 #  if ( pow == 2 ) { gagree = "R-square" } else { gagree = "Correlation" }
 #  if (family %in% c("cox","binomial")) { gagree = "Concordance" ; pow = 1 }
-  
-  if (sum(ensemble[c(2:8)]) > 0 ) {
-    cat ("  Ensemble option used when fitting models : ")
-    # ensemble\n" ) 
-    cat(paste0("(", ensemble[1],",", ensemble[2],",", ensemble[3],",", ensemble[4],", ",
+
+  if (table %in% c(1,2)) {  
+    if (sum(ensemble[c(2:8)]) > 0 ) {
+      cat ("  Ensemble option used when fitting models : ") 
+      cat(paste0("(", ensemble[1],",", ensemble[2],",", ensemble[3],",", ensemble[4],", ",
                  ensemble[5],",", ensemble[6],",", ensemble[7],",", ensemble[8],")\n\n")) 
+    }
+    
+    if ( ensemble[c(1)] == 0 ) {
+      cat ("\n Simple models with informaiton from losso not run.  Output is abbreviated. \n\n" ) 
+      doxgb = 0 ; dorf = 0 ; doann = 0 ; dorpart = 0 ; dostep = 0 ; doaic = 0 ; dofull = 0 ; 
+    }
+    
+    cat ("  Model performance evaluation in terms of", pm, "\n\n" )   
+    cat ("  Null hypothesis value is", nullval, "\n\n") 
   } 
   
-  if ( ensemble[c(1)] == 0 ) {
-    cat ("\n Simple models with informaiton from losso not run.  Output is abbreviated. \n\n" ) 
-    doxgb = 0 ; dorf = 0 ; doann = 0 ; dorpart = 0 ; dostep = 0 ; doaic = 0 ; dofull = 0 ; 
-  }
-  
-  cat ("  Model performance evaluation in terms of", pm, "\n" )   
-  cat ("  Null hypothesis value is", nullval, "\n") 
+  df = NULL 
 
   if (dolasso == 1) {
-    alldevrat = NULL
-    if (type == "devrat") { alldevrat = lasso.alldevrat }
-    if (substr(object$version[2],17, 21) %in% c("0.6-1")) {
-      cat ("\n lasso.min                      ") ;  nested.cis0(lasso.perf.rep[,1], nullval, pow=pow, alldevrat=alldevrat[1], bootstrap=bootstrap) 
-      cat ("\n lasso.minR                     ") ;  nested.cis0(lasso.perf.rep[,2], nullval, pow=pow, alldevrat=alldevrat[2], bootstrap=bootstrap)   
-      cat ("\n lasso.minR0                    ") ;  nested.cis0(lasso.perf.rep[,3], nullval, pow=pow, alldevrat=alldevrat[3], bootstrap=bootstrap)
+    group = "01:lasso"
+    if (type == "devrat") { alldevrat = lasso.alldevrat 
+    } else { alldevrat = NULL }
+    if (substr(object$version[2],17, 21) %in% c("0.6-2")) {
+#          nested.cis0_0_6_2(df, group, desc, a, mu, digits=4, pow=1, alldevrat=NULL, bootstrap=0) 
+      df = nested.cis0_0_6_2(df, group, "lasso"           , lasso.perf.rep[,1], nullval, pow=pow, digits=digits, alldevrat=alldevrat[1], bootstrap=bootstrap) 
+      df = nested.cis0_0_6_2(df, group, "lasso relaxed"   , lasso.perf.rep[,2], nullval, pow=pow, digits=digits, alldevrat=alldevrat[2], bootstrap=bootstrap)   
+      df = nested.cis0_0_6_2(df, group, "lasso relaxed G0", lasso.perf.rep[,3], nullval, pow=pow, digits=digits, alldevrat=alldevrat[3], bootstrap=bootstrap)
       if (!is.null(object$cv_elastic_fit)) {
-        cat ("\n elastic net                    ") ;  nested.cis0(lasso.perf.rep[,4], nullval, pow=pow, alldevrat=alldevrat[4], bootstrap=bootstrap)
+        df = nested.cis0_0_6_2(df, group, "elastic net", lasso.perf.rep[,4], nullval, pow=pow, digits=digits, alldevrat=alldevrat[4], bootstrap=bootstrap) }
+      df = nested.cis0_0_6_2(df, group, "ridge"        , lasso.perf.rep[,5], nullval, pow=pow, digits=digits, alldevrat=alldevrat[5], bootstrap=bootstrap)
+      if (!is.null(object$cv_elastic_fit)) {
+        df = nested.cis0_0_6_2(df, group, "elastic net G0", lasso.perf.rep[,6], nullval, pow=pow, digits=digits, alldevrat=alldevrat[6], bootstrap=bootstrap)
+        df = nested.cis0_0_6_2(df, group, "elastic net G1", lasso.perf.rep[,7], nullval, pow=pow, digits=digits, alldevrat=alldevrat[7], bootstrap=bootstrap)
       }
-      cat ("\n ridge                          ") ;  nested.cis0(lasso.perf.rep[,5], nullval, pow=pow, alldevrat=alldevrat[5], bootstrap=bootstrap)
+    } else if (substr(object$version[2],17, 21) %in% c("0.6-1")) {
+      df = nested.cis0_0_6_2(df, group, "lasso.min"       , lasso.perf.rep[,1], nullval, pow=pow, digits=digits, alldevrat=alldevrat[1], bootstrap=bootstrap) 
+      df = nested.cis0_0_6_2(df, group, "lasso relaxed"   , lasso.perf.rep[,2], nullval, pow=pow, digits=digits, alldevrat=alldevrat[2], bootstrap=bootstrap)   
+      df = nested.cis0_0_6_2(df, group, "lasso relaxed G0", lasso.perf.rep[,3], nullval, pow=pow, digits=digits, alldevrat=alldevrat[3], bootstrap=bootstrap)
+      if (!is.null(object$cv_elastic_fit)) {
+        df =nested.cis0_0_6_2(df, group, "elastic net", lasso.perf.rep[,4], nullval, pow=pow, digits=digits, alldevrat=alldevrat[4], bootstrap=bootstrap)
+      }
+      df = nested.cis0_0_6_2(df, group, "ridge"      , lasso.perf.rep[,5], nullval, pow=pow, digits=digits, alldevrat=alldevrat[5], bootstrap=bootstrap)
     } else {
-      cat ("\n lasso.min                      ") ;  nested.cis0(lasso.perf.rep[,2], nullval, pow=pow, alldevrat=alldevrat[2], bootstrap=bootstrap) 
-      cat ("\n lasso.minR                     ") ;  nested.cis0(lasso.perf.rep[,4], nullval, pow=pow, alldevrat=alldevrat[4], bootstrap=bootstrap)   
-      cat ("\n lasso.minR0                    ") ;  nested.cis0(lasso.perf.rep[,6], nullval, pow=pow, alldevrat=alldevrat[6], bootstrap=bootstrap)   
-      cat ("\n ridge                          ") ;  nested.cis0(lasso.perf.rep[,7], nullval, pow=pow, alldevrat=alldevrat[7], bootstrap=bootstrap)   ## alldevrat[2] or alldevrat[7] ??
+      df = nested.cis0_0_6_2(df, group, "lasso"           , lasso.perf.rep[,2], nullval, pow=pow, digits=digits, alldevrat=alldevrat[2], bootstrap=bootstrap) 
+      df = nested.cis0_0_6_2(df, group, "lasso relaxed"   , lasso.perf.rep[,4], nullval, pow=pow, digits=digits, alldevrat=alldevrat[4], bootstrap=bootstrap)   
+      df = nested.cis0_0_6_2(df, group, "lasso relaxed G0", lasso.perf.rep[,6], nullval, pow=pow, digits=digits, alldevrat=alldevrat[6], bootstrap=bootstrap)   
+      df = nested.cis0_0_6_2(df, group, "ridge"           , lasso.perf.rep[,7], nullval, pow=pow, digits=digits, alldevrat=alldevrat[7], bootstrap=bootstrap)   ## alldevrat[2] or alldevrat[7] ??
     }
-    cat("\n")
   }
   
   if (doxgb == 1) {
+    group = "02:xgb"
     alldevrat = NULL
     if (type == "devrat") { alldevrat = xgb.alldevrat }
-    cat ("\n XGBoost (simple)               ") ;  nested.cis0(xgb.perf.rep[,1] , nullval, pow=pow, alldevrat=alldevrat[1], bootstrap=bootstrap) ; 
-    if (sum(ensemble[c(2,6)])    > 0) { cat ("\n XGBoost (simple) lasso feature ") ;  nested.cis0(xgb.perf.rep[,2] , nullval,pow=pow, alldevrat=alldevrat[2], bootstrap=bootstrap) ; }
-    if (sum(ensemble[c(3,4,7,8)])> 0) { cat ("\n XGBoost (simple) lasso offset  ") ;  nested.cis0(xgb.perf.rep[,3] , nullval,pow=pow, alldevrat=alldevrat[3], bootstrap=bootstrap) ; }
-    cat ("\n XGBoost (tuned)                ") ;  nested.cis0(xgb.perf.rep[,4] , nullval, pow=pow, alldevrat=alldevrat[4], bootstrap=bootstrap) ; 
-    if (sum(ensemble[c(2,6)])    > 0) { cat ("\n XGBoost (tuned) lasso feature  ") ;  nested.cis0(xgb.perf.rep[,5] , nullval,pow=pow, alldevrat=alldevrat[5], bootstrap=bootstrap) ; }
-    if (sum(ensemble[c(3,4,7,8)])> 0) { cat ("\n XGBoost (tuned) lasso offset   ") ;  nested.cis0(xgb.perf.rep[,6] , nullval,pow=pow, alldevrat=alldevrat[6], bootstrap=bootstrap) ; }
-    cat("\n")
+    df =                                     nested.cis0_0_6_2(df, group, "XGBoost (simple)"              , xgb.perf.rep[,1], nullval, pow=pow, digits=digits, alldevrat=alldevrat[1], bootstrap=bootstrap) 
+    if (sum(ensemble[c(2,6)])    > 0) { df = nested.cis0_0_6_2(df, group, "XGBoost (simple) lasso feature", xgb.perf.rep[,2], nullval, pow=pow, digits=digits, alldevrat=alldevrat[2], bootstrap=bootstrap) }
+    if (sum(ensemble[c(3,4,7,8)])> 0) { df = nested.cis0_0_6_2(df, group, "XGBoost (simple) lasso offset" , xgb.perf.rep[,3], nullval, pow=pow, digits=digits, alldevrat=alldevrat[3], bootstrap=bootstrap) }
+    df =                                     nested.cis0_0_6_2(df, group, "XGBoost (tuned)"               , xgb.perf.rep[,4], nullval, pow=pow, digits=digits, alldevrat=alldevrat[4], bootstrap=bootstrap) 
+    if (sum(ensemble[c(2,6)])    > 0) { df = nested.cis0_0_6_2(df, group, "XGBoost (tuned) lasso feature" , xgb.perf.rep[,5], nullval, pow=pow, digits=digits, alldevrat=alldevrat[5], bootstrap=bootstrap) }
+    if (sum(ensemble[c(3,4,7,8)])> 0) { df = nested.cis0_0_6_2(df, group, "XGBoost (tuned) lasso offset"  , xgb.perf.rep[,6], nullval, pow=pow, digits=digits, alldevrat=alldevrat[6], bootstrap=bootstrap) }
   }
   
   if (dorf == 1) {
+    group = "03:RF"
     alldevrat = NULL
     if (type == "devrat") { alldevrat = rf.alldevrat }
-    cat ("\n RF                             ") ;  nested.cis0(rf.perf.rep[,1] , nullval, pow=pow, alldevrat=alldevrat[1], bootstrap=bootstrap) ;  
-    if (sum(ensemble[c(2,6)] )> 0) { cat ("\n RF with lasso feature           ") ;  nested.cis0(rf.perf.rep[,2] , nullval, pow=pow, alldevrat=alldevrat[2], bootstrap=bootstrap) ;  }
-    if ((sum(ensemble[c(3,4,7,8)] )> 0) & (family == "gaussian")) { cat ("\n RF with lasso offset            ") ;  nested.cis0(rf.perf.rep[,3] , nullval, pow=pow, alldevrat=alldevrat[3], bootstrap=bootstrap) ; }
-    cat("\n")
+    df =                                                                 nested.cis0_0_6_2(df, group, "RF"                   , rf.perf.rep[,1] , nullval, pow=pow, digits=digits, alldevrat=alldevrat[1], bootstrap=bootstrap) ;  
+    if (sum(ensemble[c(2,6)] )> 0) {                                df = nested.cis0_0_6_2(df, group, "RF with lasso feature", rf.perf.rep[,2] , nullval, pow=pow, digits=digits, alldevrat=alldevrat[2], bootstrap=bootstrap) }
+    if ((sum(ensemble[c(3,4,7,8)] )> 0) & (family == "gaussian")) { df = nested.cis0_0_6_2(df, group, "RF with lasso offset" , rf.perf.rep[,3] , nullval, pow=pow, digits=digits, alldevrat=alldevrat[3], bootstrap=bootstrap) }
   }
 
   if (doorf == 1) {
+    group = "04:ORF"
     alldevrat = NULL
     if (type == "devrat") { alldevrat = orf.alldevrat }
-    cat ("\n ORF                            ") ;  nested.cis0(orf.perf.rep[,1] , nullval, pow=pow, alldevrat=alldevrat[1], bootstrap=bootstrap) ;  
-    if (sum(ensemble[c(2,6)] )> 0) { cat ("\n ORF with lasso feature          ") ;  nested.cis0(orf.perf.rep[,2] , nullval, pow=pow, alldevrat=alldevrat[2], bootstrap=bootstrap) ;  }
-    if ((sum(ensemble[c(3,4,7,8)] )> 0) & (family == "gaussian")) { cat ("\n ORF with lasso offset           ") ;  nested.cis0(orf.perf.rep[,3] , nullval, pow=pow, alldevrat=alldevrat[3], bootstrap=bootstrap) ; }
-    cat("\n")
+    df =                                                                 nested.cis0_0_6_2(df, group, "ORF"                   , orf.perf.rep[,1] , nullval, pow=pow, digits=digits, alldevrat=alldevrat[1], bootstrap=bootstrap) ;  
+    if (sum(ensemble[c(2,6)] )> 0) {                                df = nested.cis0_0_6_2(df, group, "ORF with lasso feature", orf.perf.rep[,2] , nullval, pow=pow, digits=digits, alldevrat=alldevrat[2], bootstrap=bootstrap) ;  }
+    if ((sum(ensemble[c(3,4,7,8)] )> 0) & (family == "gaussian")) { df = nested.cis0_0_6_2(df, group, "ORF with lasso offset" , orf.perf.rep[,3] , nullval, pow=pow, digits=digits, alldevrat=alldevrat[3], bootstrap=bootstrap) ; }
   }
     
   if (doann == 1) {
+    group = "05:ANN"
     alldevrat = NULL
     if (type == "devrat") { alldevrat = ann.alldevrat }
-    cat ("\n ANN, no lasso info             ") ;  nested.cis0(ann.perf.rep[,1] , nullval, pow=pow, alldevrat=alldevrat[1], bootstrap=bootstrap)  
-    if (sum(ensemble[2] )> 0) { cat ("\n ANN, with lasso feature          ") ;  nested.cis0(ann.perf.rep[,2] , nullval, pow=pow, alldevrat=alldevrat[2], bootstrap=bootstrap)  } 
-    if (sum(ensemble[3] )> 0) { cat ("\n ANN, with lasso as offset        ") ;  nested.cis0(ann.perf.rep[,3] , nullval, pow=pow, alldevrat=alldevrat[3], bootstrap=bootstrap)  } 
-    if (sum(ensemble[4] )> 0) { cat ("\n ANN, updated lasso as offset     ") ;  nested.cis0(ann.perf.rep[,4] , nullval, pow=pow, alldevrat=alldevrat[4], bootstrap=bootstrap)  } 
-    if (sum(ensemble[5] )> 0) { cat ("\n ANN, lasso terms                 ") ;  nested.cis0(ann.perf.rep[,5] , nullval, pow=pow, alldevrat=alldevrat[5], bootstrap=bootstrap)  } 
-    if (sum(ensemble[6] )> 0) { cat ("\n ANN, lasso terms, lasso feature  ") ;  nested.cis0(ann.perf.rep[,6] , nullval, pow=pow, alldevrat=alldevrat[6], bootstrap=bootstrap)  } 
-    if (sum(ensemble[7] )> 0) { cat ("\n ANN, lasso terms, lasso as offset") ;  nested.cis0(ann.perf.rep[,7] , nullval, pow=pow, alldevrat=alldevrat[7], bootstrap=bootstrap)  } 
-    if (sum(ensemble[8] )> 0) { cat ("\n ANN, lasso terms, updated lasso  ") ;  nested.cis0(ann.perf.rep[,8] , nullval, pow=pow, alldevrat=alldevrat[8], bootstrap=bootstrap)  } 
-    cat("\n")  
+    df =                             nested.cis0_0_6_2(df, group, "ANN, no lasso info"               , ann.perf.rep[,1] , nullval, pow=pow, digits=digits, alldevrat=alldevrat[1], bootstrap=bootstrap)  
+    if (sum(ensemble[2] )> 0) { df = nested.cis0_0_6_2(df, group, "ANN, with lasso feature"          , ann.perf.rep[,2] , nullval, pow=pow, digits=digits, alldevrat=alldevrat[2], bootstrap=bootstrap)  } 
+    if (sum(ensemble[3] )> 0) { df = nested.cis0_0_6_2(df, group, "ANN, with lasso as offset"        , ann.perf.rep[,3] , nullval, pow=pow, digits=digits, alldevrat=alldevrat[3], bootstrap=bootstrap)  } 
+    if (sum(ensemble[4] )> 0) { df = nested.cis0_0_6_2(df, group, "ANN, updated lasso as offset"     , ann.perf.rep[,4] , nullval, pow=pow, digits=digits, alldevrat=alldevrat[4], bootstrap=bootstrap)  } 
+    if (sum(ensemble[5] )> 0) { df = nested.cis0_0_6_2(df, group, "ANN, lasso terms"                 , ann.perf.rep[,5] , nullval, pow=pow, digits=digits, alldevrat=alldevrat[5], bootstrap=bootstrap)  } 
+    if (sum(ensemble[6] )> 0) { df = nested.cis0_0_6_2(df, group, "ANN, lasso terms, lasso feature"  , ann.perf.rep[,6] , nullval, pow=pow, digits=digits, alldevrat=alldevrat[6], bootstrap=bootstrap)  } 
+    if (sum(ensemble[7] )> 0) { df = nested.cis0_0_6_2(df, group, "ANN, lasso terms, lasso as offset", ann.perf.rep[,7] , nullval, pow=pow, digits=digits, alldevrat=alldevrat[7], bootstrap=bootstrap)  } 
+    if (sum(ensemble[8] )> 0) { df = nested.cis0_0_6_2(df, group, "ANN, lasso terms, updated lasso"  , ann.perf.rep[,8] , nullval, pow=pow, digits=digits, alldevrat=alldevrat[8], bootstrap=bootstrap)  } 
   }
   
   if (dostep == 1) {
+    group = "05:step"
     alldevrat = NULL
     if (type == "devrat") { alldevrat = step.alldevrat }
-    cat ("\n step (df)                      ") ;  nested.cis0(step.perf.rep[,1] , nullval, pow=pow, alldevrat=alldevrat[1], bootstrap=bootstrap) ;
-    cat ("\n step (p)                       ") ;  nested.cis0(step.perf.rep[,2] , nullval, pow=pow, alldevrat=alldevrat[2], bootstrap=bootstrap) ;
+    df = nested.cis0_0_6_2(df, group, "step (df)", step.perf.rep[,1] , nullval, pow=pow, digits=digits, alldevrat=alldevrat[1], bootstrap=bootstrap) ;
+    df = nested.cis0_0_6_2(df, group, "step (p)" , step.perf.rep[,2] , nullval, pow=pow, digits=digits, alldevrat=alldevrat[2], bootstrap=bootstrap) ;
   }
   
   if (doaic == 1) {
-    cat ("\n AIC                            ") ;  nested.cis0(step.perf.rep[,3] , nullval, pow=pow, alldevrat=alldevrat[3], bootstrap=bootstrap) ;
+    group = "05:step"
+    df = nested.cis0_0_6_2(df, group, "AIC", step.perf.rep[,3] , nullval, pow=pow, digits=digits, alldevrat=alldevrat[3], bootstrap=bootstrap) ;
   }
   
   if (dofull == 1) {
+    group = "06:full"
     alldevrat = NULL
     if (type == "devrat") { alldevrat = step.alldevrat }
-    cat ("\n full model, no penalty         ") ;  nested.cis0(step.perf.rep[,4] , nullval, pow=pow, alldevrat=alldevrat[4], bootstrap=bootstrap) ;
+    df = nested.cis0_0_6_2(df, group, "full model, no penalty", step.perf.rep[,4] , nullval, pow=pow, digits=digits, alldevrat=alldevrat[4], bootstrap=bootstrap) ;
   }
-  if ((dostep == 1) | (doaic == 1)) { cat("\n") }
+#  if ((dostep == 1) | (doaic == 1)) { cat("\n") }
+  
+  if ( (returnd == 1) & (table %in% c(0,2)) ) {
+    cat(" Only one of returnd and table can indicae return of an output object\n",
+        " returnd is set to 0\n\n")
+    returnd = 0 
+  }
+  
+  if (table %in% c(1,2)) { 
+    comma = ","
+    df2 = cbind(df[,c(1:3)], " (", df[,4, drop=FALSE], comma, df[,5, drop=FALSE], ") ", df[,6, drop=FALSE])
+    names(df2)[c(4,6,8)] = ""
+    names(df2)[c(2,3,5,7,9)] = c("Model", type, "lower 95%", "upper 95%", "  p")
+    
+    ugroup = unique(df2$group)
+    for (i_ in c(1:length(ugroup))) {
+      df3 = df2[df2$group==ugroup[i_],-1]
+      names(df3)[c(5,7)] = "" 
+      print(df3, right=FALSE, row.names=FALSE)
+      cat("\n")
+    }
+  } 
+  
+  if (table %in% c(0,2))  {
+    row.names(df) = NULL 
+    names(df) = c("Model", "desc", paste("mean",type), "lower 95%", "upper 95%", "  p")
+    return(df)
+  }
   
   if ((type == "devrat") & (returnd == 1)) { return(devrat) }
-  
 }
 
 ####################################################################################################################################

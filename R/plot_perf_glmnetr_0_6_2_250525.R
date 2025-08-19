@@ -20,8 +20,9 @@
 #' @param x A nested.glmnetr output object
 #' @param type determines what type of nested cross validation performance measures are 
 #' plotted.  Possible values are 
-#' "devrat" to plot the deviance ratio, i.e. the fractional reduction in 
-#' deviance relative to the null model deviance, 
+#' "devrat" to plot the deviance ratio, i.e. the fractional reduction 
+#' in deviance relative to the null model deviance, 
+#' "devain" to plot deviance, 
 #' "agree" to plot agreement in terms of concordance, correlation or R-square, 
 #' "lincal" to plot the linear calibration slope coefficients, 
 #' "intcal" to plot the linear calibration intercept coefficients, 
@@ -53,7 +54,8 @@
 #' 
 #' @noRd
 #' 
-plot_perf_glmnetr_0_5_5 = function( x, type="devrat", pow=2, ylim=1, fold=1, xgbsimple=0, plot=1 ) {
+plot_perf_glmnetr_0_6_2 = function( x, type="devrat", pow=2, ylim=1, fold=1, xgbsimple=0, plot=1, track=0 ) {
+  if (track >= 2) { cat( "  in plot_perf_glmnetr_0_6_1   class(x) = ", class(x), "\n") }
   
   object = x 
   
@@ -135,15 +137,24 @@ plot_perf_glmnetr_0_5_5 = function( x, type="devrat", pow=2, ylim=1, fold=1, xgb
       } else if (type == "devrat") {
         object1 = object$lasso.devian.rep
         devratl = list()
-        for (j_ in c(1:7)) {
+        for (j_ in c(1:dim(object1)[2] )) {
           devratl[[j_]] = devrat_(object1[,j_], m2.ll.null, m2.ll.sat, n__ ) ; object1[,j_] = devratl[[j_]][[1]]
         }
       }
       nfold = dim(object1)[1]
-      toplot1= cbind( rep(1,nfold) , c(1:nfold), object1[,2]) 
-      toplot1= rbind( toplot1, cbind( rep(2,nfold) , c(1:nfold), object1[,4]) )
-      toplot1= rbind( toplot1, cbind( rep(3,nfold) , c(1:nfold), object1[,6]) )                
-      toplot1= rbind( toplot1, cbind( rep(4,nfold) , c(1:nfold), object1[,7]) )                                
+      toplot1=                 cbind( rep(1,nfold) , c(1:nfold), object1[,1]) 
+      toplot1= rbind( toplot1, cbind( rep(2,nfold) , c(1:nfold), object1[,2]) ) 
+      toplot1= rbind( toplot1, cbind( rep(3,nfold) , c(1:nfold), object1[,3]) ) 
+      if (length(object$alpha) > 1) {
+        toplot1= rbind( toplot1, cbind( rep(4,nfold) , c(1:nfold), object1[,4]) ) 
+        toplot1= rbind( toplot1, cbind( rep(5,nfold) , c(1:nfold), object1[,5]) ) 
+        if( dim(object1)[2] >= 7 ) {
+          toplot1= rbind( toplot1, cbind( rep(6,nfold) , c(1:nfold), object1[,6]) ) 
+          toplot1= rbind( toplot1, cbind( rep(7,nfold) , c(1:nfold), object1[,7]) ) 
+        } 
+      } else {
+        toplot1= rbind( toplot1, cbind( rep(4,nfold) , c(1:nfold), object1[,5]) ) 
+      }
       
       if        (type ==  "agree") {  object2 = object$lasso.agree.naive 
       } else if (type == "lincal") {  object2 = object$lasso.lincal.naive 
@@ -151,30 +162,59 @@ plot_perf_glmnetr_0_5_5 = function( x, type="devrat", pow=2, ylim=1, fold=1, xgb
       } else if (type == "devian") {  object2 = object$lasso.devian.naive
       } else if (type == "devrat") {
         object2 = object$lasso.devian.naive
-        for (j_ in c(1:7)) {
+        for (j_ in c(1:length(object2))) {
           object2[j_] = devrat_(object2[j_], null.m2LogLik, sat.m2LogLik, 1 )[[2]]   
         }
       }
-      toplot2 = cbind( 1 , 1, object2[2]) 
-      toplot2 = rbind( toplot2, cbind( 2 , 1, object2[4]) )
-      toplot2 = rbind( toplot2, cbind( 3 , 1, object2[6]) )                
-      toplot2 = rbind( toplot2, cbind( 4 , 1, object2[7]) )                                
+      toplot2 =                 cbind( 1 , 1, object2[1]) 
+      toplot2 = rbind( toplot2, cbind( 2 , 1, object2[2]) ) 
+      toplot2 = rbind( toplot2, cbind( 3 , 1, object2[3]) ) 
+      i_ = 3 
+      if (length(object$alpha) > 1) { 
+        i_ = i_ + 1 
+        toplot2 = rbind( toplot2, cbind( i_ , 1, object2[4]) )
+      }
+      i_ = i_ + 1 
+      toplot2 = rbind( toplot2, cbind( i_ , 1, object2[5]) ) 
+      if ( (length(object$alpha) > 1) & (length(object2) >=7) ) { 
+        i_ = i_ + 1 
+        toplot2 = rbind( toplot2, cbind( i_ , 1, object2[6]) )
+        i_ = i_ + 1 
+        toplot2 = rbind( toplot2, cbind( i_ , 1, object2[7]) )
+      }
       
       object3 = colMeans(object1,na.rm=T)      
       if (type == "devrat") {
-        for (j_ in c(1:7)) {
+        for (j_ in c(1:5)) {
           object3[j_] = devratl[[j_]][[2]]
         }
       }
-      toplot3 = cbind( 1 , 1, object3[2], 1) 
-      toplot3 = rbind( toplot3, cbind( 2 , 1, object3[4], 1) ) 
-      toplot3 = rbind( toplot3, cbind( 3 , 1, object3[6], 1) )
-      toplot3 = rbind( toplot3, cbind( 4 , 1, object3[7], 1) ) 
-      
-      nms = c("Lasso", "Relaxed", "G0 Relax", "Ridge")
-      i_ = 4 
+      toplot3 =                 cbind( 1 , 1, object3[1], 1) 
+      toplot3 = rbind( toplot3, cbind( 2 , 1, object3[2], 1) ) 
+      toplot3 = rbind( toplot3, cbind( 3 , 1, object3[3], 1) )
+      i_ = 3 
+      if (length(object$alpha) > 1) { 
+        i_= i_ + 1
+        toplot3 = rbind( toplot3, cbind( i_ , 1, object3[4], 1) )
+        i_= i_ + 1
+        toplot3 = rbind( toplot3, cbind( i_ , 1, object3[5], 1) )
+        if( dim(object1)[2] >= 7 ) {
+          i_= i_ + 1
+          toplot3 = rbind( toplot3, cbind( i_ , 1, object3[6], 1) )
+          i_= i_ + 1
+          toplot3 = rbind( toplot3, cbind( i_ , 1, object3[7], 1) )
+        }
+      } else {
+        i_= i_ + 1
+        toplot3 = rbind( toplot3, cbind( i_ , 1, object3[5], 1) )
+        
+      }
+      nms = c("Lasso", "Relaxed", "G0 Relax", "Elastic Net", "Ridge", "Elastic G0", "Elastic G1")
+      if (length(object$alpha) <= 1) { nms = nms[-c(4,6,7)]
+      } else if (dim(object1)[2] <= 5 ) { nms = nms[-c(4)] }
     }
     
+    toplot1
     toplot2
     toplot3
     
@@ -554,7 +594,7 @@ plot_perf_glmnetr_0_5_5 = function( x, type="devrat", pow=2, ylim=1, fold=1, xgb
     toplot3
     
     ##### Step Wise ##############################################################
-    if ( (object$fits[6] == 1) | (object$fits[7] == 1) ) {
+    if ( (object$fits[6] == 1) | (object$fits[7] == 1) | (object$fits[9] == 1) ) {
       if (is.null(object$step.devian.rep)) { object$step.devian.rep = object$step.devian.cv }
       if (is.null(object$step.lincal.rep)) { object$step.lincal.rep = object$step.lincal.cv }
       if (is.null(object$step.intcal.rep)) { object$step.intcal.rep = object$step.intcal.cv }
@@ -572,26 +612,26 @@ plot_perf_glmnetr_0_5_5 = function( x, type="devrat", pow=2, ylim=1, fold=1, xgb
       } else if (type == "devrat") {
         object1 = object$step.devian.rep
         devratl = list()
-        for (j_ in c(1:3)) {
+        for (j_ in c(1:4)) {
           devratl[[j_]] = devrat_(object1[,j_], m2.ll.null, m2.ll.sat, n__ ) ; object1[,j_] = devratl[[j_]][[1]]
         }
       }
       nfold = dim(object1)[1]    
       
       if        (type ==  "agree") {  object2 = object$step.agree.naive 
-      } else if (type == "lincal") {  object2 = c(1,1,1)
-      } else if (type == "intcal") {  object2 = c(0,0,0)
+      } else if (type == "lincal") {  object2 = c(1,1,1,1)
+      } else if (type == "intcal") {  object2 = c(0,0,0,0)
       } else if (type == "devian") {  object2 = object$step.devian.naive 
       } else if (type == "devrat") {
         object2 = object$step.devian.naive
-        for (j_ in c(1:3)) {
+        for (j_ in c(1:4)) {
           object2[j_] = devrat_(object2[j_], null.m2LogLik, sat.m2LogLik, 1 )[[2]]   
         }
       }
       
       object3 = colMeans(object1,na.rm=T)      
       if (type == "devrat") {
-        for (j_ in c(1:3)) {
+        for (j_ in c(1:4)) {
           object3[j_] = devratl[[j_]][[2]]
         }
       }
@@ -622,6 +662,15 @@ plot_perf_glmnetr_0_5_5 = function( x, type="devrat", pow=2, ylim=1, fold=1, xgb
       toplot3 = rbind( toplot3, cbind( i_ , 1, object3[3], 1) )
       nms[i_] = "AIC"
       aic_which = i_ 
+    }
+    
+    if  (object$fits[9] == 1) {
+      i_ = i_ + 1 
+      toplot1= rbind( toplot1, cbind( rep(i_,nfold) , c(1:nfold), object1[,4]) )
+      toplot2 = rbind( toplot2, cbind( i_ , 1, object2[4]) )
+      toplot3 = rbind( toplot3, cbind( i_ , 1, object3[4], 1) )
+      nms[i_] = "Full"
+      full_which = i_ 
     }
     
     toplot3

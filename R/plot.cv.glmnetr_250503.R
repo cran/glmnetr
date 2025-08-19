@@ -106,10 +106,11 @@ plot.glmnetr = function(x, type="lasso", alpha=NULL, gamma=NULL, lambda.lo=NULL,
 #'
 plot.cv.glmnetr = function(x, type="lasso", alpha=NULL, gamma=NULL, lambda.lo=NULL, plup=0, title=NULL, coefs=FALSE, comment=TRUE, lty=1, track=0, ...) {
   if (track >= 2) { cat( "  in plot.cv.glmnetr   class(x) = ", class(x), "\n") }
-  if ( substr(x$version[2],1,21) == "glmnetr version 0.6-1" ) {
-    
+  if ( substr(x$version[2],1,21) == "glmnetr version 0.6-2" ) {
     plot.cv.glmnetr_0_6_1(x, type=type, alpha=alpha, gamma=gamma, lambda.lo=lambda.lo, plup=plup, title=title, coefs=coefs, comment=comment, lty=lty, track=track, ...) 
-  } else {
+  } else if ( substr(x$version[2],1,21) == "glmnetr version 0.6-1" ) {
+    plot.cv.glmnetr_0_6_1(x, type=type, alpha=alpha, gamma=gamma, lambda.lo=lambda.lo, plup=plup, title=title, coefs=coefs, comment=comment, lty=lty, track=track, ...) 
+  }else {
     plot.cv.glmnetr_0_5_5(x,                         gam  =gamma, lambda.lo=lambda.lo, plup=plup, title=title, coefs=coefs, comment=comment, ...)
   }
 }

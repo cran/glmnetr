@@ -80,18 +80,18 @@ nested.compare0_0_5_1 = function(a, b, digits=4, txt=0, pow=1) {
 #' @seealso
 #'   \code{\link{nested.cis}} , \code{\link{summary.nested.glmnetr}} , \code{\link{nested.glmnetr}} 
 #' 
-#' @export
-#'
-#' @examples
-#' \donttest{
-#' sim.data=glmnetr.simdata(nrows=1000, ncols=100, beta=NULL)
-#' xs=sim.data$xs 
-#' y_=sim.data$yt
-#' event=sim.data$event
-#' # for this example we use a small number for folds_n to shorten run time 
-#' fit3 = nested.glmnetr(xs, NULL, y_, event, family="cox", folds_n=3) 
-#' nested.compare(fit3)
-#' }
+# #' @examples
+# #' \donttest{
+# #' sim.data=glmnetr.simdata(nrows=1000, ncols=100, beta=NULL)
+# #' xs=sim.data$xs 
+# #' y_=sim.data$yt
+# #' event=sim.data$event
+# #' # for this example we use a small number for folds_n to shorten run time 
+# #' fit3 = nested.glmnetr(xs, NULL, y_, event, family="cox", folds_n=3) 
+# #' nested.compare(fit3)
+# #' }
+#' 
+#' @noRd
 #' 
 nested.compare_0_5_1 = function(object, digits=4, type="devrat", pow=1) {
   family =  object$sample[1]

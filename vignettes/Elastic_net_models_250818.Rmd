@@ -1,7 +1,7 @@
 ---
 title: "Elastic Net Models"
 author: "Walter K. Kremers, Mayo Clinic, Rochester MN"
-date: "10 May 2025" 
+date: "18 August 2025" 
 output: pdf_document 
 vignette: >
   %\VignetteIndexEntry{Using stepreg}
@@ -10,7 +10,7 @@ vignette: >
 ---
 ```{r setup, include=FALSE}
   evalload = TRUE ; evalmodel = FALSE ;
-  evalload = FALSE ; evalmodel = TRUE ;
+#  evalload = FALSE ; evalmodel = TRUE ;
 knitr::opts_chunk$set(echo = TRUE) 
 #library(glmnetr)
 #library(survival)
@@ -51,14 +51,15 @@ summary(y_)
 # Fitting an Elastic Net model
 To fit the elastic net model we call the neted.glmnetr() function line in the "An Introduction to glmnetr" while now specifying a vector of candidate alpha values using the alpha option in the function call. For comparison we are also fitting the random forest model as well as the full model including all candiate predictors.
 ```{r load 1, include=FALSE, eval=evalload}
-load( file="~/Documents/Rpackages/glmnetr_supl/Elastic_Net_Models_250510.RLIST" ) 
+load( file="~/Documents/Rpackages/glmnetr_supl/Elastic_Net_Models_250818.RLIST" ) 
 #nested.gau.fit$fits[1] = 0 
 ```
 ```{r  Fit an elastic net model informed by cross validation, eval=evalmodel }
 # Fit a relaxed lasso model informed by cross validation 
-nested_elastic_fit = nested.glmnetr(xs, start=NULL, y_, event=NULL, family="gaussian", resample=NULL, folds_n=10,
-                                    dolasso=1, doxgb=0, dorf=1, doorf=0, doann=0, dorpart=0, dostep=0, doaic=0, dofull=1, 
-                                    alpha=seq(0,1,0.2), seed=791590258, track=0) 
+nested_elastic_fit = nested.glmnetr(xs, start=NULL, y_, event=NULL, family="gaussian", 
+                     resample=NULL, folds_n=10, dolasso=1, doxgb=0, dorf=1, doorf=0, 
+                     doann=0, dorpart=0, dostep=0, doaic=0, dofull=1, 
+                     alpha=seq(0,1,0.2), seed=791590258, track=0) 
 ```
 When alpha is not specified the value c(1) is used to fit models based only on the L1 penalty. By default the candidate values for gamma are c(0, 0.25, 0.5, 0.75, 1), as suggested in the glmnet package. 
 
@@ -129,5 +130,5 @@ preds[1:10]
 For this analysis the best elastic net model is the same as the best lasso model, so we suppressed here the printing out of the same numbers.
 
 ```{r save1, include=FALSE, eval=evalmodel}
-save( nested_elastic_fit , file="~/Documents/Rpackages/glmnetr_supl/Elastic_Net_Models_250510.RLIST" )
+save( nested_elastic_fit , file="~/Documents/Rpackages/glmnetr_supl/Elastic_Net_Models_250818.RLIST" )
 ```

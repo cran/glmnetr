@@ -154,7 +154,8 @@ summary.nested.glmnetr = function(object, cvfit=FALSE, type="lasso", pow=2, prin
     cat("     Output object 'glmnetr' version not identified. \n",
         "    Analysis will not be performed.") 
   } else { 
-    if        (substr(object$version[2],1,21) == "glmnetr version 0.6-1") {summary.nested.glmnetr_0_6_1(object, cvfit=cvfit, type=type, pow=pow, printg1=printg1, digits=digits, call=call, onese=onese, table=table, tuning=tuning, width=width, cal=cal, ...) 
+    if        (substr(object$version[2],1,21) == "glmnetr version 0.6-2") {summary.nested.glmnetr_0_6_2(object, cvfit=cvfit, type=type, pow=pow, printg1=printg1, digits=digits, call=call, onese=onese, table=table, tuning=tuning, width=width, cal=cal, ...) 
+    } else if (substr(object$version[2],1,21) == "glmnetr version 0.6-1") {summary.nested.glmnetr_0_6_1(object, cvfit=cvfit, type=type, pow=pow, printg1=printg1, digits=digits, call=call, onese=onese, table=table, tuning=tuning, width=width, cal=cal, ...) 
     } else if (object$version[2] == "glmnetr version 0.5-5 (2024-12-28)") {summary.nested.glmnetr_0_5_3(object, cvfit=cvfit, pow=pow, printg1=printg1, digits=digits, call=call, onese=onese, table=table, tuning=tuning, width=width, cal=cal, ...) 
     } else if (object$version[2] == "glmnetr version 0.5-4 (2024-10-24)") {summary.nested.glmnetr_0_5_3(object, cvfit=cvfit, pow=pow, printg1=printg1, digits=digits, call=call, onese=onese, table=table, tuning=tuning, width=width, cal=cal, ...) 
     } else if (object$version[2] == "glmnetr version 0.5-3 (2024-08-28)") {summary.nested.glmnetr_0_5_3(object, cvfit=cvfit, pow=pow, printg1=printg1, digits=digits, call=call, onese=onese, table=table, tuning=tuning, width=width, cal=cal, ...) 

@@ -11,16 +11,17 @@
 #' the package vignettes for more discussion.    
 #'
 #' @param object A nested.glmnetr output object.
-#' @param digits digits for printing of z-scores, p-values, etc. with default of 4 
-#' @param pow the power to which the average of correlations is to be raised.  Only 
-#' applies to the "gaussian" model.  Default is 2 to yield R-square but can be on to 
-#' show correlations.  pow is ignored for the family of "cox" and "binomial".  
 #' @param type determines what type of nested cross validation performance measures are 
 #' compared.  Possible values are "devrat" to compare the deviance ratios, i.e. the 
 #' fractional reduction in deviance relative to the null model deviance, 
 #' "agree" to compare agreement, "lincal" to compare the linear calibration 
 #' slope coefficients, "intcal" to compare the linear calibration intercept 
 #' coefficients, from the nested cross validation. 
+#' @param digits digits for printing of z-scores, p-values, etc. with default of 4 
+#' @param pow the power to which the average of correlations is to be raised.  Only 
+#' applies to the "gaussian" model.  Default is 2 to yield R-square but can be on to 
+#' show correlations.  pow is ignored for the family of "cox" and "binomial".  
+#' @param table 1 to print table to console, 0 to output the tabled information to a data frame
 #'  
 #' @return A printout to the R console. 
 #' 
@@ -40,7 +41,7 @@
 #' nested.compare(fit3)
 #' }
 #' 
-nested.compare = function( object, type="devrat", digits=4, pow=1 ) {
+nested.compare = function( object, type="devrat", digits=4, pow=1, table=1 ) {
   if ( (type == "intcal") & (object$sample[1] == 'cox') ) { 
     cat("     There is no intercept for the Cox model to compare! \n",
         "    Analysis will not be performed.") 
@@ -48,7 +49,8 @@ nested.compare = function( object, type="devrat", digits=4, pow=1 ) {
     cat("     Output object 'glmnetr' version not identified. \n",
         "    Analysis will not be performed.") 
   } else {
-    if        (substr(object$version[2],1,21) == "glmnetr version 0.6-1") { nested.compare_0_6_1(object, type=type, digits=digits, pow=pow ) 
+    if        (substr(object$version[2],1,21) == "glmnetr version 0.6-2") { nested.compare_0_6_2(object, type=type, digits=digits, pow=pow, table=table ) 
+    } else if (substr(object$version[2],1,21) == "glmnetr version 0.6-1") { nested.compare_0_6_1(object, type=type, digits=digits, pow=pow ) 
     } else if (object$version[2] == "glmnetr version 0.5-5 (2024-12-28)") { nested.compare_0_5_3(object, type=type, digits=digits, pow=pow ) 
     } else if (object$version[2] == "glmnetr version 0.5-4 (2024-10-24)") { nested.compare_0_5_3(object, type=type, digits=digits, pow=pow ) 
     } else if (object$version[2] == "glmnetr version 0.5-3 (2024-08-28)") { nested.compare_0_5_3(object, type=type, digits=digits, pow=pow ) 

@@ -18,8 +18,8 @@
 #' @param gamma the gamma vector.  Default is c(0,0.25,0.50,0.75,1). 
 #' @param alpha A vector for alpha values considetered when tuning, for example
 #' c(0,0.2,0.4,0.6,0.8,1). Default is c(1) to fit the 
-#' lasso model involving only the L1 penalty. c(0) could be used to ffit
-#' the reidge model involving only the L2 penalty.
+#' lasso model involving only the L1 penalty. The value for alpha of 0 corresponds to the 
+#' ridge model involving only the L2 penalty.
 #' @param folds_n number of folds for cross validation.  Default and generally recommended is 10.
 #' @param fine use a finer step in determining lambda.  Of little value unless one 
 #' repeats the cross validation many times to more finely tune the hyperparameters.  
@@ -73,28 +73,38 @@
 #' summary(cv.glmnetr.fit)
 #' 
 cv.glmnetr = function(trainxs, trainy__, family, alpha=1, gamma=c(0,0.25,0.5,0.75,1), lambda=NULL, foldid=NULL, folds_n=NULL, fine=0, path=0, track=0, ... ) { 
+  if (track >= 1) { cat( "  ... begin cv.glmnetr   ") }
+  if (track >= 2) { time_start = diff_time(NULL, NULL) ; time_last=time_start ; 
+  } else if (track == 1) { cat("\n") } 
   lambda_null = 0 
   if (is.null(lambda)) {
+    if (track >= 1) { cat( "  ... search for lambda vector   ") }
+    if (track == 1) { cat( "\n" ) }
     lambda_null = 1 
     
-    temp_fit_1 = cv.glmnet( trainxs, trainy__, family=family, alpha=1, foldid=foldid, nfolds=folds_n , ... ) 
-    cv_glmnet_fit_a0 = cv.glmnet( trainxs, trainy__, family=family, alpha=0, foldid=foldid, nfolds=folds_n , ... ) 
-    if (fine == 0) {
+    temp_fit_1       = cv.glmnet( trainxs, trainy__, family=family, alpha=1, foldid=foldid, nfolds=folds_n , ... )   ## L1 penalty 
+    cv_glmnet_fit_a0 = cv.glmnet( trainxs, trainy__, family=family, alpha=0, foldid=foldid, nfolds=folds_n , ... )   ## L2 penalty 
+    if (fine == 1) { 
+      lambda  = sort( unique( c(temp_fit_1$lambda, cv_glmnet_fit_a0$lambda) ) , decreasing = TRUE )
+    } else if (fine == 2) { 
+      lambda  = sort( temp_fit_1$lambda , decreasing = TRUE )
+    } else {
       lambda2 = sort( cv_glmnet_fit_a0$lambda[ ( (cv_glmnet_fit_a0$lambda < min(temp_fit_1$lambda)) |
-                                             (cv_glmnet_fit_a0$lambda > max(temp_fit_1$lambda)) ) ] )
-      lambda = sort( unique( c(temp_fit_1$lambda, lambda2) ) , decreasing = TRUE) 
-    } else { 
-      lambda = sort( unique( c(temp_fit_1$lambda, cv_glmnet_fit_a0$lambda) ) , decreasing = TRUE )
+                                                   (cv_glmnet_fit_a0$lambda > max(temp_fit_1$lambda)) ) ] )
+      lambda  = sort( unique( c(temp_fit_1$lambda, lambda2) ) , decreasing = TRUE) 
     } 
+    
+    if (track >= 2) { time_last = diff_time(time_start, time_last) }
   }
   
   cv_glmnet_fit_ = list()
   lalpha = length(alpha)
   for (j_ in c(1:lalpha)) {
+    if (track >= 1) { cat( "  fitting model for alpha =", alpha[j_], "   ") }
+    if (track == 1) { cat( "\n" ) }
     #      print(c(j_,alpha[j_]))
     alpha_ = alpha[j_]
     cv_glmnet_fit_[[j_]] = cv.glmnet( trainxs, trainy__, family=family, alpha=alpha_, lambda=lambda, gamma=gamma, relax=TRUE, foldid=foldid, nfolds=folds_n, path=path, ... ) 
-    #      names(cv_glmnet_fit_[[j_]])
     class(cv_glmnet_fit_[[j_]]) = "cv.glmnetr" 
     cv_glmnet_fit_[[j_]]$alpha  = alpha_
     cv_glmnet_fit_[[j_]]$family = family
@@ -117,6 +127,7 @@ cv.glmnetr = function(trainxs, trainy__, family, alpha=1, gamma=c(0,0.25,0.5,0.7
       a.index.min = j_ 
       cvm.min = cvm.min_
     }
+    if (track >= 2) { time_last = diff_time(time_start, time_last) } 
   }
   
   class(cv_glmnet_fit_) = "cv.glmnetr.list" 
@@ -131,7 +142,6 @@ cv.glmnetr = function(trainxs, trainy__, family, alpha=1, gamma=c(0,0.25,0.5,0.7
   names(index.elastic) = c("alpha", "gamma", "lambda")
   names(vals.elastic) = c("alpha", "gamma", "lambda", "measure", "NZero")
   #    print(index.elastic)
-  if (track >= 2) { print(vals.elastic) } 
   cv_elastic_fit$index.elastic = index.elastic
   cv_elastic_fit$vals.elastic = vals.elastic
   
@@ -143,6 +153,9 @@ cv.glmnetr = function(trainxs, trainy__, family, alpha=1, gamma=c(0,0.25,0.5,0.7
   #    cv_elastic_fit
   #    cv_lasso_fit
   #    cv_ridge_fit
+  
+  if (track == 1) { print(vals.elastic) ; cat( "  ... finish cv.glmnetr \n") ; } 
+  if (track >= 2) { print(vals.elastic) ; time_last = diff_time(time_start, time_last) ; cat( "  ... finish cv.glmnetr \n") ; } 
   
   return( list( cv_glmnet_fit_ = cv_glmnet_fit_ , cv_lasso_fit   = cv_lasso_fit   , 
                 cv_ridge_fit   = cv_ridge_fit   , cv_elastic_fit = cv_elastic_fit , 

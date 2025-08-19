@@ -42,7 +42,7 @@
 #'
 #' @noRd
 #'
-summary.nested.glmnetr_0_6_1 = function(object, cvfit=FALSE, type="lasso", pow=2, printg1=FALSE, 
+summary.nested.glmnetr_0_6_2 = function(object, cvfit=FALSE, type="lasso", pow=2, printg1=FALSE, 
                                   digits=4, call=NULL, onese=0, table=1, tuning=0, width=84, cal=0, ...) {
 
   ## AltDevRat
@@ -407,8 +407,11 @@ summary.nested.glmnetr_0_6_1 = function(object, cvfit=FALSE, type="lasso", pow=2
       }
       row.names(lasso)[1] = paste0( row.names(lasso)[1] , "                " )  
       if ( length(object$alpha) == 1 ) {
-        lasso = lasso[-4,]
-        lasso.cal = lasso.cal[-4,]
+#        print("  HERE")
+#        print (lasso)
+        lasso = lasso[-c(4,6,7),]
+#        print (lasso)
+        lasso.cal = lasso.cal[-c(4,6,7),]
       } 
       lassor = roundperf(lasso, digits, resample) 
       if ((family == "cox") & (resample==1)) { lassor = lassor[,-2] }      

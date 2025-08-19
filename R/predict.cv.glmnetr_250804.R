@@ -45,9 +45,11 @@
 predict.cv.glmnetr = function( object, xs_new=NULL, alpha=NULL, gamma=NULL, lambda=NULL, type="lasso", comment=TRUE, ...) {
 #  cat( "  in predict.cv.glmnetr   class(object) = ", class(object), "\n")
   if (inherits(object,"nested.glmnetr")) { 
-    if ( substr(object$version[2],1,21) == "glmnetr version 0.6-1" ) { 
+    if        ( substr(object$version[2],1,21) == "glmnetr version 0.6-2" ) { 
       predict.cv.glmnetr_0_6_1( object, xs_new=xs_new, alpha=alpha, gamma=gamma, lambda=lambda, comment=comment, type=type, ...)
-    } else {
+    } else if ( substr(object$version[2],1,21) == "glmnetr version 0.6-1" ) { 
+      predict.cv.glmnetr_0_6_1( object, xs_new=xs_new, alpha=alpha, gamma=gamma, lambda=lambda, comment=comment, type=type, ...)
+    }  else {
       predict.cv.glmnetr_0_5_5( object, xs_new=xs_new, lam=lambda, gam=gamma, comment=comment, ...)
     }
     #  } else if (is.null(object$vals.elastic)) {

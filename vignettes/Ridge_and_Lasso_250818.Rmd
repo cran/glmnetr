@@ -1,7 +1,7 @@
 ---
 title: "Lasso and Ridge, Model and Coefficient stability"
 author: "Walter K. Kremers, Mayo Clinic, Rochester MN"
-date: "10 May 2025" 
+date: "18 August 2025" 
 output: pdf_document 
 vignette: >
   %\VignetteIndexEntry{Lasso and Ridge Stability}

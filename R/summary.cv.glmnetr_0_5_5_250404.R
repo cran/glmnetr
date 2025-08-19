@@ -22,6 +22,8 @@
 #' 
 #' @noRd
 #' 
+#' @noRd
+#' 
 summary.cv.glmnetr_0_5_5 = function(object, printg1="FALSE", orderall=FALSE, ...) {
   if (inherits(object,"nested.glmnetr")) { object = object$cv.glmnet.fit }
   

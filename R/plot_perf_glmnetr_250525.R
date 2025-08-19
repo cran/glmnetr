@@ -61,7 +61,9 @@ plot_perf_glmnetr = function( x, type="devrat", pow=2, ylim=1, fold=1, xgbsimple
     cat("     Output object 'glmnetr' version not identified. \n",
         "    Analysis will not be performed.") 
   } else { 
-    if        (substr(x$version[2],1,21) == "glmnetr version 0.6-1") { 
+    if        (substr(x$version[2],1,21) == "glmnetr version 0.6-2") { 
+      plot_perf_glmnetr_0_6_2(object, type=type, pow=pow, ylim=ylim, fold=fold, xgbsimple=xgbsimple, plot=plot, track=track) 
+    } else if (substr(x$version[2],1,21) == "glmnetr version 0.6-1") { 
       plot_perf_glmnetr_0_6_1(object, type=type, pow=pow, ylim=ylim, fold=fold, xgbsimple=xgbsimple, plot=plot, track=track) 
     } else { 
       plot_perf_glmnetr_0_5_5(object, type=type, pow=pow, ylim=ylim, fold=fold, xgbsimple=xgbsimple, plot=plot)

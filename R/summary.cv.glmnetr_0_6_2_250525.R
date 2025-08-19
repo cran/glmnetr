@@ -28,7 +28,7 @@
 #'
 #' @noRd
 #' 
-summary.cv.glmnetr_0_6_1 = function(object, type=NULL, printg1="FALSE", orderall=FALSE, betatol=1e-14, ...) {
+summary.cv.glmnetr_0_6_2 = function(object, type=NULL, printg1="FALSE", orderall=FALSE, betatol=1e-14, ...) {
   # object = nested_elastic_fit1 ; type = "lasso" ; type = "elastic" ; betatol=1e-14 ;
   if (is.null(type)) { type = "lasso" }
   if (inherits(object,"nested.glmnetr")) { 
