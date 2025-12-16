@@ -49,7 +49,8 @@ nested.compare = function( object, type="devrat", digits=4, pow=1, table=1 ) {
     cat("     Output object 'glmnetr' version not identified. \n",
         "    Analysis will not be performed.") 
   } else {
-    if        (substr(object$version[2],1,21) == "glmnetr version 0.6-2") { nested.compare_0_6_2(object, type=type, digits=digits, pow=pow, table=table ) 
+    if        (substr(object$version[2],1,21) == "glmnetr version 0.6-3") { nested.compare_0_6_2(object, type=type, digits=digits, pow=pow, table=table ) 
+    } else if (substr(object$version[2],1,21) == "glmnetr version 0.6-2") { nested.compare_0_6_2(object, type=type, digits=digits, pow=pow, table=table ) 
     } else if (substr(object$version[2],1,21) == "glmnetr version 0.6-1") { nested.compare_0_6_1(object, type=type, digits=digits, pow=pow ) 
     } else if (object$version[2] == "glmnetr version 0.5-5 (2024-12-28)") { nested.compare_0_5_3(object, type=type, digits=digits, pow=pow ) 
     } else if (object$version[2] == "glmnetr version 0.5-4 (2024-10-24)") { nested.compare_0_5_3(object, type=type, digits=digits, pow=pow ) 

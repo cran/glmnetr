@@ -94,7 +94,11 @@
 #' choose to not keep the final model when the goal is basically only to assess 
 #' model performance for the GBM.  In that case the tuning parameters for the final
 #' tuned model ae retained facilitating recalculation of the final model, this will
-#' also require the original training data.  
+#' also require the original training data. 
+#' 
+#' Note, at the time of this writing, before fitting gradient boosting machine 
+#' models one must install the packages 'DiceKriging' and 'rgenoud' using the 
+#' install.packages() function.   
 #' @param dorf fit and evaluate a random forest (RF) 
 #' model.  1 for yes, 0 for no (default).  Also, if dorf is specified by a list, 
 #' then RF models will be fit.  The randomForestSRC package is used.  This list can have 
@@ -368,7 +372,7 @@ nested.glmnetr = function(xs, start=NULL, y_, event=NULL, family="gaussian", res
     cat(paste0("  With family = ", family, ", stratified is set to 0\n"))
   } 
   
-  pver = "glmnetr version 0.6-2 (2025-08-18)" 
+  pver = "glmnetr version 0.6-3 (2025-12-15)" 
   
   if ( (!is.null(do_ncv)) & (is.null(resample)) ) { 
     resample = do_ncv

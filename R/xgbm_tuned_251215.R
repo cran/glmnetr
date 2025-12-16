@@ -39,19 +39,6 @@
 #' @importFrom xgboost xgb.cv xgb.train xgb.DMatrix getinfo 
 #' 
 #' @export
-#'
-#' @examples 
-#' \donttest{
-#' # Simulate some data for a Cox model 
-#' sim.data=glmnetr.simdata(nrows=1000, ncols=100, beta=NULL)
-#' Surv.xgb = ifelse( sim.data$event==1, sim.data$yt, -sim.data$yt )
-#' data.full <- xgboost::xgb.DMatrix(data = sim.data$xs, label = Surv.xgb)
-#' # for this example we use a small number for folds_n and nrounds to shorten run time 
-#' xgbfit = xgb.simple( data.full, objective = "survival:cox")
-#' preds = predict(xgbfit, sim.data$xs)
-#' summary( preds ) 
-#' preds[1:8]
-#' }
 #' 
 xgb.simple = function(train.xgb.dat, 
                       booster     = "gbtree",
@@ -173,8 +160,8 @@ xgb.simple = function(train.xgb.dat,
 #' instead of two vectors.  The xgb.tuned() function does not handle (start,stop) 
 #' time, i.e. interval, data.  To tune the xgboost model we use the mlrMBO package
 #' which "suggests" the DiceKriging and rgenoud packages, but doe not install 
-#' these.  Still, for xgb.tuned() to run it seems that one should install the 
-#' DiceKriging and rgenoud packages.  
+#' these.  Still, for xgb.tuned() to run it seems at the time of this writing
+#' that one should install the DiceKriging and rgenoud packages.  
 #' 
 #' @param train.xgb.dat The data to be used for training the XGBoost model
 #' @param booster for now just "gbtree" (default) 
@@ -210,23 +197,8 @@ xgb.simple = function(train.xgb.dat,
 #' @importFrom ParamHelpers makeParamSet makeNumericParam makeIntegerParam 
 #' @importFrom mlrMBO makeMBOControl setMBOControlTermination mbo 
 #' @importFrom xgboost xgb.cv xgb.train xgb.DMatrix getinfo 
-## @importFrom DiceKriging
-## @importFrom rgenoud
 #'
 #' @export
-#'
-#' @examples 
-#' \donttest{
-#' # Simulate some data for a Cox model 
-#' sim.data=glmnetr.simdata(nrows=1000, ncols=100, beta=NULL)
-#' Surv.xgb = ifelse( sim.data$event==1, sim.data$yt, -sim.data$yt )
-#' data.full <- xgboost::xgb.DMatrix(data = sim.data$xs, label = Surv.xgb)
-#' # for this example we use a small number for folds_n and nrounds to shorten 
-#' # run time.  This may still take a minute or so.  
-#' # xgbfit=xgb.tuned(data.full,objective="survival:cox",nfold=5,nrounds=20)
-#' # preds = predict(xgbfit, sim.data$xs)
-#' # summary( preds ) 
-#' }
 #' 
 xgb.tuned = function(train.xgb.dat, 
                             booster     = "gbtree",

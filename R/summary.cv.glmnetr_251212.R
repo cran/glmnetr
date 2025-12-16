@@ -25,7 +25,9 @@
 #' @export
 #'
 summary.cv.glmnetr = function(object, printg1="FALSE", orderall=FALSE, type="lasso", ...) {
-  if        ( substr(object$version[2],1,21) == "glmnetr version 0.6-2" ) { 
+  if        ( substr(object$version[2],1,21) == "glmnetr version 0.6-3" ) { 
+    summary.cv.glmnetr_0_6_2(object, printg1=printg1, orderall=orderall, type=type, ...)
+  } else if ( substr(object$version[2],1,21) == "glmnetr version 0.6-2" ) { 
     summary.cv.glmnetr_0_6_2(object, printg1=printg1, orderall=orderall, type=type, ...)
   } else if ( substr(object$version[2],1,21) == "glmnetr version 0.6-1" ) { 
     summary.cv.glmnetr_0_6_1(object, printg1=printg1, orderall=orderall, type=type, ...)
